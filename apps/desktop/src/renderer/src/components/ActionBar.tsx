@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Action, PostingRow } from '@shared/api'
 import { api, useLive } from '../api'
+import { useShortcut, withShortcut } from '../shortcuts'
 import { Menu, MenuItem, MenuSeparator, ToolbarButton } from './Menu'
 
 /**
@@ -18,35 +19,58 @@ export function ActionBar({ postingId, onLeaveBox }: { postingId: number; onLeav
   const labels = useLive(() => api.labels(), [])
   const [confirmTrash, setConfirmTrash] = useState(false)
 
-  const p = posting.data
-  if (!p || p.isBundle) return null
-  const kind = boxes.data?.find((b) => b.id === p.boxId)?.kind ?? ''
+  // Esc backs out of the Trash confirmation (before anything else sees the key).
+  useEffect(() => {
+    if (!confirmTrash) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      setConfirmTrash(false)
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
+  }, [confirmTrash])
 
-  const run = (action: Action, leaves = false) => {
+  const p = posting.data
+  const ready = !!p && !p.isBundle
+  const kind = boxes.data?.find((b) => b.id === p?.boxId)?.kind ?? ''
+
+  // Keys for the open thread; menus (b, m, l) register their own.
+  useShortcut('replyLater', () => p && move(kind === 'laterbox' ? 'imbox' : 'laterbox'), ready)
+  useShortcut('setAside', () => p && move(kind === 'asidebox' ? 'imbox' : 'asidebox'), ready)
+  useShortcut('toFeed', () => kind !== 'feedbox' && move('feedbox'), ready)
+  useShortcut('toTrail', () => kind !== 'trailbox' && move('trailbox'), ready)
+  useShortcut('toggleSeen', () => p && run({ type: 'seen', postingId: p.id, seen: !p.seen }), ready)
+  useShortcut('trash', () => setConfirmTrash(true), ready)
+
+  if (!p || !ready) return null
+  function run(action: Action, leaves = false) {
     if (leaves) onLeaveBox()
     void api.runAction(action)
   }
-  const move = (to: Extract<Action, { type: 'move' }>['to']) => run({ type: 'move', postingId: p.id, to }, true)
+  function move(to: Extract<Action, { type: 'move' }>['to']) {
+    if (p) run({ type: 'move', postingId: p.id, to }, true)
+  }
   const bubble = (when: Extract<Action, { type: 'bubble' }>['when']) => run({ type: 'bubble', postingId: p.id, when }, when.kind !== 'now')
 
   return (
     <div className="no-drag flex items-center gap-0.5" role="toolbar" aria-label="Thread actions">
       <ToolbarButton
-        label={kind === 'laterbox' ? 'Remove from Reply Later' : 'Reply Later'}
+        label={withShortcut(kind === 'laterbox' ? 'Remove from Reply Later' : 'Reply Later', 'replyLater')}
         pressed={kind === 'laterbox'}
         onClick={() => move(kind === 'laterbox' ? 'imbox' : 'laterbox')}
       >
         <ReplyLaterIcon />
       </ToolbarButton>
       <ToolbarButton
-        label={kind === 'asidebox' ? 'Remove from Set Aside' : 'Set Aside'}
+        label={withShortcut(kind === 'asidebox' ? 'Remove from Set Aside' : 'Set Aside', 'setAside')}
         pressed={kind === 'asidebox'}
         onClick={() => move(kind === 'asidebox' ? 'imbox' : 'asidebox')}
       >
         <SetAsideIcon />
       </ToolbarButton>
 
-      <Menu label="Bubble Up" icon={<BubbleIcon />}>
+      <Menu label="Bubble Up" icon={<BubbleIcon />} shortcut="bubbleMenu">
         {(close) => (
           <>
             <MenuItem onSelect={() => (close(), bubble({ kind: 'now' }))}>Now</MenuItem>
@@ -82,7 +106,7 @@ export function ActionBar({ postingId, onLeaveBox }: { postingId: number; onLeav
         )}
       </Menu>
 
-      <Menu label="Move to…" icon={<MoveIcon />}>
+      <Menu label="Move to…" icon={<MoveIcon />} shortcut="moveMenu">
         {(close) => (
           <>
             {(
@@ -102,7 +126,7 @@ export function ActionBar({ postingId, onLeaveBox }: { postingId: number; onLeav
         )}
       </Menu>
 
-      <Menu label="Labels" icon={<LabelIcon />}>
+      <Menu label="Labels" icon={<LabelIcon />} shortcut="labelsMenu">
         {() =>
           (labels.data ?? []).length === 0 ? (
             <p className="px-2.5 py-1.5 text-ink-faint">No labels yet. Create them in HEY.</p>
@@ -121,12 +145,12 @@ export function ActionBar({ postingId, onLeaveBox }: { postingId: number; onLeav
         }
       </Menu>
 
-      <ToolbarButton label={p.seen ? 'Mark unseen' : 'Mark seen'} onClick={() => run({ type: 'seen', postingId: p.id, seen: !p.seen })}>
+      <ToolbarButton label={withShortcut(p.seen ? 'Mark unseen' : 'Mark seen', 'toggleSeen')} onClick={() => run({ type: 'seen', postingId: p.id, seen: !p.seen })}>
         <SeenIcon seen={p.seen} />
       </ToolbarButton>
 
       <div className="relative">
-        <ToolbarButton label="Move to Trash" pressed={confirmTrash} onClick={() => setConfirmTrash(!confirmTrash)}>
+        <ToolbarButton label={withShortcut('Move to Trash', 'trash')} pressed={confirmTrash} onClick={() => setConfirmTrash(!confirmTrash)}>
           <TrashIcon />
         </ToolbarButton>
         {confirmTrash && (

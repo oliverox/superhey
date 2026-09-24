@@ -8,6 +8,8 @@ import { ActivityDrawer, Toasts } from './components/Activity'
 import { Reader, type ReaderTarget } from './components/Reader'
 import { SetupScreen, StartingScreen } from './components/Setup'
 import { useTheme } from './theme'
+import { useShortcut } from './shortcuts'
+import { ShortcutHelp } from './components/ShortcutHelp'
 
 type PaneId = 'sidebar' | 'list' | 'reader'
 
@@ -42,6 +44,7 @@ function Workspace({ status }: { status: AppStatus }) {
   const { theme, setTheme, toggle: toggleTheme } = useTheme()
   const [activePane, setActivePane] = useState<PaneId>('list')
   const [showActivity, setShowActivity] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
 
   const list = postings.data ?? []
   const selectedIndex = target?.postingId != null ? list.findIndex((p) => p.id === target.postingId) : -1
@@ -59,39 +62,40 @@ function Workspace({ status }: { status: AppStatus }) {
     })
   }, [])
 
-  // Keyboard: j/k or arrows move through the list, / searches, Esc leaves search.
+  // Keyboard (see shortcuts.ts for the full map).
+  const step = (delta: number) => {
+    const next = list[Math.min(Math.max(selectedIndex + delta, 0), list.length - 1)]
+    if (next) open(next)
+    setActivePane('list')
+  }
+  useShortcut('nextThread', () => step(1), !query)
+  useShortcut('prevThread', () => step(-1), !query)
+  useShortcut('search', () => searchRef.current?.focus())
+  useShortcut('theme', toggleTheme)
+  const goToBox = (i: number) => ordered[i] && setBoxId(ordered[i]!.id)
+  useShortcut('box1', () => goToBox(0))
+  useShortcut('box2', () => goToBox(1))
+  useShortcut('box3', () => goToBox(2))
+  useShortcut('box4', () => goToBox(3))
+  useShortcut('box5', () => goToBox(4))
+  useShortcut('box6', () => goToBox(5))
+  useShortcut('undo', () => {
+    void api.recentActions(1).then(([last]) => {
+      if (last?.canUndo) void api.undoAction(last.id)
+    })
+  })
+  useShortcut('help', () => setShowHelp((v) => !v))
+
+  // Esc leaves search (it isn't a shortcut: overlays and fields handle it themselves too).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
-      if (e.key === 'Escape') {
-        setQuery('')
-        searchRef.current?.blur()
-        return
-      }
-      if (typing || e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key === 'T' && e.shiftKey) {
-        toggleTheme()
-      } else if (e.key === '/') {
-        e.preventDefault()
-        searchRef.current?.focus()
-      } else if ((e.key === 'j' || e.key === 'ArrowDown') && !query) {
-        e.preventDefault()
-        const next = list[Math.min(selectedIndex + 1, list.length - 1)]
-        if (next) open(next)
-        setActivePane('list')
-      } else if ((e.key === 'k' || e.key === 'ArrowUp') && !query) {
-        e.preventDefault()
-        const prev = list[Math.max(selectedIndex - 1, 0)]
-        if (prev) open(prev)
-        setActivePane('list')
-      } else if (/^[1-6]$/.test(e.key)) {
-        const box = ordered[Number(e.key) - 1]
-        if (box) setBoxId(box.id)
-      }
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      setQuery('')
+      searchRef.current?.blur()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [list, selectedIndex, open, ordered, query, toggleTheme])
+  }, [])
 
   return (
     <div
@@ -171,6 +175,7 @@ function Workspace({ status }: { status: AppStatus }) {
       </div>
       <Toasts />
       {showActivity && <ActivityDrawer onClose={() => setShowActivity(false)} />}
+      {showHelp && <ShortcutHelp onClose={() => setShowHelp(false)} />}
     </div>
   )
 }

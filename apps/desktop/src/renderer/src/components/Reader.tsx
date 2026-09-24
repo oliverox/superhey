@@ -10,6 +10,7 @@ import { splitQuoted, type QuotedSplit } from '../mail/quoted'
 import { AttachmentStrip, stripAttachmentLines, visibleAttachments } from './Attachments'
 import { ActionBar } from './ActionBar'
 import { ContextPanel } from './ContextPanel'
+import { useShortcut, withShortcut } from '../shortcuts'
 import { HtmlBody } from './HtmlBody'
 import { PersonChip, RecipientsButton } from './People'
 
@@ -101,7 +102,7 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
         <button
           onClick={panel.toggle}
           aria-pressed={panel.open}
-          title={`${panel.open ? 'Hide' : 'Show'} details (i)`}
+          title={withShortcut(panel.open ? 'Hide details' : 'Show details', 'details')}
           className={`no-drag flex size-7 items-center justify-center rounded-ui ${
             panel.open ? 'bg-pane-sunk text-ink' : 'text-ink-faint hover:bg-pane-sunk hover:text-ink'
           }`}
@@ -153,6 +154,12 @@ function Conversation({
       return next
     })
   const multiple = entries.length > 1
+  const expandAll = () => {
+    setOpen(new Set(entries.map((e) => e.id)))
+    setShowAll(true)
+  }
+  useShortcut('expandAll', expandAll, multiple)
+  useShortcut('collapseAll', () => setOpen(new Set()), multiple)
   const allOpen = multiple && entries.every((e) => open.has(e.id))
   const openCount = entries.filter((e) => open.has(e.id)).length
 
@@ -169,10 +176,8 @@ function Conversation({
             <>
               <span aria-hidden>·</span>
               <button
-                onClick={() => {
-                  setOpen(new Set(entries.map((e) => e.id)))
-                  setShowAll(true)
-                }}
+                onClick={expandAll}
+                title={withShortcut('Expand all', 'expandAll')}
                 className="rounded-[3px] font-medium text-ink-soft hover:text-ink"
               >
                 Expand all
@@ -182,7 +187,11 @@ function Conversation({
           {openCount >= 2 && (
             <>
               <span aria-hidden>·</span>
-              <button onClick={() => setOpen(new Set())} className="rounded-[3px] font-medium text-ink-soft hover:text-ink">
+              <button
+                onClick={() => setOpen(new Set())}
+                title={withShortcut('Collapse all', 'collapseAll')}
+                className="rounded-[3px] font-medium text-ink-soft hover:text-ink"
+              >
                 Collapse all
               </button>
             </>
@@ -479,14 +488,7 @@ function useContextPanel(ref: React.RefObject<HTMLElement | null>) {
     }
   }
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
-      if (e.key === 'i' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) toggle()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
+  useShortcut('details', toggle)
 
   return { open, toggle }
 }

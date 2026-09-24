@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
+import { useShortcut, withShortcut, type ShortcutId } from '../shortcuts'
 
 /**
  * A button that opens a small menu below it. Closes on outside click, Escape, or when an
@@ -9,14 +10,24 @@ export function Menu({
   icon,
   children,
   align = 'right',
+  shortcut,
 }: {
   label: string
   icon: ReactNode
   children: (close: () => void) => ReactNode
   align?: 'left' | 'right'
+  /** Key that opens (or closes) the menu. */
+  shortcut?: ShortcutId
 }) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
+  const menu = useRef<HTMLDivElement>(null)
+  useShortcut(shortcut ?? 'help', () => setOpen((o) => !o), shortcut != null)
+
+  // Opened from the keyboard or not, focus goes to the first item so arrows work at once.
+  useEffect(() => {
+    if (open) items(menu.current)[0]?.focus()
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -36,13 +47,15 @@ export function Menu({
 
   return (
     <div ref={root} className="no-drag relative">
-      <ToolbarButton label={label} pressed={open} onClick={() => setOpen(!open)} aria-haspopup="menu">
+      <ToolbarButton label={shortcut ? withShortcut(label, shortcut) : label} pressed={open} onClick={() => setOpen(!open)} aria-haspopup="menu">
         {icon}
       </ToolbarButton>
       {open && (
         <div
+          ref={menu}
           role="menu"
           aria-label={label}
+          onKeyDown={(e) => moveFocus(e, menu.current)}
           className={`absolute top-full z-50 mt-1.5 min-w-[200px] rounded-ui-lg border border-rule-strong bg-pane p-1 text-[13px] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.28)] ${
             align === 'right' ? 'right-0' : 'left-0'
           }`}
@@ -52,6 +65,22 @@ export function Menu({
       )}
     </div>
   )
+}
+
+/** The focusable things in a menu, in order: items, checkboxes, and inputs like the date. */
+function items(menu: HTMLElement | null): HTMLElement[] {
+  return menu ? [...menu.querySelectorAll<HTMLElement>('[role^=menuitem], input')] : []
+}
+
+/** ↑/↓ move between items (wrapping); Home/End jump. Enter and Space press the button. */
+function moveFocus(e: ReactKeyboardEvent, menu: HTMLElement | null) {
+  const list = items(menu)
+  if (!list.length || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return
+  e.preventDefault()
+  const i = list.indexOf(document.activeElement as HTMLElement)
+  const next =
+    e.key === 'Home' ? 0 : e.key === 'End' ? list.length - 1 : (i + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length
+  list[next]!.focus()
 }
 
 export function MenuItem({
