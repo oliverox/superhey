@@ -223,9 +223,9 @@ body {
 }
 /* In a bundle, designed mail stays in the timeline's column (it scales to fit) rather than
    breaking out across the rail. */
+/* A designed email is as wide as in a thread, so it may pass over the rail. */
 .bundle-item .email-wide {
-  width: auto;
-  margin-inline: 0;
+  position: relative;
 }
 [data-theme='omarchy'] .bundle-node {
   border-radius: 0;

@@ -66,7 +66,8 @@ export function BundleView({ bundleId, sender, onOpen }: { bundleId: number; sen
 
       {threads.error && <p className="mt-6 text-danger">Couldn't load this bundle: {threads.error}</p>}
 
-      <ol className="bundle-timeline mt-7">
+      {/* The timeline hangs in the column's margin, so each email gets the thread view's full width. */}
+      <ol className="bundle-timeline mt-7 -ml-9">
         {list.map((t, i) => (
           <BundleItem key={t.id} posting={t} index={i} expanded={expanded.has(t.id)} onToggle={() => toggle(t.id)} onOpenThread={() => onOpen(t)} />
         ))}
