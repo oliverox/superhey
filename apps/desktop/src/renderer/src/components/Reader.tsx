@@ -1,0 +1,461 @@
+import { useEffect, useRef, useState } from 'react'
+import Markdown, { type Components } from 'react-markdown'
+import type { EntryRow, PostingRow, ThreadView } from '@shared/api'
+import { api, useLive } from '../api'
+import { dayAndTime, longDate } from '../format'
+import { parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes, type ForwardedHeader } from '../mail/forwarded'
+import { displayName } from '../mail/people'
+import { splitQuoted, type QuotedSplit } from '../mail/quoted'
+import { AttachmentStrip, stripAttachmentLines, visibleAttachments } from './Attachments'
+import { ContextPanel } from './ContextPanel'
+import { PersonChip, RecipientsButton } from './People'
+
+export interface ReaderTarget {
+  postingId: number | null
+  topicId: number | null
+  entryCount: number | null
+  subject: string
+  appUrl: string | null
+  isBundle: boolean
+}
+
+// Email is untrusted: react-markdown drops raw HTML, and remote images are not loaded
+// (they can be trackers). Links open in the system browser via the main process.
+const mdComponents: Components = {
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noreferrer noopener">
+      {children}
+    </a>
+  ),
+  img: ({ alt }) => <span className="text-[13px] text-ink-faint">[image{alt ? `: ${alt}` : ''}]</span>,
+  table: ({ children }) => (
+    <div className="table-scroll">
+      <table>{children}</table>
+    </div>
+  ),
+}
+
+/** Collapsed messages beyond this many fold into a "N earlier messages" row. */
+const MAX_VISIBLE_COLLAPSED = 3
+
+interface ReaderProps {
+  target: ReaderTarget | null
+  active: boolean
+  onOpenThread: (p: PostingRow) => void
+}
+
+export function Reader({ target, active, onOpenThread }: ReaderProps) {
+  if (!target) {
+    return (
+      <main className="pane flex flex-col bg-pane-alt" data-active={active}>
+        <div className="drag h-[52px] shrink-0" />
+        <div className="flex flex-1 flex-col items-center justify-center text-ink-faint">
+          <p className="font-app text-[17px] font-medium text-ink-soft">Pick a thread to read.</p>
+          <p className="mt-2 text-[12.5px]">
+            <kbd>j</kbd> / <kbd>k</kbd> to move · <kbd>/</kbd> to search · <kbd>1</kbd>–<kbd>6</kbd> to switch boxes
+          </p>
+        </div>
+      </main>
+    )
+  }
+  return <ThreadReader key={`${target.postingId}-${target.topicId}`} target={target} active={active} onOpenThread={onOpenThread} />
+}
+
+function ThreadReader({ target, active, onOpenThread }: ReaderProps & { target: ReaderTarget }) {
+  const { topicId } = target
+  const thread = useLive<ThreadView | null>(
+    () => (topicId == null ? Promise.resolve(null) : api.thread(topicId, target.entryCount)),
+    [topicId, target.entryCount],
+    (e) => e.type === 'change' && e.change.kind === 'thread' && e.change.topicId === topicId,
+  )
+  const subject = thread.data?.subject ?? target.subject
+  const title = stripSubjectPrefixes(subject)
+  const mainRef = useRef<HTMLElement>(null)
+  const panel = useContextPanel(mainRef)
+  const showPanel = panel.open && !!thread.data && !target.isBundle
+
+  return (
+    <main ref={mainRef} className="pane flex min-h-0 flex-col bg-pane-alt" data-active={active}>
+      <header className="drag flex h-[52px] shrink-0 items-center justify-end gap-1 border-b border-rule bg-pane px-4">
+        {target.appUrl && (
+          <a
+            href={target.appUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="no-drag rounded-ui px-2 py-1 text-[12px] text-ink-soft hover:bg-pane-sunk hover:text-ink"
+          >
+            Open in HEY ↗
+          </a>
+        )}
+        <button
+          onClick={panel.toggle}
+          aria-pressed={panel.open}
+          title={`${panel.open ? 'Hide' : 'Show'} details (i)`}
+          className={`no-drag flex size-7 items-center justify-center rounded-ui ${
+            panel.open ? 'bg-pane-sunk text-ink' : 'text-ink-faint hover:bg-pane-sunk hover:text-ink'
+          }`}
+        >
+          <PanelIcon />
+        </button>
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        <div className="scroll min-h-0 min-w-0 flex-1">
+          <article className="reading-column mx-auto px-10 pt-9 pb-24">
+            <h1 className="rise font-app text-[26px] leading-[1.2] font-semibold tracking-[-0.02em] text-balance">{title}</h1>
+
+            {target.isBundle ? (
+              <p className="mt-6 text-ink-soft">This row bundles several emails from one sender. Open it in HEY to see them.</p>
+            ) : thread.error ? (
+              <p className="mt-6 text-danger">Couldn't load this thread: {thread.error}</p>
+            ) : !thread.data ? (
+              <ReaderSkeleton />
+            ) : (
+              <Conversation entries={thread.data.entries} subject={subject} />
+            )}
+          </article>
+        </div>
+        {showPanel && <ContextPanel thread={thread.data!} onOpenThread={onOpenThread} />}
+      </div>
+    </main>
+  )
+}
+
+/** The newest message is open; earlier ones are one line each until clicked. */
+function Conversation({ entries, subject }: { entries: EntryRow[]; subject: string }) {
+  const [open, setOpen] = useState<Set<number>>(() => new Set(entries.length ? [entries.at(-1)!.id] : []))
+  const [showAll, setShowAll] = useState(false)
+  const expand = (id: number) => setOpen((s) => new Set(s).add(id))
+  const collapse = (id: number) =>
+    setOpen((s) => {
+      const next = new Set(s)
+      next.delete(id)
+      return next
+    })
+  const multiple = entries.length > 1
+  const allOpen = multiple && entries.every((e) => open.has(e.id))
+  const openCount = entries.filter((e) => open.has(e.id)).length
+
+  const earlier = entries.slice(0, -1)
+  const hidden = !showAll && earlier.length > MAX_VISIBLE_COLLAPSED ? earlier.slice(1, -(MAX_VISIBLE_COLLAPSED - 1)) : []
+  const hiddenIds = new Set(hidden.map((e) => e.id))
+
+  return (
+    <>
+      {multiple && (
+        <div className="mt-1.5 flex items-center gap-1.5 text-[12px] text-ink-faint">
+          <span>{entries.length} messages</span>
+          {!allOpen && (
+            <>
+              <span aria-hidden>·</span>
+              <button
+                onClick={() => {
+                  setOpen(new Set(entries.map((e) => e.id)))
+                  setShowAll(true)
+                }}
+                className="rounded-[3px] font-medium text-ink-soft hover:text-ink"
+              >
+                Expand all
+              </button>
+            </>
+          )}
+          {openCount >= 2 && (
+            <>
+              <span aria-hidden>·</span>
+              <button onClick={() => setOpen(new Set())} className="rounded-[3px] font-medium text-ink-soft hover:text-ink">
+                Collapse all
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      <ol className="mt-4 space-y-2.5">
+        {entries.map((entry, i) => {
+          if (hiddenIds.has(entry.id) && !open.has(entry.id)) {
+            return entry.id === hidden[0]!.id ? (
+              <li key="more">
+                <button
+                  onClick={() => setShowAll(true)}
+                  className="flex w-full items-center gap-3 py-1 text-[12px] font-medium text-ink-faint hover:text-ink-soft"
+                >
+                  <span className="h-px flex-1 bg-rule" />
+                  {hidden.length} earlier messages
+                  <span className="h-px flex-1 bg-rule" />
+                </button>
+              </li>
+            ) : null
+          }
+          return (
+            <Message
+              key={entry.id}
+              entry={entry}
+              subject={subject}
+              expanded={open.has(entry.id)}
+              onExpand={() => expand(entry.id)}
+              onCollapse={multiple ? () => collapse(entry.id) : undefined}
+              index={i}
+            />
+          )
+        })}
+      </ol>
+    </>
+  )
+}
+
+function Message({
+  entry,
+  subject,
+  expanded,
+  onExpand,
+  onCollapse,
+  index,
+}: {
+  entry: EntryRow
+  subject: string
+  expanded: boolean
+  onExpand: () => void
+  /** Absent when the message is the thread's only one. */
+  onCollapse?: () => void
+  index: number
+}) {
+  const surface = entry.from?.isMe ? 'bg-mine' : 'bg-pane'
+  const time = <Time iso={entry.createdAt} />
+
+  if (!expanded) {
+    // Two lines: who and when, then what they wrote (without the history they quoted).
+    const preview = snippet(splitQuoted(entry.bodyMd, index > 0)?.fresh ?? entry.bodyMd)
+    return (
+      <li className={`rise overflow-hidden rounded-ui-lg border border-rule ${surface}`} style={{ animationDelay: `${Math.min(index, 6) * 30}ms` }}>
+        <button onClick={onExpand} className="block w-full px-6 py-3 text-left hover:bg-pane-sunk/50">
+          <span className="flex items-center gap-3">
+            <span className="min-w-0 flex-1 truncate font-semibold">
+              {entry.from?.isMe ? 'You' : entry.from ? displayName(entry.from) : 'Unknown'}
+            </span>
+            {entry.attachments.length > 0 && <span className="shrink-0 text-[11.5px] text-ink-faint">📎 {entry.attachments.length}</span>}
+            {time}
+          </span>
+          {preview && <span className="mt-0.5 block truncate text-[13px] text-ink-faint">{preview}</span>}
+        </button>
+      </li>
+    )
+  }
+
+  const full = stripAttachmentLines(entry.bodyMd, entry.attachments)
+  // Replies carry the conversation below them; show only what this message adds.
+  const quote = splitQuoted(full, index > 0)
+  const body = quote ? quote.fresh : full
+  const forwarded = splitForwarded(body)
+
+  return (
+    // The header sits outside the card, under the subject (or the message before); the card
+    // holds only what was written.
+    <li className={`rise ${index > 0 ? 'pt-4' : ''}`} style={{ animationDelay: `${Math.min(index, 6) * 30}ms` }}>
+      <header
+        className={`group/header mb-3 ${onCollapse ? 'cursor-pointer' : ''}`}
+        // Clicking the header's empty space folds the message; names and buttons keep their own clicks.
+        onClick={(e) => {
+          if (onCollapse && !(e.target as HTMLElement).closest('button, a, [role=dialog]')) onCollapse()
+        }}
+      >
+        <div className="flex items-baseline gap-2">
+          <div className="flex min-w-0 flex-1 items-baseline gap-2">
+            {entry.from ? <PersonChip person={entry.from} className="font-semibold" /> : <span className="font-semibold">Unknown</span>}
+            <RecipientsButton to={entry.to} cc={entry.cc} className="text-[12.5px]" />
+          </div>
+          {time}
+          {onCollapse && (
+            <button
+              onClick={onCollapse}
+              aria-label="Collapse message"
+              title="Collapse message"
+              className="flex size-5 shrink-0 items-center justify-center self-center rounded-ui text-ink-faint opacity-0 group-hover/header:opacity-100 hover:bg-pane-sunk hover:text-ink focus-visible:opacity-100"
+            >
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden>
+                <path d="m4 10 4-4 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          )}
+        </div>
+        {forwarded && <ForwardedLine header={forwarded.header} threadSubject={subject} />}
+      </header>
+
+      <div className={`rounded-ui-lg border border-rule px-7 pt-6 pb-4 ${surface}`}>
+        <div className="prose-mail">
+          {forwarded ? (
+            <>
+              {forwarded.before && <Markdown components={mdComponents}>{forwarded.before}</Markdown>}
+              <Markdown components={mdComponents}>{forwarded.after}</Markdown>
+            </>
+          ) : (
+            <Markdown components={mdComponents}>{body}</Markdown>
+          )}
+          {quote && <QuotedHistory quote={quote} />}
+        </div>
+        <AttachmentStrip attachments={visibleAttachments(entry.attachments)} />
+      </div>
+    </li>
+  )
+}
+
+/**
+ * The forward's origin, as a quiet second line of the header. The original "to" is
+ * dropped: it names the forwarder, who is already the sender above.
+ */
+function ForwardedLine({ header, threadSubject }: { header: ForwardedHeader; threadSubject: string }) {
+  const date = parseForwardedDate(header.date)
+  const subject = header.subject && !sameSubject(header.subject, threadSubject) ? stripSubjectPrefixes(header.subject) : null
+  return (
+    <div className="mt-1 flex min-w-0 items-baseline gap-1.5 text-[12.5px] text-ink-faint">
+      <span className="shrink-0">Forwarded from</span>
+      {header.from && <PersonChip person={header.from} className="font-medium text-ink-soft" />}
+      {date ? (
+        <>
+          <span aria-hidden>·</span>
+          <time dateTime={date.toISOString()} title={longDate(date.toISOString())} className="shrink-0 text-[11.5px]">
+            {(({ day, time }) => `${day}, ${time}`)(dayAndTime(date.toISOString()))}
+          </time>
+        </>
+      ) : header.date ? (
+        <>
+          <span aria-hidden>·</span>
+          <span className="shrink-0">{header.date}</span>
+        </>
+      ) : null}
+      {subject && (
+        <>
+          <span aria-hidden>·</span>
+          <span className="min-w-0 truncate">{subject}</span>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** The trimmed conversation history, one click away. */
+function QuotedHistory({ quote }: { quote: QuotedSplit }) {
+  const [open, setOpen] = useState(false)
+  const label = `${open ? 'Hide' : 'Show'} quoted text${quote.quotedName ? ` from ${quote.quotedName}` : ''}`
+  return (
+    <div className="mb-1">
+      <button
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-label={label}
+        title={label}
+        className={`inline-flex h-[18px] w-8 items-center justify-center rounded-full transition-colors ${
+          open ? 'bg-rule-strong text-ink' : 'bg-pane-sunk text-ink-soft hover:bg-rule-strong hover:text-ink'
+        }`}
+      >
+        <svg width="16" height="4" viewBox="0 0 16 4" aria-hidden fill="currentColor">
+          <circle cx="2" cy="2" r="1.6" />
+          <circle cx="8" cy="2" r="1.6" />
+          <circle cx="14" cy="2" r="1.6" />
+        </svg>
+      </button>
+      {open && (
+        <div className="mt-3 border-l-2 border-rule-strong pl-4 text-ink-soft">
+          <Markdown components={mdComponents}>{quote.quoted}</Markdown>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The message time as a small tag: day, hairline, time. Full date on hover. */
+function Time({ iso }: { iso: string }) {
+  const { day, time } = dayAndTime(iso)
+  return (
+    <time
+      dateTime={iso}
+      title={longDate(iso)}
+      className="inline-flex shrink-0 items-center self-center rounded-ui bg-pane-sunk px-2 py-[3px] text-[11px] leading-none font-medium text-ink-soft"
+    >
+      {day}
+      <span aria-hidden className="mx-1.5 h-2.5 w-px bg-rule-strong" />
+      <span className="text-ink-faint">{time}</span>
+    </time>
+  )
+}
+
+/** A plain one-line preview of a Markdown body. */
+function snippet(markdown: string) {
+  return markdown
+    .replace(/^📎.*$/gmu, '')
+    .replace(/^\\?-{2,}.*(Forwarded|Original).*$/gim, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\\([\\`*_{}[\]()#+\-.!<>|~])/g, '$1')
+    .replace(/[*_`>#]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180)
+}
+
+/** Wide enough for the email column and the details panel side by side. */
+const PANEL_AUTO_WIDTH = 1080
+const PANEL_KEY = 'details-panel'
+type PanelPref = 'auto' | 'open' | 'closed'
+
+/**
+ * Open automatically when the reader is wide; the toggle (or "i") overrides that and is
+ * remembered on this device.
+ */
+function useContextPanel(ref: React.RefObject<HTMLElement | null>) {
+  const [wide, setWide] = useState(false)
+  const [pref, setPref] = useState<PanelPref>(() => {
+    try {
+      const v = localStorage.getItem(PANEL_KEY)
+      return v === 'open' || v === 'closed' ? v : 'auto'
+    } catch {
+      return 'auto'
+    }
+  })
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const ro = new ResizeObserver(([e]) => setWide((e?.contentRect.width ?? 0) >= PANEL_AUTO_WIDTH))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [ref])
+
+  const open = pref === 'open' || (pref === 'auto' && wide)
+  const toggle = () => {
+    const next: PanelPref = open ? 'closed' : 'open'
+    setPref(next)
+    try {
+      localStorage.setItem(PANEL_KEY, next)
+    } catch {
+      // not remembered, still works
+    }
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      if (e.key === 'i' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) toggle()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
+  return { open, toggle }
+}
+
+function PanelIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M10 3v10" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  )
+}
+
+function ReaderSkeleton() {
+  return (
+    <div className="mt-8 space-y-3 rounded-ui-lg border border-rule bg-pane px-7 py-6" aria-label="Loading thread">
+      {[92, 100, 84, 96, 60].map((w, i) => (
+        <div key={i} className="pulse h-3 rounded bg-pane-sunk" style={{ width: `${w}%`, animationDelay: `${i * 90}ms` }} />
+      ))}
+    </div>
+  )
+}

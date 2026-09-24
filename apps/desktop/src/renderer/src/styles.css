@@ -1,0 +1,373 @@
+@import 'tailwindcss';
+
+/*
+ * Themes are sets of tokens on <html data-theme>. Components only use the tokens, so a
+ * theme can change colour, type, corners and pane layout without touching components.
+ *
+ *   default  — graphite sidebar, white panes, one cobalt accent. Follows system light/dark.
+ *   omarchy  — Omarchy / Hyprland: tiled panes with gaps, square corners, monospace,
+ *              Tokyo Night palette, accent border on the active pane.
+ */
+
+:root,
+[data-theme='default'] {
+  --bg: #e9ebef;
+  --side-bg: #17191e;
+  --side-ink: #f1f2f5;
+  --side-soft: #a6abb6;
+  --side-faint: #6b717d;
+  --side-sel: #262a31;
+  --side-rule: #262a31;
+  --pane: #ffffff;
+  --pane-alt: #f7f8fa;
+  --pane-sunk: #eef0f3;
+  --ink: #101217;
+  --ink-soft: #4a505c;
+  --ink-faint: #8a909c;
+  --rule: #e6e8ec;
+  --rule-strong: #d3d6dc;
+  --accent: #3355ff;
+  --accent-ink: #ffffff;
+  --accent-wash: #edf0ff;
+  --new: #3355ff;
+  --danger: #d4343a;
+  --selection: #edf0ff;
+  --mine: #f5f7ff;
+
+  --font-ui: 'Onest Variable', ui-sans-serif, sans-serif;
+  --font-read: 'Onest Variable', ui-sans-serif, sans-serif;
+  --r: 8px;
+  --r-lg: 12px;
+  --gap: 0px;
+  --pane-border: 0px;
+  --text: 13.5px;
+  --read-size: 15px;
+  --measure: 33.5em;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='omarchy']) {
+    --bg: #0b0c0f;
+    --side-bg: #0f1013;
+    --side-sel: #1d2026;
+    --side-rule: #1d2026;
+    --pane: #14161a;
+    --pane-alt: #181a1f;
+    --pane-sunk: #1d2026;
+    --ink: #eceef2;
+    --ink-soft: #a7adb8;
+    --ink-faint: #6f7582;
+    --rule: #23262d;
+    --rule-strong: #2f333b;
+    --accent: #7b91ff;
+    --accent-ink: #0b0c0f;
+    --accent-wash: #1c2240;
+    --new: #7b91ff;
+    --danger: #ff6b6b;
+    --selection: #1c2240;
+    --mine: #171b2c;
+    color-scheme: dark;
+  }
+}
+
+[data-theme='omarchy'] {
+  /* Tokyo Night */
+  --bg: #1a1b26;
+  --side-bg: #16161e;
+  --side-ink: #c0caf5;
+  --side-soft: #a9b1d6;
+  --side-faint: #565f89;
+  --side-sel: #283457;
+  --side-rule: #292e42;
+  --pane: #16161e;
+  --pane-alt: #1a1b26;
+  --pane-sunk: #1f2335;
+  --ink: #c0caf5;
+  --ink-soft: #a9b1d6;
+  --ink-faint: #565f89;
+  --rule: #292e42;
+  --rule-strong: #414868;
+  --accent: #7aa2f7;
+  --accent-ink: #16161e;
+  --accent-wash: #283457;
+  --new: #ff9e64;
+  --danger: #f7768e;
+  --selection: #283457;
+  --mine: #1f2335;
+
+  /* Uses the Omarchy system font when installed, else the bundled JetBrains Mono. */
+  --font-ui: 'CaskaydiaMono Nerd Font', 'JetBrainsMono Nerd Font', 'JetBrains Mono Variable', ui-monospace, monospace;
+  --font-read: var(--font-ui);
+  --r: 0px;
+  --r-lg: 0px;
+  --gap: 10px;
+  --pane-border: 2px;
+  --text: 12.5px;
+  --read-size: 13px;
+  --measure: 43em;
+  color-scheme: dark;
+}
+
+@theme {
+  --font-app: var(--font-ui);
+  --font-body: var(--font-read);
+  --radius-ui: var(--r);
+  --radius-ui-lg: var(--r-lg);
+  --color-bg: var(--bg);
+  --color-side: var(--side-bg);
+  --color-side-ink: var(--side-ink);
+  --color-side-soft: var(--side-soft);
+  --color-side-faint: var(--side-faint);
+  --color-side-sel: var(--side-sel);
+  --color-side-rule: var(--side-rule);
+  --color-pane: var(--pane);
+  --color-pane-alt: var(--pane-alt);
+  --color-pane-sunk: var(--pane-sunk);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-wash: var(--accent-wash);
+  --color-new: var(--new);
+  --color-danger: var(--danger);
+  --color-selection: var(--selection);
+  --color-mine: var(--mine);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--text);
+  font-feature-settings: 'ss01', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+::selection {
+  background: var(--accent-wash);
+}
+
+/* Panes: plain columns by default; bordered tiles with gaps under Omarchy. */
+.tiles {
+  gap: var(--gap);
+  padding: var(--gap);
+  background: var(--bg);
+}
+.pane {
+  border: var(--pane-border) solid var(--rule-strong);
+  min-height: 0;
+  transition: border-color 120ms ease;
+}
+[data-theme='omarchy'] .pane[data-active='true'] {
+  border-color: var(--accent);
+}
+:root:not([data-theme='omarchy']) .pane + .pane {
+  border-left: 1px solid var(--rule);
+}
+
+/* Draggable window chrome (hidden title bar on macOS). */
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.eyebrow {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+[data-theme='omarchy'] .eyebrow {
+  text-transform: lowercase;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+[data-theme='omarchy'] .eyebrow::before {
+  content: '# ';
+  color: var(--accent);
+}
+
+kbd {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink-faint);
+}
+[data-theme='omarchy'] kbd {
+  border-radius: 0;
+}
+
+/* The reading column: about 72 characters of body text per line, whatever the window
+   width. Set in em of the body font, since ch (the width of "0") overstates Onest's
+   average character by 40%. Onest averages 0.465em a character; monospace is 0.6em. */
+.reading-column {
+  font-family: var(--font-read);
+  font-size: var(--read-size);
+  /* the measure + the message card's padding (3.5rem) + the column's padding (5rem) + borders */
+  max-width: calc(var(--measure) + 8.5rem + 2px);
+}
+
+/* Wide tables scroll sideways inside the message instead of squashing. */
+.table-scroll {
+  overflow-x: auto;
+  margin: 0 0 1em;
+  scrollbar-width: thin;
+}
+.table-scroll table {
+  margin: 0;
+}
+
+/* Email bodies. */
+.prose-mail {
+  font-family: var(--font-read);
+  font-size: var(--read-size);
+  line-height: 1.65;
+  color: var(--ink);
+  user-select: text;
+  cursor: auto;
+  overflow-wrap: anywhere;
+}
+[data-theme='omarchy'] .prose-mail {
+  line-height: 1.7;
+}
+.prose-mail p {
+  margin: 0 0 0.9em;
+}
+.prose-mail a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+.prose-mail blockquote {
+  margin: 0 0 1em;
+  padding-left: 1em;
+  border-left: 2px solid var(--rule-strong);
+  color: var(--ink-soft);
+}
+.prose-mail ul,
+.prose-mail ol {
+  margin: 0 0 1em;
+  padding-left: 1.3em;
+}
+.prose-mail ul {
+  list-style: disc;
+}
+.prose-mail ol {
+  list-style: decimal;
+}
+.prose-mail h1,
+.prose-mail h2,
+.prose-mail h3 {
+  font-weight: 650;
+  margin: 1.2em 0 0.5em;
+  line-height: 1.25;
+}
+.prose-mail h1 {
+  font-size: 1.3em;
+}
+.prose-mail h2 {
+  font-size: 1.15em;
+}
+.prose-mail table {
+  border-collapse: collapse;
+  margin: 0 0 1em;
+  font-size: 0.9em;
+}
+.prose-mail td,
+.prose-mail th {
+  border: 1px solid var(--rule);
+  padding: 4px 8px;
+}
+.prose-mail code {
+  font-size: 0.88em;
+  background: var(--pane-sunk);
+  padding: 1px 4px;
+  border-radius: var(--r);
+}
+/* Mail apps turn preformatted text into code blocks; in email that is prose, so wrap it. */
+.prose-mail pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--pane-sunk);
+  padding: 12px;
+  border-radius: var(--r);
+  overflow-x: auto;
+}
+.prose-mail hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 1.5em 0;
+}
+.prose-mail img {
+  max-width: 100%;
+}
+
+mark {
+  background: var(--accent-wash);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+/* Omarchy is instant: no easing flourishes. */
+[data-theme='omarchy'] .rise {
+  animation: none;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.pulse {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .pulse {
+    animation: none;
+  }
+}
+
+.scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-strong) transparent;
+}

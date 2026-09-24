@@ -1,0 +1,155 @@
+import { describe, expect, it } from 'vitest'
+import { openDb } from '../src/cache/db'
+import { Repo } from '../src/cache/repo'
+import * as S from '../src/cli/schemas'
+import { normalizeUtc } from '../src/cli/schemas'
+import { PostingId, TopicId } from '../src/ids'
+import { alice, entry, me, posting } from './fixtures'
+
+const repo = () => new Repo(openDb(':memory:'))
+const P = (over: Record<string, unknown> = {}) => S.Posting.parse(posting(over))
+
+describe('Repo postings', () => {
+  it('treats an absent seen flag as unseen and orders like the Imbox', () => {
+    const r = repo()
+    r.upsertPostings([
+      P({ id: 1, seen: true, active_at: '2026-09-23T00:00:00Z' }),
+      P({ id: 2, active_at: '2026-09-21T00:00:00Z' }),
+      P({ id: 3, active_at: '2026-09-22T00:00:00Z' }),
+      P({ id: 4, seen: true, bubbled_up: true, active_at: '2026-01-01T00:00:00Z' }),
+    ])
+    expect(r.postings(1).map((p) => [p.id, p.seen])).toEqual([
+      [4, true],
+      [3, false],
+      [2, false],
+      [1, true],
+    ])
+  })
+
+  it('upserts in place and marks bundles', () => {
+    const r = repo()
+    r.upsertPostings([P({ name: 'Old subject' })])
+    r.upsertPostings([P({ name: 'New subject' }), P({ id: 101, topic_id: null, name: 'A • B' })])
+    expect(r.postingCount(1)).toBe(2)
+    expect(r.posting(PostingId(100))?.subject).toBe('New subject')
+    expect(r.posting(PostingId(101))).toMatchObject({ isBundle: true, topicId: null })
+  })
+
+  it('exposes label names', () => {
+    const r = repo()
+    r.upsertPostings([P({ folders: [{ id: 1, name: 'Travel' }, { id: 2, name: 'Receipts' }] })])
+    expect(r.posting(PostingId(100))?.labels).toEqual(['Travel', 'Receipts'])
+  })
+
+  it('prefers the alternative sender name', () => {
+    const r = repo()
+    r.upsertPostings([P({ alternative_sender_name: 'Example Newsletter' })])
+    expect(r.posting(PostingId(100))).toMatchObject({ senderName: 'Example Newsletter', senderEmail: 'alice@example.com' })
+  })
+
+  it('lists other recent threads from a sender, once each, newest first', () => {
+    const r = repo()
+    r.upsertPostings([
+      P({ id: 1, topic_id: 10, active_at: '2026-09-01T00:00:00Z' }),
+      P({ id: 2, topic_id: 11, active_at: '2026-09-03T00:00:00Z' }),
+      P({ id: 3, topic_id: 11, box_id: 2, active_at: '2026-09-02T00:00:00Z' }), // same thread, another box
+      P({ id: 4, topic_id: 12, active_at: '2026-09-04T00:00:00Z' }), // the open thread
+      P({ id: 5, topic_id: 13, creator: { ...alice, email_address: 'bob@example.com' } }),
+    ])
+    expect(r.postingsFromSender('Alice@Example.com', TopicId(12)).map((p) => p.id)).toEqual([2, 1])
+    expect(r.postingsFromSender('alice@example.com', null, 1).map((p) => p.id)).toEqual([4])
+  })
+
+  it('falls back to the given box id', () => {
+    const r = repo()
+    r.upsertPostings([P({ box_id: null })], 7)
+    expect(r.postings(7)).toHaveLength(1)
+  })
+})
+
+describe('Repo threads', () => {
+  it('stores entries, marks my own, and searches them', () => {
+    const r = repo()
+    r.replaceMyAddresses(['ME@hey.example'])
+    r.storeThread(
+      TopicId(900),
+      [
+        S.Entry.parse(entry()),
+        S.Entry.parse(entry({ id: 5001, creator: me, body: 'Friday works. See you at noon.', created_at: '2026-09-20T11:00:00Z' })),
+      ],
+      'Lunch on Friday?',
+    )
+    const t = r.thread(TopicId(900))!
+    expect(t.entries.map((e) => e.isMine)).toEqual([false, true])
+    expect(t.entries[0]).toMatchObject({
+      from: { name: 'Alice Example', email: 'alice@example.com', isMe: false },
+      to: [{ name: 'Me', email: 'me@hey.example', isMe: true }],
+    })
+    expect(r.search('harb').map((h) => h.entryId)).toEqual([5000])
+    expect(r.search('"quoted')).toEqual([])
+  })
+
+  it('uses sender over creator when HEY recorded one', () => {
+    const r = repo()
+    const other = { ...alice, id: 12, name: 'Real Sender', email_address: 'real@example.com' }
+    r.storeThread(TopicId(900), [S.Entry.parse(entry({ sender: other }))], null)
+    expect(r.thread(TopicId(900))!.entries[0]!.from?.email).toBe('real@example.com')
+  })
+
+  it('replaces a thread on refetch without duplicating search rows', () => {
+    const r = repo()
+    r.storeThread(TopicId(900), [S.Entry.parse(entry())], 's')
+    r.storeThread(TopicId(900), [S.Entry.parse(entry())], 's')
+    expect(r.search('harbour')).toHaveLength(1)
+  })
+
+  it('reads recipients stored by older versions as bare addresses', () => {
+    const r = repo()
+    r.replaceMyAddresses(['me@hey.example'])
+    r.storeThread(TopicId(900), [S.Entry.parse(entry())], 's')
+    r.db.prepare('UPDATE entries SET recipients_json = ?').run(JSON.stringify({ to: ['Me@hey.example'], cc: [] }))
+    expect(r.thread(TopicId(900))!.entries[0]!.to).toEqual([{ name: null, email: 'me@hey.example', isMe: true }])
+  })
+
+  it('knows when a thread is stale', () => {
+    const r = repo()
+    expect(r.threadIsStale(TopicId(900), 1)).toBe(true)
+    r.storeThread(TopicId(900), [S.Entry.parse(entry())], 's')
+    expect(r.threadIsStale(TopicId(900), 1)).toBe(false)
+    expect(r.threadIsStale(TopicId(900), 2)).toBe(true)
+  })
+})
+
+describe('Repo events', () => {
+  const ev = (id: number, starts_at: string) =>
+    S.CalendarEvent.parse({ id, title: `e${id}`, starts_at, ends_at: starts_at, calendar: { id: 3 } })
+
+  it('replaces events inside the window only', () => {
+    const r = repo()
+    r.replaceEvents('2026-09-01T00:00:00Z', '2026-12-31T00:00:00Z', [
+      ev(1, '2026-09-20T09:00:00Z'),
+      ev(2, '2026-09-25T09:00:00Z'),
+      ev(3, '2026-10-10T09:00:00Z'),
+    ])
+    r.replaceEvents('2026-09-20T00:00:00Z', '2026-09-27T00:00:00Z', [ev(2, '2026-09-25T09:00:00Z')])
+    expect(r.events('2026-01-01T00:00:00Z', '2027-01-01T00:00:00Z').map((e) => e.id)).toEqual([2, 3])
+  })
+})
+
+describe('timestamps', () => {
+  it('treats zone-less CLI times as UTC', () => {
+    expect(normalizeUtc('2026-08-13T07:21')).toBe('2026-08-13T07:21:00Z')
+    expect(normalizeUtc('2026-08-13T07:21:14.5')).toBe('2026-08-13T07:21:14.5Z')
+    expect(normalizeUtc('2026-08-13T07:21:14.564656Z')).toBe('2026-08-13T07:21:14.564656Z')
+    expect(normalizeUtc('2026-08-13T11:21:00+04:00')).toBe('2026-08-13T11:21:00+04:00')
+    expect(normalizeUtc('not a date')).toBe('not a date')
+  })
+
+  it('stores entry times with their zone and fixes older rows on read', () => {
+    const r = repo()
+    r.storeThread(TopicId(900), [S.Entry.parse(entry({ created_at: '2026-08-13T07:21' }))], 's')
+    expect(r.thread(TopicId(900))!.entries[0]!.createdAt).toBe('2026-08-13T07:21:00Z')
+    r.db.prepare("UPDATE entries SET created_at = '2026-08-13T07:22'").run()
+    expect(r.thread(TopicId(900))!.entries[0]!.createdAt).toBe('2026-08-13T07:22:00Z')
+  })
+})

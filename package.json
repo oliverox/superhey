@@ -1,0 +1,15 @@
+{
+  "name": "myhey",
+  "private": true,
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @myhey/desktop dev",
+    "build": "pnpm --filter @myhey/desktop build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "demo": "pnpm --filter @myhey/core demo"
+  }
+}
