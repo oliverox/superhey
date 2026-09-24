@@ -4,13 +4,14 @@ import { join, resolve } from 'node:path'
 import { HeyNotFoundError } from '../cli/errors'
 import type { HeyClient } from '../cli/client'
 import type { HeyRunner } from '../cli/runner'
-import type { WatchLine } from '../cli/schemas'
+import type { ScreenerEntry, WatchLine } from '../cli/schemas'
 import { PostingId, type TopicId } from '../ids'
 import type { PostingRow, Repo, ThreadView } from '../cache/repo'
 import { Watcher, type WatchStatus } from './watcher'
 
 export type CacheChange =
   | { kind: 'boxes' }
+  | { kind: 'screener' }
   | { kind: 'postings'; boxId: number }
   | { kind: 'thread'; topicId: TopicId }
   | { kind: 'calendar' }
@@ -31,6 +32,9 @@ interface EngineEvents {
 const DAY_MS = 86_400_000
 const BOX_REFRESH_DEBOUNCE_MS = 1_000
 const CALENDAR_REFRESH_DEBOUNCE_MS = 2_000
+/** `hey watch` doesn't report Screener arrivals, so it is also checked on this interval. */
+const SCREENER_POLL_MS = 3 * 60_000
+const SCREENER_REFRESH_DEBOUNCE_MS = 2_000
 
 /**
  * Keeps the local cache in step with HEY. The UI reads only from the cache; this engine
@@ -45,6 +49,9 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
   private readonly fileFetches = new Map<string, Promise<AttachmentFile>>()
   private readonly htmlFetches = new Map<TopicId, Promise<Record<number, string>>>()
   private backfillPaused = false
+  private screener: ScreenerEntry[] = []
+  private screenerTimer: ReturnType<typeof setTimeout> | null = null
+  private screenerPoll: ReturnType<typeof setInterval> | null = null
   private status: SyncStatus = { watch: 'stopped', initialSyncDone: false, lastError: null }
 
   constructor(
@@ -67,12 +74,15 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
   async start() {
     await this.initialSync()
     this.watcher.start()
+    this.screenerPoll = setInterval(() => void this.refreshScreener().catch((e) => this.fail(e)), SCREENER_POLL_MS)
   }
 
   stop() {
     this.watcher.stop()
     for (const t of this.boxTimers.values()) clearTimeout(t)
     if (this.calendarTimer) clearTimeout(this.calendarTimer)
+    if (this.screenerTimer) clearTimeout(this.screenerTimer)
+    if (this.screenerPoll) clearInterval(this.screenerPoll)
     this.backfillPaused = true
   }
 
@@ -87,6 +97,7 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
       ...boxes.map((box) => this.refreshBox(box.id)),
       this.refreshCalendar(),
       this.refreshTodos(),
+      this.refreshScreener(),
       this.client.labels().then((l) => this.repo.replaceNamed('labels', l)),
       this.client.collections().then((c) => this.repo.replaceNamed('collections', c)),
     ])
@@ -118,6 +129,26 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
     // replaced wholesale and deleted events disappear.
     this.repo.replaceEvents(today.toISOString(), nextWeek.toISOString(), [...thisWeek, ...following])
     this.emit('change', { kind: 'calendar' })
+  }
+
+  /** Who's waiting in The Screener (held in memory; it's small and always re-read). */
+  async refreshScreener(): Promise<ScreenerEntry[]> {
+    this.screener = await this.client.screenerList()
+    this.emit('change', { kind: 'screener' })
+    return this.screener
+  }
+
+  screenerEntries(): ScreenerEntry[] {
+    return this.screener
+  }
+
+  /** Coalesces the checks that new mail and window focus ask for. */
+  requestScreenerRefresh() {
+    if (this.screenerTimer) clearTimeout(this.screenerTimer)
+    this.screenerTimer = setTimeout(() => {
+      this.screenerTimer = null
+      void this.refreshScreener().catch((e) => this.fail(e))
+    }, SCREENER_REFRESH_DEBOUNCE_MS)
   }
 
   async refreshTodos() {
@@ -246,6 +277,8 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
     switch (line.change) {
       case 'added':
       case 'updated':
+        // New mail may come with a new first-time sender (the watch doesn't report those).
+        if (line.new) this.requestScreenerRefresh()
         if (line.posting && line.box) {
           // Watch postings carry the thread ID on the line, not in the posting.
           const posting = { ...line.posting, topic_id: line.posting.topic_id ?? line.thread_id ?? null }

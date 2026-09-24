@@ -129,9 +129,12 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
 
   async runAction(action: unknown, source: unknown = 'user') {
     if (source !== 'user' && source !== 'auto') throw new Error('bad action source')
+    const checked = validateAction(action)
+    // A test instance must never decide on a real sender waiting in the Screener.
+    if (checked.type === 'screen' && process.env.MYHEY_TEST_NO_SCREENER_DECISIONS === '1') throw new Error('Screener decisions are off in this test instance')
     // Test instances opening threads to check rendering must not mark real mail as seen.
     if (source === 'auto' && process.env.MYHEY_TEST_NO_AUTO_ACTIONS === '1') throw new Error('automatic actions are off in this instance')
-    return this.need().actions.run(validateAction(action), source)
+    return this.need().actions.run(checked, source)
   }
 
   async undoAction(id: number) {
@@ -145,6 +148,16 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
   private sendersCache: Promise<Array<{ id: number; email: string; default?: boolean | null }>> | null = null
 
   /** Sender addresses rarely change; fetched once per session. */
+  async screener() {
+    return this.need()
+      .engine.screenerEntries()
+      .map((e) => ({ id: e.id, name: e.name ?? null, email: e.email_address, subject: e.subject ?? null, summary: e.summary ?? null, topicId: e.topic_id ?? null }))
+  }
+
+  async refreshScreener() {
+    this.need().engine.requestScreenerRefresh()
+  }
+
   async senders() {
     this.sendersCache ??= this.need().client.senders().catch((err) => {
       this.sendersCache = null
@@ -248,6 +261,17 @@ const BUBBLE_KINDS = ['now', 'tomorrow', 'weekend', 'next-week', 'on']
 function validateAction(input: unknown): Action {
   const a = input as Record<string, unknown>
   if (!a || typeof a !== 'object') throw new Error('bad action')
+  if (a.type === 'screen') {
+    if (!['approve', 'deny', 'spam'].includes(a.decision as string)) throw new Error('bad action')
+    if (a.box != null && !['imbox', 'feedbox', 'trailbox'].includes(a.box as string)) throw new Error('bad action')
+    return {
+      type: 'screen',
+      clearanceId: int(a.clearanceId),
+      decision: a.decision as 'approve' | 'deny' | 'spam',
+      box: (a.box ?? undefined) as 'imbox' | 'feedbox' | 'trailbox' | undefined,
+      name: typeof a.name === 'string' ? a.name.slice(0, 200) : undefined,
+    }
+  }
   const postingId = int(a.postingId)
   switch (a.type) {
     case 'seen':

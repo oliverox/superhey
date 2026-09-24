@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import type { SQLInputValue } from 'node:sqlite'
-import type { BubbleWhen, HeyClient } from '../cli/client'
+import type { BubbleWhen, HeyClient, ScreenerBox } from '../cli/client'
 import type { Repo } from '../cache/repo'
 import { PostingId } from '../ids'
 import type { SyncEngine } from '../sync/engine'
@@ -15,6 +15,11 @@ export type Action =
   | { type: 'unbubble'; postingId: number }
   | { type: 'label'; postingId: number; labelId: number; add: boolean }
   | { type: 'trash'; postingId: number }
+  /** A Screener decision. Keyed by clearance ID (the sender isn't a posting yet). */
+  | { type: 'screen'; clearanceId: number; decision: 'approve' | 'deny' | 'spam'; box?: ScreenerBox; name?: string }
+
+/** Actions on a thread already in the cache (everything but Screener decisions). */
+type PostingAction = Exclude<Action, { type: 'screen' }>
 
 /** Who asked: the user, an automatic behaviour (seen-on-open), an undo, and later agents and rules. */
 export type ActionSource = 'user' | 'auto' | 'undo' | 'agent' | 'rule'
@@ -66,6 +71,7 @@ export class ActionRunner extends EventEmitter<{ action: [ActionRecord] }> {
   }
 
   async run(action: Action, source: ActionSource = 'user'): Promise<ActionRecord> {
+    if (action.type === 'screen') return this.screen(action, source)
     const posting = this.repo.posting(PostingId(action.postingId))
     if (!posting) throw new Error(`thread ${action.postingId} is not in the cache`)
     const snapshot = this.repo.postingSnapshot(action.postingId)!
@@ -112,10 +118,55 @@ export class ActionRunner extends EventEmitter<{ action: [ActionRecord] }> {
     return rows.map(toRecord)
   }
 
+  /**
+   * Yes and No undo each other (HEY lets a decision be reversed with the opposite one);
+   * Spam also trains HEY's filter, so it has no undo. Verified by the sender leaving the queue.
+   */
+  private async screen(action: Extract<Action, { type: 'screen' }>, source: ActionSource): Promise<ActionRecord> {
+    const who = action.name ?? 'this sender'
+    const summary =
+      action.decision === 'approve'
+        ? `Let ${who} in${action.box && action.box !== 'imbox' ? ` (to ${BOX_NAMES[action.box]})` : ''}`
+        : action.decision === 'deny'
+          ? `Screened out ${who}`
+          : `Marked ${who} as spam`
+    const inverse: Action[] | null =
+      action.decision === 'approve'
+        ? [{ ...action, decision: 'deny', box: undefined }]
+        : action.decision === 'deny'
+          ? [{ ...action, decision: 'approve', box: 'imbox' }]
+          : null
+    const res = this.repo.db
+      .prepare(
+        `INSERT INTO actions (source, type, params_json, status, created_at, posting_id, summary, inverse_json)
+         VALUES (?, 'screen', ?, 'running', ?, 0, ?, ?)`,
+      )
+      .run(source, JSON.stringify(action), new Date().toISOString(), summary, inverse ? JSON.stringify(inverse) : null)
+    const id = Number(res.lastInsertRowid)
+    this.publish(id)
+    try {
+      if (action.decision === 'approve') await this.client.screenerApprove(action.clearanceId, action.box)
+      else await this.client.screenerDeny(action.clearanceId, { spam: action.decision === 'spam' })
+      const waiting = await this.engine.refreshScreener()
+      // An undo puts a decided sender back in play, so only a first decision is checked here.
+      const verified = source === 'undo' ? null : !waiting.some((e) => e.id === action.clearanceId)
+      if (verified === false) throw new Error("HEY didn't apply the decision")
+      this.finish(id, 'done', verified, null)
+    } catch (err) {
+      this.finish(id, 'failed', null, err instanceof Error ? err.message : String(err))
+    }
+    // Approving delivers the sender's waiting mail.
+    if (action.decision === 'approve') {
+      const box = this.repo.boxByKind(action.box ?? 'imbox')
+      if (box) this.engine.requestBoxRefresh(box.id)
+    }
+    return this.publish(id)
+  }
+
   // Internals
 
   /** The actions that put things back as they are now. Empty when nothing would change. */
-  private inverseOf(action: Action): Action[] | null {
+  private inverseOf(action: PostingAction): Action[] | null {
     const p = this.repo.posting(PostingId(action.postingId))!
     const box = this.repo.box(p.boxId)
     const restoreSeen: Action[] = [{ type: 'seen', postingId: action.postingId, seen: p.seen }]
@@ -142,7 +193,7 @@ export class ActionRunner extends EventEmitter<{ action: [ActionRecord] }> {
     }
   }
 
-  private applyOptimistic(action: Action) {
+  private applyOptimistic(action: PostingAction) {
     const p = this.repo.posting(PostingId(action.postingId))!
     const boxes = new Set([p.boxId])
     switch (action.type) {
@@ -182,7 +233,7 @@ export class ActionRunner extends EventEmitter<{ action: [ActionRecord] }> {
     for (const boxId of boxes) this.engine.notify({ kind: 'postings', boxId })
   }
 
-  private async execute(action: Action, fromBoxId: number, source: ActionSource): Promise<boolean | null> {
+  private async execute(action: PostingAction, fromBoxId: number, source: ActionSource): Promise<boolean | null> {
     const id = PostingId(action.postingId)
     switch (action.type) {
       case 'seen': {
@@ -206,13 +257,13 @@ export class ActionRunner extends EventEmitter<{ action: [ActionRecord] }> {
     }
   }
 
-  private boxesTouched(action: Action, fromBoxId: number): number[] {
+  private boxesTouched(action: PostingAction, fromBoxId: number): number[] {
     const kinds = action.type === 'move' ? [action.to] : action.type === 'bubble' || action.type === 'unbubble' ? ['bubblebox', 'imbox'] : []
     const ids = kinds.flatMap((k) => this.repo.boxByKind(k)?.id ?? [])
     return [...new Set([fromBoxId, ...ids])]
   }
 
-  private describe(action: Action, subject: string): string {
+  private describe(action: PostingAction, subject: string): string {
     const s = `“${subject || '(no subject)'}”`
     switch (action.type) {
       case 'seen':
@@ -232,7 +283,7 @@ export class ActionRunner extends EventEmitter<{ action: [ActionRecord] }> {
     }
   }
 
-  private insert(action: Action, source: ActionSource, summary: string, inverse: Action[] | null): number {
+  private insert(action: PostingAction, source: ActionSource, summary: string, inverse: Action[] | null): number {
     const res = this.repo.db
       .prepare(
         `INSERT INTO actions (source, type, params_json, status, created_at, posting_id, summary, inverse_json)

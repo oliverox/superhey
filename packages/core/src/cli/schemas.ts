@@ -142,6 +142,17 @@ export const Bundle = z.looseObject({
   postings: z.array(Posting).default([]),
 })
 
+/** Someone waiting in The Screener; `id` is the clearance ID the decisions take. */
+export const ScreenerEntry = z.looseObject({
+  id: z.number(),
+  name: nullish(z.string()),
+  email_address: z.string(),
+  subject: nullish(z.string()),
+  summary: nullish(z.string()),
+  topic_id: nullish(z.number()),
+})
+export type ScreenerEntry = z.infer<typeof ScreenerEntry>
+
 export const Named = z.looseObject({ id: z.number(), name: z.string() })
 
 /** One line of `hey watch` output. */

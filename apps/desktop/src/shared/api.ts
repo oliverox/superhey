@@ -53,6 +53,10 @@ export interface Api {
   runAction(action: Action, source?: 'user' | 'auto'): Promise<ActionRecord>
   undoAction(id: number): Promise<ActionRecord>
   recentActions(limit?: number): Promise<ActionRecord[]>
+  /** First-time senders waiting in The Screener. */
+  screener(): Promise<ScreenerItem[]>
+  /** Checks The Screener again soon (e.g. when the window regains focus). */
+  refreshScreener(): Promise<void>
   /** Configured sender addresses. */
   senders(): Promise<Array<{ id: number; email: string; default?: boolean | null }>>
   /** Opens the system file picker; answers the chosen paths (empty in browser dev mode). */
@@ -67,7 +71,7 @@ export interface Api {
   openAttachment(id: string): Promise<void>
 }
 
-export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft'] as const satisfies ReadonlyArray<keyof Api>
+export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener'] as const satisfies ReadonlyArray<keyof Api>
 export type ApiMethod = (typeof API_METHODS)[number]
 
 export type ApiEvent =
@@ -89,4 +93,14 @@ export function fileHeaders(contentType: string | null, filename: string): Recor
     'x-content-type-options': 'nosniff',
     'cache-control': 'private, max-age=31536000, immutable',
   }
+}
+
+/** Someone waiting in The Screener (`id` is the clearance ID decisions take). */
+export interface ScreenerItem {
+  id: number
+  name: string | null
+  email: string
+  subject: string | null
+  summary: string | null
+  topicId: number | null
 }

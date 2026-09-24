@@ -7,7 +7,7 @@ export interface ShortcutDef {
   /** `KeyboardEvent.key` values; `mod+` means ⌘ on macOS / Ctrl elsewhere. */
   keys: readonly string[]
   label: string
-  group: 'Navigate' | 'Thread' | 'Act' | 'App'
+  group: 'Navigate' | 'Thread' | 'Act' | 'Screener' | 'App'
 }
 
 export const SHORTCUTS = {
@@ -40,6 +40,11 @@ export const SHORTCUTS = {
   replyAll: { keys: ['a'], label: 'Reply all', group: 'Act' },
   forward: { keys: ['F'], label: 'Forward', group: 'Act' },
   compose: { keys: ['c'], label: 'New message', group: 'App' },
+
+  screener: { keys: ['S'], label: 'Open The Screener', group: 'Screener' },
+  screenYes: { keys: ['y'], label: 'Yes, let them in', group: 'Screener' },
+  screenNo: { keys: ['n'], label: 'No, screen them out', group: 'Screener' },
+  screenSpam: { keys: ['!'], label: 'Spam', group: 'Screener' },
 
   help: { keys: ['?'], label: 'Keyboard shortcuts', group: 'App' },
   theme: { keys: ['T'], label: 'Switch theme', group: 'App' },

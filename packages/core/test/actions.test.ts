@@ -234,3 +234,64 @@ describe('ActionRunner', () => {
     await expect(actions.run({ type: 'seen', postingId: 999, seen: true })).rejects.toThrow(/not in the cache/)
   })
 })
+
+describe('ActionRunner: Screener decisions', () => {
+  function screenerSetup(opts: { ignore?: boolean } = {}) {
+    const waiting = new Map([[7, { id: 7, name: 'Norton', email_address: 'x@example.com', subject: 'Statement', topic_id: 55 }]])
+    const decided = new Map<number, (typeof waiting extends Map<number, infer V> ? V : never)>()
+    const calls: string[][] = []
+    const exec: Exec = async (_b, raw) => {
+      const a = raw.filter((x) => x !== '--json')
+      calls.push(a)
+      const ok = (data: unknown) => ({ stdout: JSON.stringify({ ok: true, data }), stderr: '', exitCode: 0 })
+      if (a[0] === 'screener' && a[1] === 'list') return ok([...waiting.values()])
+      const id = Number(a[2])
+      if (!opts.ignore && (a[1] === 'approve' || a[1] === 'deny')) {
+        const e = waiting.get(id) ?? decided.get(id)
+        if (e) {
+          waiting.delete(id)
+          decided.set(id, e)
+        }
+      }
+      return ok({})
+    }
+    const runner = new HeyRunner({ binary: 'hey', exec })
+    const client = new HeyClient(runner)
+    const repo = new Repo(openDb(':memory:'))
+    repo.replaceBoxes(Object.entries(BOXES).map(([kind, id]) => ({ id, kind, name: kind })))
+    const engine = new SyncEngine(client, repo, runner, { attachmentsDir: mkdtempSync(join(tmpdir(), 'att-')) })
+    vi.spyOn(engine, 'requestBoxRefresh').mockImplementation(() => {})
+    return { actions: new ActionRunner(client, repo, engine), calls, waiting }
+  }
+
+  it('lets a sender in to a chosen box, verifies they left the queue, and undoes with No', async () => {
+    const { actions, calls, waiting } = screenerSetup()
+    const r = await actions.run({ type: 'screen', clearanceId: 7, decision: 'approve', box: 'feedbox', name: 'Norton' })
+    expect(r).toMatchObject({ status: 'done', verified: true, canUndo: true, summary: 'Let Norton in (to The Feed)' })
+    expect(calls).toContainEqual(['screener', 'approve', '7', '--box', 'The Feed'])
+    expect(waiting.size).toBe(0)
+    await actions.undo(r.id)
+    expect(calls).toContainEqual(['screener', 'deny', '7'])
+  })
+
+  it('screens a sender out, with Yes as the undo', async () => {
+    const { actions, calls } = screenerSetup()
+    const r = await actions.run({ type: 'screen', clearanceId: 7, decision: 'deny', name: 'Norton' })
+    expect(r).toMatchObject({ status: 'done', summary: 'Screened out Norton', canUndo: true })
+    await actions.undo(r.id)
+    expect(calls).toContainEqual(['screener', 'approve', '7'])
+  })
+
+  it('marks spam without an undo', async () => {
+    const { actions, calls } = screenerSetup()
+    const r = await actions.run({ type: 'screen', clearanceId: 7, decision: 'spam', name: 'Norton' })
+    expect(r).toMatchObject({ status: 'done', canUndo: false, summary: 'Marked Norton as spam' })
+    expect(calls).toContainEqual(['screener', 'deny', '7', '--spam'])
+  })
+
+  it('reports a decision HEY ignored', async () => {
+    const { actions } = screenerSetup({ ignore: true })
+    const r = await actions.run({ type: 'screen', clearanceId: 7, decision: 'approve', name: 'Norton' })
+    expect(r).toMatchObject({ status: 'failed', error: "HEY didn't apply the decision" })
+  })
+})

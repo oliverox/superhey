@@ -5,6 +5,10 @@ import * as S from './schemas'
 
 export type BoxRef = string | number
 
+/** Where an approved sender's mail goes. */
+export type ScreenerBox = 'imbox' | 'feedbox' | 'trailbox'
+const SCREENER_BOX_NAMES: Record<ScreenerBox, string> = { imbox: 'Imbox', feedbox: 'The Feed', trailbox: 'Paper Trail' }
+
 export interface OutgoingMessage {
   to: string[]
   cc?: string[]
@@ -119,6 +123,21 @@ export class HeyClient {
   async forward(topicId: TopicId, msg: Pick<OutgoingMessage, 'to' | 'cc' | 'bcc' | 'body'>) {
     const list = (flag: string, addrs?: string[]) => (addrs?.length ? [flag, addrs.join(',')] : [])
     await this.runner.json(['forward', String(topicId), ...list('--to', msg.to), ...list('--cc', msg.cc), ...list('--bcc', msg.bcc), ...(msg.body ? ['-m', msg.body] : [])])
+  }
+
+  /** First-time senders waiting to be screened. */
+  screenerList() {
+    return this.data(['screener', 'list', '--all'], z.array(S.ScreenerEntry))
+  }
+
+  /** Let a sender in: their waiting mail goes to `box` (Imbox by default). */
+  async screenerApprove(clearanceId: number, box?: ScreenerBox) {
+    await this.runner.json(['screener', 'approve', String(clearanceId), ...(box && box !== 'imbox' ? ['--box', SCREENER_BOX_NAMES[box]] : [])])
+  }
+
+  /** Turn a sender away; `spam` also trains HEY's spam filter. */
+  async screenerDeny(clearanceId: number, opts: { spam?: boolean } = {}) {
+    await this.runner.json(['screener', 'deny', String(clearanceId), ...(opts.spam ? ['--spam'] : [])])
   }
 
   /** The account's own sender addresses; used to tell sent entries from received ones. */

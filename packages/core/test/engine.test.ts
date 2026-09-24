@@ -49,6 +49,17 @@ describe('SyncEngine watch handling', () => {
     expect(repo.posting(PostingId(100))).toMatchObject({ topicId: 900, isBundle: false, subject: 'Renamed' })
   })
 
+  it('checks the Screener when new mail arrives (the watch does not report it)', async () => {
+    vi.useFakeTimers()
+    const { feed, calls, engine } = setup([['screener list', ok([{ id: 7, name: 'Norton', email_address: 'x@example.com' }])]])
+    feed({ change: 'added', box: imbox, posting_id: 100, posting: posting(), new: true })
+    feed({ change: 'added', box: imbox, posting_id: 101, posting: posting({ id: 101 }), new: true })
+    feed({ change: 'updated', box: imbox, posting_id: 100, posting: posting(), new: false })
+    await vi.runAllTimersAsync()
+    expect(calls.filter((c) => c[0] === 'screener')).toHaveLength(1)
+    expect(engine.screenerEntries().map((e) => e.id)).toEqual([7])
+  })
+
   it('removes deleted postings', () => {
     const { repo, feed } = setup()
     feed({ change: 'added', box: imbox, posting: posting() })

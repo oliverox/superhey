@@ -11,6 +11,7 @@ import { useTheme } from './theme'
 import { useShortcut } from './shortcuts'
 import { ShortcutHelp } from './components/ShortcutHelp'
 import { Composer, type ComposeRequest } from './components/Composer'
+import { ScreenerBanner, ScreenerList, useScreener } from './components/ScreenerView'
 
 type PaneId = 'sidebar' | 'list' | 'reader'
 
@@ -41,6 +42,20 @@ function Workspace({ status }: { status: AppStatus }) {
 
   const [query, setQuery] = useState('')
   const [target, setTarget] = useState<ReaderTarget | null>(null)
+  const waiting = useScreener()
+  const [screening, setScreening] = useState(false)
+  const screeningRef = useRef(screening)
+  screeningRef.current = screening
+  const screenerTarget = target?.screeningId ?? null
+  const openScreener = () => {
+    setQuery('')
+    setScreening(true)
+  }
+  const leaveScreener = useCallback(() => {
+    setScreening(false)
+    setTarget(null)
+  }, [])
+  useShortcut('screener', openScreener, waiting.length > 0 && !screening)
   const searchRef = useRef<HTMLInputElement>(null)
   const { theme, setTheme, toggle: toggleTheme } = useTheme()
   const [activePane, setActivePane] = useState<PaneId>('list')
@@ -102,6 +117,8 @@ function Workspace({ status }: { status: AppStatus }) {
       if (e.key !== 'Escape' || e.defaultPrevented) return
       setQuery('')
       searchRef.current?.blur()
+      // Leaving The Screener also closes the unscreened email in the reader.
+      if (!(document.activeElement instanceof HTMLInputElement) && screeningRef.current) leaveScreener()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -132,7 +149,18 @@ function Workspace({ status }: { status: AppStatus }) {
       <section className="pane flex flex-col bg-pane" data-pane="list" data-active={activePane === 'list'}>
         <header className="drag flex h-[52px] shrink-0 items-center gap-3 border-b border-rule px-4">
           <h1 className="text-[16px] font-semibold tracking-tight">
-            {query ? 'Search' : (activeBox?.name ?? '')}
+            {screening ? (
+              <span className="flex items-center gap-2">
+                <button onClick={leaveScreener} aria-label="Back to the Imbox" title="Back (Esc)" className="no-drag -ml-1 rounded-ui px-1 text-ink-faint hover:bg-pane-sunk hover:text-ink">
+                  ←
+                </button>
+                The Screener
+              </span>
+            ) : query ? (
+              'Search'
+            ) : (
+              (activeBox?.name ?? '')
+            )}
           </h1>
           <div className="no-drag ml-auto flex h-7 w-44 items-center rounded-ui bg-pane-sunk px-2 text-ink-faint focus-within:ring-1 focus-within:ring-rule-strong">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden className="shrink-0">
@@ -150,7 +178,25 @@ function Workspace({ status }: { status: AppStatus }) {
             {!query && <kbd className="text-[11px] text-ink-faint">/</kbd>}
           </div>
         </header>
-        {query ? (
+        {screening ? (
+          <ScreenerList
+            items={waiting}
+            selectedId={screenerTarget}
+            onEmpty={leaveScreener}
+            onSelect={(item) =>
+              setTarget({
+                postingId: null,
+                topicId: item.topicId,
+                entryCount: null,
+                subject: item.subject ?? '',
+                appUrl: null,
+                isBundle: false,
+                sender: item.name ?? item.email,
+                screeningId: item.id,
+              })
+            }
+          />
+        ) : query ? (
           <SearchResults
             query={query}
             onOpen={(hit) =>
@@ -159,6 +205,8 @@ function Workspace({ status }: { status: AppStatus }) {
             activeTopicId={target?.topicId ?? null}
           />
         ) : (
+          <>
+          {activeBox?.kind === 'imbox' && <ScreenerBanner count={waiting.length} onOpen={openScreener} />}
           <PostingList
             key={activeBox?.id}
             postings={list}
@@ -166,6 +214,7 @@ function Workspace({ status }: { status: AppStatus }) {
             selectedId={target?.postingId ?? null}
             onOpen={open}
           />
+          </>
         )}
       </section>
 

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { keyLabel, SHORTCUTS, type ShortcutDef } from '../shortcuts'
 
-const GROUPS: Array<ShortcutDef['group']> = ['Navigate', 'Thread', 'Act', 'App']
+const GROUPS: Array<ShortcutDef['group']> = ['Navigate', 'Thread', 'Act', 'Screener', 'App']
 
 /** Every shortcut, generated from the same table the keys run from. `?` or Esc closes it. */
 export function ShortcutHelp({ onClose }: { onClose: () => void }) {

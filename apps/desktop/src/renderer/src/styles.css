@@ -180,6 +180,34 @@ body {
   border-left: 1px solid var(--rule);
 }
 
+/* The Screener banner: a soft accent strip; under Omarchy, a plain tile line. */
+.screener-banner {
+  background: var(--accent-wash);
+  color: var(--accent);
+  transition: filter 120ms ease;
+}
+.screener-banner:hover {
+  filter: brightness(0.96);
+}
+[data-theme='omarchy'] .screener-banner {
+  justify-content: flex-start;
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+  color: var(--new);
+  font-weight: 400;
+}
+[data-theme='omarchy'] .screener-banner svg {
+  display: none;
+}
+[data-theme='omarchy'] .screener-banner::before {
+  content: '#';
+  color: var(--accent);
+}
+[data-theme='omarchy'] .screener-banner::after {
+  content: '→';
+  margin-left: auto;
+}
+
 /* Round avatars by default; square tiles under Omarchy. */
 .avatar-shape {
   border-radius: var(--avatar-r);

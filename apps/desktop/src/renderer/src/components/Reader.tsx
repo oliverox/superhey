@@ -25,6 +25,8 @@ export interface ReaderTarget {
   isBundle: boolean
   /** Who a bundle is from, for its heading. */
   sender?: string | null
+  /** Set while reading a first-time sender's email in The Screener (clearance ID). */
+  screeningId?: number | null
 }
 
 // Email is untrusted: react-markdown drops raw HTML, and remote images are not loaded
@@ -129,7 +131,8 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
             ) : (
               <>
                 <Conversation entries={thread.data.entries} subject={subject} htmlByEntry={html.data ?? {}} />
-                <ReplyArea key={thread.data.topicId} thread={thread.data} />
+                {/* No replying to someone who hasn't been let in yet. */}
+                {target.screeningId == null && <ReplyArea key={thread.data.topicId} thread={thread.data} />}
               </>
             )}
           </article>
