@@ -227,6 +227,13 @@ body {
 .bundle-item .email-wide {
   position: relative;
 }
+/* With several emails open, the keys act on one; the others' actions wait, dimmed. */
+.bundle-actions {
+  transition: opacity 150ms ease;
+}
+.bundle-item[data-focused='false'] .bundle-actions:not(:hover, :focus-within) {
+  opacity: 0.45;
+}
 [data-theme='omarchy'] .bundle-node {
   border-radius: 0;
 }

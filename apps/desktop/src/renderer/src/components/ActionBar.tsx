@@ -9,7 +9,16 @@ import { Menu, MenuItem, MenuSeparator, ToolbarButton } from './Menu'
  * layer (verified, logged, undoable); `onLeaveBox` lets the list move on to the next thread
  * when this one leaves the box being viewed.
  */
-export function ActionBar({ postingId, onLeaveBox }: { postingId: number; onLeaveBox: () => void }) {
+export function ActionBar({
+  postingId,
+  onLeaveBox,
+  keys = true,
+}: {
+  postingId: number
+  onLeaveBox: () => void
+  /** Whether the keyboard acts on this thread (in a bundle, only the email in focus). */
+  keys?: boolean
+}) {
   const posting = useLive(
     () => api.posting(postingId),
     [postingId],
@@ -33,15 +42,16 @@ export function ActionBar({ postingId, onLeaveBox }: { postingId: number; onLeav
 
   const p = posting.data
   const ready = !!p && !p.isBundle
+  const live = ready && keys
   const kind = boxes.data?.find((b) => b.id === p?.boxId)?.kind ?? ''
 
   // Keys for the open thread; menus (b, m, l) register their own.
-  useShortcut('replyLater', () => p && move(kind === 'laterbox' ? 'imbox' : 'laterbox'), ready)
-  useShortcut('setAside', () => p && move(kind === 'asidebox' ? 'imbox' : 'asidebox'), ready)
-  useShortcut('toFeed', () => kind !== 'feedbox' && move('feedbox'), ready)
-  useShortcut('toTrail', () => kind !== 'trailbox' && move('trailbox'), ready)
-  useShortcut('toggleSeen', () => p && run({ type: 'seen', postingId: p.id, seen: !p.seen }), ready)
-  useShortcut('trash', () => setConfirmTrash(true), ready)
+  useShortcut('replyLater', () => p && move(kind === 'laterbox' ? 'imbox' : 'laterbox'), live)
+  useShortcut('setAside', () => p && move(kind === 'asidebox' ? 'imbox' : 'asidebox'), live)
+  useShortcut('toFeed', () => kind !== 'feedbox' && move('feedbox'), live)
+  useShortcut('toTrail', () => kind !== 'trailbox' && move('trailbox'), live)
+  useShortcut('toggleSeen', () => p && run({ type: 'seen', postingId: p.id, seen: !p.seen }), live)
+  useShortcut('trash', () => setConfirmTrash(true), live)
 
   if (!p || !ready) return null
   function run(action: Action, leaves = false) {
@@ -70,7 +80,7 @@ export function ActionBar({ postingId, onLeaveBox }: { postingId: number; onLeav
         <SetAsideIcon />
       </ToolbarButton>
 
-      <Menu label="Bubble Up" icon={<BubbleIcon />} shortcut="bubbleMenu">
+      <Menu label="Bubble Up" icon={<BubbleIcon />} shortcut={keys ? 'bubbleMenu' : undefined}>
         {(close) => (
           <>
             <MenuItem onSelect={() => (close(), bubble({ kind: 'now' }))}>Now</MenuItem>
@@ -106,7 +116,7 @@ export function ActionBar({ postingId, onLeaveBox }: { postingId: number; onLeav
         )}
       </Menu>
 
-      <Menu label="Move to…" icon={<MoveIcon />} shortcut="moveMenu">
+      <Menu label="Move to…" icon={<MoveIcon />} shortcut={keys ? 'moveMenu' : undefined}>
         {(close) => (
           <>
             {(
@@ -126,7 +136,7 @@ export function ActionBar({ postingId, onLeaveBox }: { postingId: number; onLeav
         )}
       </Menu>
 
-      <Menu label="Labels" icon={<LabelIcon />} shortcut="labelsMenu">
+      <Menu label="Labels" icon={<LabelIcon />} shortcut={keys ? 'labelsMenu' : undefined}>
         {() =>
           (labels.data ?? []).length === 0 ? (
             <p className="px-2.5 py-1.5 text-ink-faint">No labels yet. Create them in HEY.</p>

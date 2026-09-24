@@ -1,32 +1,60 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { PostingRow, ThreadView } from '@shared/api'
 import { api, useLive } from '../api'
 import { stripSubjectPrefixes } from '../mail/forwarded'
 import { useShortcut, withShortcut } from '../shortcuts'
+import { ActionBar } from './ActionBar'
 import { Avatar } from './Avatar'
 import { Conversation, Time } from './Reader'
+import { ReplyArea } from './ReplyArea'
 
 /**
  * A bundle, read as one digest: the sender once at the top, then their emails on a quiet
  * timeline, newest first. The newest is open; the others are one line each (subject and
  * preview), so together they read as a table of contents. Opening one expands it in
- * place; its content is fetched only then. `;` / `:` expand or collapse them all.
+ * place, drawn as the thread view draws it, with its actions and replies; its content is
+ * fetched only then. `;` / `:` expand or collapse them all. The thread keys (e, r, ⇧R…)
+ * act on the email in focus: the one last opened, or clicked.
  */
-export function BundleView({ bundleId, sender, onOpen }: { bundleId: number; sender: string; onOpen: (p: PostingRow) => void }) {
-  const threads = useLive(() => api.bundleThreads(bundleId), [bundleId])
-  const list = threads.data ?? []
+export function BundleView({ bundleId, sender, onLeaveBox }: { bundleId: number; sender: string; onLeaveBox: () => void }) {
+  const members = useLive(() => api.bundleThreads(bundleId), [bundleId])
+  // Actions change the cached rows; re-read those (not HEY's bundle) so seen, labels and
+  // moves show at once. An email moved or trashed out of the box leaves the digest.
+  const ids = (members.data ?? []).map((t) => t.id)
+  const key = ids.join()
+  const box = members.data?.[0]?.boxId
+  const rows = useLive(
+    async () => ({ key, rows: await Promise.all(ids.map((id) => api.posting(id))) }),
+    [key],
+    (e) => e.type === 'change' && e.change.kind === 'postings',
+  )
+  // Rows read for an earlier member list don't count (they'd look like an emptied bundle).
+  const fresh = rows.data?.key === key ? rows.data.rows : null
+  const list = (fresh ?? members.data ?? []).filter((t): t is PostingRow => !!t && t.boxId === box)
+
   const [open, setOpen] = useState<Set<number> | null>(null)
-  // Until someone chooses, the newest email is the one open.
+  const [focused, setFocused] = useState<number | null>(null)
+  // Until someone chooses, the newest email is the one open (and in focus).
   const expanded = open ?? new Set(list.slice(0, 1).map((t) => t.id))
+  const inFocus = list.some((t) => t.id === focused && expanded.has(t.id)) ? focused : (list.find((t) => expanded.has(t.id))?.id ?? null)
   const toggle = (id: number) => {
     const next = new Set(expanded)
     if (next.has(id)) next.delete(id)
-    else next.add(id)
+    else {
+      next.add(id)
+      setFocused(id)
+    }
     setOpen(next)
   }
   const many = list.length > 1
   useShortcut('expandAll', () => setOpen(new Set(list.map((t) => t.id))), many)
   useShortcut('collapseAll', () => setOpen(new Set()), many)
+
+  // Everything filed away: the bundle is done, so the list moves on.
+  const emptied = ids.length > 0 && fresh != null && list.length === 0
+  useEffect(() => {
+    if (emptied) onLeaveBox()
+  }, [emptied, onLeaveBox])
 
   const unread = list.filter((t) => !t.seen).length
   const face = list[0]?.avatar
@@ -38,7 +66,7 @@ export function BundleView({ bundleId, sender, onOpen }: { bundleId: number; sen
         <div className="min-w-0 flex-1">
           <h1 className="truncate font-app text-[26px] leading-tight font-semibold tracking-[-0.02em]">{sender}</h1>
           <p className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-ink-faint">
-            {threads.loading && !threads.data ? (
+            {members.loading && !members.data ? (
               'Loading…'
             ) : (
               <>
@@ -64,12 +92,20 @@ export function BundleView({ bundleId, sender, onOpen }: { bundleId: number; sen
         </div>
       </header>
 
-      {threads.error && <p className="mt-6 text-danger">Couldn't load this bundle: {threads.error}</p>}
+      {members.error && <p className="mt-6 text-danger">Couldn't load this bundle: {members.error}</p>}
 
       {/* The timeline hangs in the column's margin, so each email gets the thread view's full width. */}
       <ol className="bundle-timeline mt-7 -ml-9">
         {list.map((t, i) => (
-          <BundleItem key={t.id} posting={t} index={i} expanded={expanded.has(t.id)} onToggle={() => toggle(t.id)} onOpenThread={() => onOpen(t)} />
+          <BundleItem
+            key={t.id}
+            posting={t}
+            index={i}
+            expanded={expanded.has(t.id)}
+            focused={t.id === inFocus}
+            onToggle={() => toggle(t.id)}
+            onFocus={() => setFocused(t.id)}
+          />
         ))}
       </ol>
     </div>
@@ -80,20 +116,29 @@ function BundleItem({
   posting: p,
   index,
   expanded,
+  focused,
   onToggle,
-  onOpenThread,
+  onFocus,
 }: {
   posting: PostingRow
   index: number
   expanded: boolean
+  /** The keyboard acts on this email. */
+  focused: boolean
   onToggle: () => void
-  onOpenThread: () => void
+  onFocus: () => void
 }) {
   const subject = stripSubjectPrefixes(p.subject) || '(no subject)'
   // HEY's summary often opens with the subject again; the preview is what follows it.
   const preview = afterSubject(p.summary, subject)
   return (
-    <li className="bundle-item rise relative pb-7 pl-9 last:pb-2" style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }}>
+    <li
+      className="bundle-item rise relative pb-7 pl-9 last:pb-2"
+      data-focused={expanded && focused}
+      style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }}
+      // Clicking into an open email (to read, select or act) gives it the keys.
+      onMouseDownCapture={expanded ? onFocus : undefined}
+    >
       {/* The node on the timeline: filled while unread. */}
       <span aria-hidden className={`bundle-node absolute top-[7px] left-[3px] size-[11px] rounded-full border-2 ${p.seen ? 'border-rule-strong bg-pane-alt' : 'border-accent bg-accent'}`} />
       <div className="flex items-start gap-3">
@@ -101,21 +146,31 @@ function BundleItem({
           <span className={`block text-[17px] leading-snug font-semibold tracking-[-0.01em] ${expanded ? 'text-ink' : 'text-ink-soft group-hover:text-ink'}`}>{subject}</span>
           {!expanded && preview && <span className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-ink-faint">{preview}</span>}
         </button>
-        {/* Open, the message header below carries the time, as in a thread. */}
-        {!expanded && p.activeAt && (
-          <span className="mt-[3px] shrink-0">
-            <Time iso={p.activeAt} />
+        {/* Open, the email's actions take the time's place (the message header carries it). */}
+        {expanded ? (
+          <span className="bundle-actions -mt-0.5 shrink-0">
+            <ActionBar postingId={p.id} onLeaveBox={() => {}} keys={focused} />
           </span>
+        ) : (
+          p.activeAt && (
+            <span className="mt-[3px] shrink-0">
+              <Time iso={p.activeAt} />
+            </span>
+          )
         )}
       </div>
-      {expanded && <BundleEmail posting={p} onOpenThread={onOpenThread} />}
+      {expanded && <BundleEmail posting={p} focused={focused} />}
     </li>
   )
 }
 
 /** One bundled email, read in place exactly as the thread view draws it; fetched on first open. */
-function BundleEmail({ posting: p, onOpenThread }: { posting: PostingRow; onOpenThread: () => void }) {
-  const thread = useLive<ThreadView | null>(() => (p.topicId == null ? Promise.resolve(null) : api.thread(p.topicId, p.entryCount)), [p.topicId, p.entryCount])
+function BundleEmail({ posting: p, focused }: { posting: PostingRow; focused: boolean }) {
+  const thread = useLive<ThreadView | null>(
+    () => (p.topicId == null ? Promise.resolve(null) : api.thread(p.topicId, p.entryCount)),
+    [p.topicId, p.entryCount],
+    (e) => e.type === 'change' && e.change.kind === 'thread' && e.change.topicId === p.topicId,
+  )
   const html = useLive<Record<number, string>>(
     () => (p.topicId == null || !thread.data ? Promise.resolve({}) : api.threadHtml(p.topicId)),
     [p.topicId, thread.data?.fetchedAt],
@@ -132,10 +187,8 @@ function BundleEmail({ posting: p, onOpenThread }: { posting: PostingRow; onOpen
     )
   return (
     <>
-      <Conversation entries={thread.data.entries} subject={thread.data.subject ?? p.subject ?? ""} htmlByEntry={html.data ?? {}} keys={false} />
-      <button onClick={onOpenThread} className="mt-2.5 rounded-ui px-1.5 py-0.5 text-[12px] font-medium text-ink-faint hover:bg-pane-sunk hover:text-ink" title="Open as a thread, with replies and actions">
-        Open thread →
-      </button>
+      <Conversation entries={thread.data.entries} subject={thread.data.subject ?? p.subject ?? ''} htmlByEntry={html.data ?? {}} keys={false} />
+      <ReplyArea thread={thread.data} keys={focused} />
     </>
   )
 }

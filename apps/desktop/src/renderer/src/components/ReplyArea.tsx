@@ -8,7 +8,14 @@ import { Composer, type ComposeRequest } from './Composer'
  * Under a conversation: Reply (⇧R), Reply all (a) and Forward (⇧F). The composer opens in
  * place, addressed the way HEY would, with every recipient visible and editable.
  */
-export function ReplyArea({ thread }: { thread: ThreadView }) {
+export function ReplyArea({
+  thread,
+  keys = true,
+}: {
+  thread: ThreadView
+  /** Whether ⇧R, a and ⇧F act on this thread (in a bundle, only the email in focus). */
+  keys?: boolean
+}) {
   const [request, setRequest] = useState<ComposeRequest | null>(null)
   const latest = thread.entries.at(-1)
   const others = latest ? [latest.from, ...latest.to, ...latest.cc].filter((p) => p && !p.isMe).length : 0
@@ -24,9 +31,9 @@ export function ReplyArea({ thread }: { thread: ThreadView }) {
     }
   }
 
-  useShortcut('reply', () => open('reply'), !request && !!latest)
-  useShortcut('replyAll', () => open('reply-all'), !request && !!latest)
-  useShortcut('forward', () => open('forward'), !request && !!latest)
+  useShortcut('reply', () => open('reply'), keys && !request && !!latest)
+  useShortcut('replyAll', () => open('reply-all'), keys && !request && !!latest)
+  useShortcut('forward', () => open('forward'), keys && !request && !!latest)
 
   if (!latest) return null
   if (request) {

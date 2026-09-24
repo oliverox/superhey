@@ -124,7 +124,7 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
           {!target.isBundle && <h1 className="rise font-app text-[26px] leading-[1.2] font-semibold tracking-[-0.02em] text-balance">{title}</h1>}
 
             {target.isBundle ? (
-              target.postingId != null && <BundleView bundleId={target.postingId} sender={target.sender ?? 'this sender'} onOpen={onOpenThread} />
+              target.postingId != null && <BundleView bundleId={target.postingId} sender={target.sender ?? 'this sender'} onLeaveBox={onLeaveBox} />
             ) : thread.error ? (
               <p className="mt-6 text-danger">Couldn't load this thread: {thread.error}</p>
             ) : !thread.data ? (
