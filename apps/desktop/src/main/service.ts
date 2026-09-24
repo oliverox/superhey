@@ -128,6 +128,12 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     await this.opts.openFile(file.path)
   }
 
+  /** For the file endpoints: a cached real avatar image, or null for initials-only senders. */
+  async avatarFile(url: string) {
+    if (typeof url !== 'string' || url.length > 2000) return null
+    return this.need().avatars.get(url)
+  }
+
   /** For the file endpoints. Only attachments already listed in the cache can be served. */
   async attachmentFile(id: string) {
     if (typeof id !== 'string' || id.length > 200) throw new Error('bad attachment id')

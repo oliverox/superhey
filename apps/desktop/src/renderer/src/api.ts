@@ -44,6 +44,12 @@ export const fileUrl = (id: string) =>
     ? `myhey-file://attachment/${encodeURIComponent(id)}`
     : `/api/file/${encodeURIComponent(id)}?token=${encodeURIComponent(token ?? '')}`
 
+/** URL for a sender's avatar image; answers 404 when HEY only has initials for them. */
+export const avatarUrl = (heyUrl: string) =>
+  window.bridge
+    ? `myhey-file://avatar/${encodeURIComponent(heyUrl)}`
+    : `/api/avatar?u=${encodeURIComponent(heyUrl)}&token=${encodeURIComponent(token ?? '')}`
+
 export const onApiEvent = (cb: (event: ApiEvent) => void) => bridge.onEvent(cb)
 
 /**

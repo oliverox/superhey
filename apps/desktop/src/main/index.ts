@@ -23,6 +23,7 @@ protocol.registerSchemesAsPrivileged([
 
 async function serveFile(request: Request): Promise<Response> {
   const url = new URL(request.url)
+  if (url.host === 'avatar') return serveAvatar(decodeURIComponent(url.pathname.slice(1)))
   if (url.host !== 'attachment') return new Response(null, { status: 404 })
   try {
     const file = await service.attachmentFile(decodeURIComponent(url.pathname.slice(1)))
@@ -77,6 +78,15 @@ ipcMain.handle('api', (_event, method: unknown, args: unknown) => {
 service.on('event', (event: ApiEvent) => {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send('api:event', event)
 })
+
+async function serveAvatar(avatarUrl: string): Promise<Response> {
+  const file = await service.avatarFile(avatarUrl).catch(() => null)
+  if (!file) return new Response(null, { status: 404 })
+  const body = await net.fetch(pathToFileURL(file.path).toString())
+  return new Response(body.body, {
+    headers: { 'content-type': file.contentType, 'cache-control': 'private, max-age=86400', 'access-control-allow-origin': '*' },
+  })
+}
 
 app.whenReady().then(() => {
   protocol.handle(FILE_SCHEME, serveFile)

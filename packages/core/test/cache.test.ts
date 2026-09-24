@@ -41,6 +41,22 @@ describe('Repo postings', () => {
     expect(r.posting(PostingId(100))?.labels).toEqual(['Travel', 'Receipts'])
   })
 
+  it("exposes the sender's avatar and the tracker flag, with initials as a fallback", () => {
+    const r = repo()
+    r.upsertPostings([
+      P({
+        blocked_trackers: true,
+        creator: { ...alice, avatar_url: 'https://app.hey.com/avatars/x', avatar_background_color: '#FF7182', initials: 'AE' },
+      }),
+      P({ id: 101, creator: { id: 12, name: 'Bea Lin', email_address: 'bea@example.com' } }),
+    ])
+    expect(r.posting(PostingId(100))).toMatchObject({
+      avatar: { url: 'https://app.hey.com/avatars/x', color: '#FF7182', initials: 'AE' },
+      blockedTrackers: true,
+    })
+    expect(r.posting(PostingId(101))).toMatchObject({ avatar: { url: null, color: null, initials: 'BL' }, blockedTrackers: false })
+  })
+
   it('prefers the alternative sender name', () => {
     const r = repo()
     r.upsertPostings([P({ alternative_sender_name: 'Example Newsletter' })])

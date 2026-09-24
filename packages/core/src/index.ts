@@ -5,6 +5,7 @@ export { HeyClient, type BoxPage, type BubbleWhen, type Verified } from './cli/c
 export { ActionRunner, type Action, type ActionRecord, type ActionSource, type ActionStatus, type MoveTarget } from './actions/runner'
 export * as schemas from './cli/schemas'
 export { openDb, type Db } from './cache/db'
+export { AvatarCache, type AvatarFile } from './cache/avatars'
 export * from './cache/repo'
 export { Watcher, type WatchStatus } from './sync/watcher'
 export { SyncEngine, type AttachmentFile, type CacheChange, type SyncStatus } from './sync/engine'
@@ -13,6 +14,7 @@ import { HeyClient } from './cli/client'
 import { HeyRunner, locateCli } from './cli/runner'
 import { dirname, join } from 'node:path'
 import { openDb } from './cache/db'
+import { AvatarCache } from './cache/avatars'
 import { Repo } from './cache/repo'
 import { SyncEngine } from './sync/engine'
 import { ActionRunner } from './actions/runner'
@@ -27,7 +29,8 @@ export async function createCore(opts: { dbPath: string; cliPath?: string; accou
     attachmentsDir: join(dirname(opts.dbPath), 'attachments'),
   })
   const actions = new ActionRunner(client, repo, engine)
-  return { cli, runner, client, repo, engine, actions }
+  const avatars = new AvatarCache(join(dirname(opts.dbPath), 'avatars'))
+  return { cli, runner, client, repo, engine, actions, avatars }
 }
 
 export type Core = Awaited<ReturnType<typeof createCore>>

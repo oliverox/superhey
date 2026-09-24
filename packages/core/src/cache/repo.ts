@@ -23,6 +23,10 @@ export interface PostingRow {
   appUrl: string | null
   /** HEY label names on the thread. */
   labels: string[]
+  /** The sender's avatar as HEY describes it: a logo/photo URL, and the colour and initials for the fallback. */
+  avatar: { url: string | null; color: string | null; initials: string }
+  /** HEY blocked spy trackers in this email. */
+  blockedTrackers: boolean
 }
 
 export interface AttachmentRow {
@@ -554,15 +558,36 @@ function toPostingRow(r: Record<string, unknown>): PostingRow {
     isBundle: r.is_bundle === 1,
     activeAt: r.active_at as string | null,
     appUrl: r.app_url as string | null,
-    labels: labelsOf(r.raw_json as string),
+    ...fromRaw(r.raw_json as string, (r.sender_name as string | null) ?? (r.sender_email as string | null)),
   }
 }
 
-function labelsOf(rawJson: string): string[] {
-  try {
-    const folders = (JSON.parse(rawJson) as { folders?: Array<{ name?: unknown }> | null }).folders
-    return (folders ?? []).flatMap((f) => (typeof f.name === 'string' ? [f.name] : []))
-  } catch {
-    return []
+/** Details kept only in the posting's raw JSON: labels, avatar, tracker flag. */
+function fromRaw(rawJson: string, senderName: string | null): Pick<PostingRow, 'labels' | 'avatar' | 'blockedTrackers'> {
+  type Raw = {
+    folders?: Array<{ name?: unknown }> | null
+    creator?: { avatar_url?: unknown; avatar_background_color?: unknown; initials?: unknown } | null
+    blocked_trackers?: unknown
   }
+  let raw: Raw = {}
+  try {
+    raw = JSON.parse(rawJson) as Raw
+  } catch {
+    // keep defaults
+  }
+  const str = (v: unknown) => (typeof v === 'string' && v ? v : null)
+  return {
+    labels: (raw.folders ?? []).flatMap((f) => (typeof f.name === 'string' ? [f.name] : [])),
+    avatar: {
+      url: str(raw.creator?.avatar_url),
+      color: str(raw.creator?.avatar_background_color),
+      initials: str(raw.creator?.initials) ?? initialsOf(senderName),
+    },
+    blockedTrackers: raw.blocked_trackers === true,
+  }
+}
+
+function initialsOf(name: string | null): string {
+  const words = (name ?? '').replace(/[^\p{L}\p{N} ]/gu, ' ').split(/\s+/).filter(Boolean)
+  return words.slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || '?'
 }

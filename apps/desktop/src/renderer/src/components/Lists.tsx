@@ -3,6 +3,7 @@ import type { PostingRow, SearchHit } from '@shared/api'
 import { api, useLive } from '../api'
 import { shortDate } from '../format'
 import { stripSubjectPrefixes } from '../mail/forwarded'
+import { Avatar } from './Avatar'
 
 interface ListProps {
   postings: PostingRow[]
@@ -40,30 +41,33 @@ export function PostingList({ postings, loading, selectedId, onOpen }: ListProps
               role="option"
               aria-selected={selected}
               onClick={() => onOpen(p)}
-              className={`rise relative mx-2 cursor-default rounded-ui px-3 py-2.5 ${
+              className={`rise relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2.5 pr-3 pl-4 ${
                 selected ? 'bg-selection' : 'hover:bg-pane-sunk'
               }`}
               style={{ animationDelay: `${Math.min(i, 12) * 18}ms` }}
             >
-              {!p.seen && <span className="absolute top-[15px] left-[3px] size-1.5 rounded-full bg-new" aria-label="Unseen" />}
-              <div className="flex items-baseline gap-2">
-                <span className={`min-w-0 truncate ${p.seen ? 'text-ink-soft' : 'font-semibold text-ink'}`}>
-                  {p.subject ? stripSubjectPrefixes(p.subject) : '(no subject)'}
-                </span>
-                {p.hasAttachments && <Paperclip />}
-                {(p.entryCount ?? 0) > 1 && <span className="shrink-0 text-[11px] text-ink-faint">{p.entryCount}</span>}
-                <span className="ml-auto shrink-0 pl-1 text-[11.5px] text-ink-faint">{shortDate(p.activeAt)}</span>
-              </div>
-              <div className="mt-0.5 flex min-w-0 items-baseline gap-1.5 text-[12.5px] text-ink-faint">
-                {p.labels.map((label) => (
-                  <span key={label} className="shrink-0 rounded-[4px] border border-rule-strong px-1 text-[10.5px] leading-[15px] font-medium text-ink-soft">
-                    {label}
+              {!p.seen && <span className="absolute top-1/2 left-[5px] size-1.5 -translate-y-1/2 rounded-full bg-new" aria-label="Unseen" />}
+              <Avatar avatar={p.avatar} stacked={p.isBundle} blockedTrackers={p.blockedTrackers} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-2">
+                  <span className={`min-w-0 truncate ${p.seen ? 'text-ink-soft' : 'font-semibold text-ink'}`}>
+                    {p.subject ? stripSubjectPrefixes(p.subject) : '(no subject)'}
                   </span>
-                ))}
-                <span className="min-w-0 truncate">
-                  <span className="font-medium text-ink-soft">{senderLabel(p)}</span>
-                  {p.summary && <> – {p.summary}</>}
-                </span>
+                  {p.hasAttachments && <Paperclip />}
+                  {(p.entryCount ?? 0) > 1 && <span className="shrink-0 text-[11px] text-ink-faint">{p.entryCount}</span>}
+                  <span className="ml-auto shrink-0 pl-1 text-[11.5px] text-ink-faint">{shortDate(p.activeAt)}</span>
+                </div>
+                <div className="mt-0.5 flex min-w-0 items-baseline gap-1.5 text-[12.5px] text-ink-faint">
+                  {p.labels.map((label) => (
+                    <span key={label} className="shrink-0 rounded-[4px] border border-rule-strong px-1 text-[10.5px] leading-[15px] font-medium text-ink-soft">
+                      {label}
+                    </span>
+                  ))}
+                  <span className="min-w-0 truncate">
+                    <span className="font-medium text-ink-soft">{senderLabel(p)}</span>
+                    {p.summary && <> – {p.summary}</>}
+                  </span>
+                </div>
               </div>
             </li>
           </Fragment>

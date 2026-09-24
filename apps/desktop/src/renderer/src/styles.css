@@ -38,6 +38,7 @@
   --font-read: 'Onest Variable', ui-sans-serif, sans-serif;
   --r: 8px;
   --r-lg: 12px;
+  --avatar-r: 9999px;
   --gap: 0px;
   --pane-border: 0px;
   --text: 13.5px;
@@ -101,6 +102,7 @@
   --font-read: var(--font-ui);
   --r: 0px;
   --r-lg: 0px;
+  --avatar-r: 0px;
   --gap: 10px;
   --pane-border: 2px;
   --text: 12.5px;
@@ -176,6 +178,11 @@ body {
 }
 :root:not([data-theme='omarchy']) .pane + .pane {
   border-left: 1px solid var(--rule);
+}
+
+/* Round avatars by default; square tiles under Omarchy. */
+.avatar-shape {
+  border-radius: var(--avatar-r);
 }
 
 /* Draggable window chrome (hidden title bar on macOS). */

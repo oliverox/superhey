@@ -49,6 +49,17 @@ createServer(async (req, res) => {
     return
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/avatar') {
+    const f = await service.avatarFile(url.searchParams.get('u') ?? '').catch(() => null)
+    if (!f) {
+      res.writeHead(404).end()
+      return
+    }
+    res.writeHead(200, { 'content-type': f.contentType, 'cache-control': 'private, max-age=86400' })
+    createReadStream(f.path).pipe(res)
+    return
+  }
+
   const file = /^\/api\/file\/(.+)$/.exec(url.pathname)
   if (req.method === 'GET' && file) {
     try {
