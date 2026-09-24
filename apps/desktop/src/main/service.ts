@@ -85,6 +85,10 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     return this.need().engine.ensureThread(TopicId(int(topicId)), entryCount == null ? null : int(entryCount))
   }
 
+  async threadHtml(topicId: number) {
+    return this.need().engine.ensureThreadHtml(TopicId(int(topicId)))
+  }
+
   async search(query: string) {
     if (typeof query !== 'string') throw new Error('query must be a string')
     return this.need().repo.search(query.slice(0, 200))

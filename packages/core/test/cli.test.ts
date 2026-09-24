@@ -2,7 +2,7 @@ import { chmod, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { HeyClient } from '../src/cli/client'
+import { HeyClient, splitThreadHtml } from '../src/cli/client'
 import { HeyAuthError, HeyBinaryError, HeyCliError, HeyNotFoundError } from '../src/cli/errors'
 import { compareVersions, HeyRunner, locateCli } from '../src/cli/runner'
 import { PostingId } from '../src/ids'
@@ -160,5 +160,42 @@ describe('HeyClient', () => {
       ['box view 1', box([])],
     ])
     expect(await new HeyClient(runner).move(PostingId(100), 'feedbox', 1)).toEqual({ verified: null })
+  })
+})
+
+describe('thread HTML', () => {
+  // Shaped like `hey thread read --html`: one article per message; an email's own markup
+  // (even an "<article>") sits escaped inside attributes.
+  const doc = `<!doctype html><html><body>
+<article id="entry-11" data-entry-id="11"><header><div>From: A</div></header>
+<div><figure data-trix-attachment="{&quot;content&quot;:&quot;&lt;article id=\\&quot;entry-99\\&quot;&gt;&quot;}"></figure></div>
+</article>
+<article id="entry-12" data-entry-id="12"><div>Second</div></article>
+</body></html>`
+
+  it('splits the CLI output into one HTML body per message', () => {
+    const map = splitThreadHtml(doc)
+    expect([...map.keys()]).toEqual([11, 12])
+    expect(map.get(11)).toContain('<header><div>From: A</div></header>')
+    expect(map.get(11)).not.toContain('</article>')
+    expect(map.get(12)).toBe('<div>Second</div>')
+  })
+
+  it('reads it through a plain-text CLI call', async () => {
+    const { runner, calls } = runnerWith([['thread read 900 --html', { stdout: doc, stderr: '', exitCode: 0 }]])
+    const map = await new HeyClient(runner).threadHtml(900 as never)
+    expect(map.size).toBe(2)
+    expect(calls[0]).toEqual(['thread', 'read', '900', '--html'])
+  })
+
+  it('maps text-command failures to typed errors', async () => {
+    const { runner } = runnerWith([
+      ['thread read 1', { stdout: '', stderr: '', exitCode: 3 }],
+      ['thread read 2', { stdout: '{"ok":false,"code":"not_found","error":"resource not found"}', stderr: '', exitCode: 2 }],
+      ['thread read 3', { stdout: '', stderr: 'boom', exitCode: 1 }],
+    ])
+    await expect(runner.text(['thread', 'read', '1'])).rejects.toBeInstanceOf(HeyAuthError)
+    await expect(runner.text(['thread', 'read', '2'])).rejects.toBeInstanceOf(HeyNotFoundError)
+    await expect(runner.text(['thread', 'read', '3'])).rejects.toThrow(/boom/)
   })
 })

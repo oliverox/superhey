@@ -232,6 +232,14 @@ kbd {
   max-width: calc(var(--measure) + 8.5rem + 2px);
 }
 
+/* Designed emails: up to 724px (a 700px email plus the frame's padding), centred on the
+   reading column and never wider than the scrolling pane. */
+.email-wide {
+  --email-w: min(724px, calc(100cqw - 3rem));
+  width: var(--email-w);
+  margin-inline: calc((100% - var(--email-w)) / 2);
+}
+
 /* Wide tables scroll sideways inside the message instead of squashing. */
 .table-scroll {
   overflow-x: auto;

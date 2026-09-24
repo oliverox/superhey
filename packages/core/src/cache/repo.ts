@@ -403,6 +403,21 @@ export class Repo {
     return byEntry
   }
 
+  /** Cached original HTML for a thread's messages, by entry ID. Missing entries are absent. */
+  entryHtml(topicId: TopicId): Map<number, string> {
+    const rows = this.all<{ id: number; body_html: string }>(
+      'SELECT id, body_html FROM entries WHERE topic_id = ? AND body_html IS NOT NULL',
+      topicId,
+    )
+    return new Map(rows.map((r) => [r.id, r.body_html]))
+  }
+
+  storeEntryHtml(html: Map<number, string>) {
+    transaction(this.db, () => {
+      for (const [id, body] of html) this.run('UPDATE entries SET body_html = ? WHERE id = ?', body, id)
+    })
+  }
+
   /** Whether the cached thread is missing or older than what the posting reports. */
   threadIsStale(topicId: TopicId, entryCount: number | null): boolean {
     const t = this.get<{ entry_count: number }>('SELECT entry_count FROM threads WHERE topic_id = ?', topicId)

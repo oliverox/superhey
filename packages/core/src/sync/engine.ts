@@ -43,6 +43,7 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
   private calendarTimer: NodeJS.Timeout | null = null
   private readonly threadFetches = new Map<TopicId, Promise<ThreadView | null>>()
   private readonly fileFetches = new Map<string, Promise<AttachmentFile>>()
+  private readonly htmlFetches = new Map<TopicId, Promise<Record<number, string>>>()
   private backfillPaused = false
   private status: SyncStatus = { watch: 'stopped', initialSyncDone: false, lastError: null }
 
@@ -150,6 +151,22 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
     })().finally(() => this.threadFetches.delete(topicId))
 
     this.threadFetches.set(topicId, fetch)
+    return fetch
+  }
+
+  /** Original HTML of each message in a thread, fetched once and cached. */
+  async ensureThreadHtml(topicId: TopicId): Promise<Record<number, string>> {
+    const thread = this.repo.thread(topicId)
+    const cached = this.repo.entryHtml(topicId)
+    if (thread && thread.entries.every((e) => cached.has(e.id))) return Object.fromEntries(cached)
+
+    const inFlight = this.htmlFetches.get(topicId)
+    if (inFlight) return inFlight
+    const fetch = (async () => {
+      this.repo.storeEntryHtml(await this.client.threadHtml(topicId))
+      return Object.fromEntries(this.repo.entryHtml(topicId))
+    })().finally(() => this.htmlFetches.delete(topicId))
+    this.htmlFetches.set(topicId, fetch)
     return fetch
   }
 

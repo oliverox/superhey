@@ -1,14 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Markdown, { type Components } from 'react-markdown'
 import type { EntryRow, PostingRow, ThreadView } from '@shared/api'
 import { api, useLive } from '../api'
 import { dayAndTime, longDate } from '../format'
 import { parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes, type ForwardedHeader } from '../mail/forwarded'
 import { displayName } from '../mail/people'
+import { isDesigned } from '../mail/html'
 import { splitQuoted, type QuotedSplit } from '../mail/quoted'
 import { AttachmentStrip, stripAttachmentLines, visibleAttachments } from './Attachments'
 import { ActionBar } from './ActionBar'
 import { ContextPanel } from './ContextPanel'
+import { HtmlBody } from './HtmlBody'
 import { PersonChip, RecipientsButton } from './People'
 
 export interface ReaderTarget {
@@ -72,6 +74,11 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
     (e) => e.type === 'change' && e.change.kind === 'thread' && e.change.topicId === topicId,
   )
   const subject = thread.data?.subject ?? target.subject
+  // Original HTML for designed emails: one CLI call once the thread is cached, then kept.
+  const html = useLive<Record<number, string>>(
+    () => (topicId == null || !thread.data ? Promise.resolve({}) : api.threadHtml(topicId)),
+    [topicId, thread.data?.fetchedAt],
+  )
   const title = stripSubjectPrefixes(subject)
   const mainRef = useRef<HTMLElement>(null)
   const panel = useContextPanel(mainRef)
@@ -104,7 +111,7 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <div className="scroll min-h-0 min-w-0 flex-1">
+        <div className="scroll min-h-0 min-w-0 flex-1 [container-type:inline-size]">
           <article className="reading-column mx-auto px-10 pt-9 pb-24">
             <h1 className="rise font-app text-[26px] leading-[1.2] font-semibold tracking-[-0.02em] text-balance">{title}</h1>
 
@@ -115,7 +122,7 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
             ) : !thread.data ? (
               <ReaderSkeleton />
             ) : (
-              <Conversation entries={thread.data.entries} subject={subject} />
+              <Conversation entries={thread.data.entries} subject={subject} htmlByEntry={html.data ?? {}} />
             )}
           </article>
         </div>
@@ -126,7 +133,16 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
 }
 
 /** The newest message is open; earlier ones are one line each until clicked. */
-function Conversation({ entries, subject }: { entries: EntryRow[]; subject: string }) {
+function Conversation({
+  entries,
+  subject,
+  htmlByEntry,
+}: {
+  entries: EntryRow[]
+  subject: string
+  /** Original HTML by entry ID; arrives shortly after the thread, then cached. */
+  htmlByEntry: Record<number, string>
+}) {
   const [open, setOpen] = useState<Set<number>>(() => new Set(entries.length ? [entries.at(-1)!.id] : []))
   const [showAll, setShowAll] = useState(false)
   const expand = (id: number) => setOpen((s) => new Set(s).add(id))
@@ -197,6 +213,7 @@ function Conversation({ entries, subject }: { entries: EntryRow[]; subject: stri
               expanded={open.has(entry.id)}
               onExpand={() => expand(entry.id)}
               onCollapse={multiple ? () => collapse(entry.id) : undefined}
+            entryHtml={htmlByEntry[entry.id]}
               index={i}
             />
           )
@@ -212,6 +229,7 @@ function Message({
   expanded,
   onExpand,
   onCollapse,
+  entryHtml,
   index,
 }: {
   entry: EntryRow
@@ -220,8 +238,11 @@ function Message({
   onExpand: () => void
   /** Absent when the message is the thread's only one. */
   onCollapse?: () => void
+  entryHtml?: string
   index: number
 }) {
+  const [view, setView] = useState<'original' | 'simplified'>('original')
+  const designed = useMemo(() => entryHtml != null && isDesigned(entryHtml), [entryHtml])
   const surface = entry.from?.isMe ? 'bg-mine' : 'bg-pane'
   const time = <Time iso={entry.createdAt} />
 
@@ -244,6 +265,7 @@ function Message({
     )
   }
 
+  const showOriginal = designed && view === 'original'
   const full = stripAttachmentLines(entry.bodyMd, entry.attachments)
   // Replies carry the conversation below them; show only what this message adds.
   const quote = splitQuoted(full, index > 0)
@@ -266,6 +288,15 @@ function Message({
             {entry.from ? <PersonChip person={entry.from} className="font-semibold" /> : <span className="font-semibold">Unknown</span>}
             <RecipientsButton to={entry.to} cc={entry.cc} className="text-[12.5px]" />
           </div>
+          {designed && (
+            <button
+              onClick={() => setView(showOriginal ? 'simplified' : 'original')}
+              title={showOriginal ? 'Show as plain text in the app’s style' : 'Show as the sender designed it'}
+              className="shrink-0 self-center rounded-ui px-1.5 py-0.5 text-[11.5px] font-medium text-ink-faint hover:bg-pane-sunk hover:text-ink"
+            >
+              {showOriginal ? 'Simplified' : 'Original'}
+            </button>
+          )}
           {time}
           {onCollapse && (
             <button
@@ -283,20 +314,35 @@ function Message({
         {forwarded && <ForwardedLine header={forwarded.header} threadSubject={subject} />}
       </header>
 
-      <div className={`rounded-ui-lg border border-rule px-7 pt-6 pb-4 ${surface}`}>
-        <div className="prose-mail">
-          {forwarded ? (
-            <>
-              {forwarded.before && <Markdown components={mdComponents}>{forwarded.before}</Markdown>}
-              <Markdown components={mdComponents}>{forwarded.after}</Markdown>
-            </>
-          ) : (
-            <Markdown components={mdComponents}>{body}</Markdown>
+      {showOriginal ? (
+        // Designed mail assumes a white page, so it gets one in every theme. It's built for
+        // ~600–700px, so its card may grow past the text measure (centred, within the pane).
+        <div className={`email-wide overflow-hidden rounded-ui-lg border border-rule ${surface}`}>
+          <div className="bg-white p-3">
+            <HtmlBody entryHtml={entryHtml!} />
+          </div>
+          {visibleAttachments(entry.attachments).length > 0 && (
+            <div className="px-6 pb-4">
+              <AttachmentStrip attachments={visibleAttachments(entry.attachments)} />
+            </div>
           )}
-          {quote && <QuotedHistory quote={quote} />}
         </div>
-        <AttachmentStrip attachments={visibleAttachments(entry.attachments)} />
-      </div>
+      ) : (
+        <div className={`rounded-ui-lg border border-rule px-7 pt-6 pb-4 ${surface}`}>
+          <div className="prose-mail">
+            {forwarded ? (
+              <>
+                {forwarded.before && <Markdown components={mdComponents}>{forwarded.before}</Markdown>}
+                <Markdown components={mdComponents}>{forwarded.after}</Markdown>
+              </>
+            ) : (
+              <Markdown components={mdComponents}>{body}</Markdown>
+            )}
+            {quote && <QuotedHistory quote={quote} />}
+          </div>
+          <AttachmentStrip attachments={visibleAttachments(entry.attachments)} />
+        </div>
+      )}
     </li>
   )
 }

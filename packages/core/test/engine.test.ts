@@ -110,6 +110,23 @@ describe('SyncEngine threads and backfill', () => {
   })
 })
 
+describe('SyncEngine thread HTML', () => {
+  it('fetches message HTML once, then serves it from the cache', async () => {
+    let fetches = 0
+    const { engine } = setup([
+      ['thread read 900 --html', () => (fetches++, { stdout: '<article id="entry-5000"><div>Hi</div></article>', stderr: '', exitCode: 0 })],
+      ['thread read 900', ok([entry()])],
+      ['attachment list 900', ok([])],
+    ])
+    await engine.ensureThread(TopicId(900), 1)
+    const [a, b] = await Promise.all([engine.ensureThreadHtml(TopicId(900)), engine.ensureThreadHtml(TopicId(900))])
+    expect(a).toEqual({ 5000: '<div>Hi</div>' })
+    expect(b).toEqual(a)
+    await engine.ensureThreadHtml(TopicId(900))
+    expect(fetches).toBe(1)
+  })
+})
+
 describe('SyncEngine attachments', () => {
   const pdf = { id: '5000:1', message_id: 5000, filename: 'Plan.pdf', content_type: 'application/pdf', byte_size: 1200 }
 

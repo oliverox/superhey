@@ -135,6 +135,10 @@ const MIGRATIONS: string[] = [
   ALTER TABLE actions ADD COLUMN undone_by INTEGER;
   CREATE INDEX actions_recent ON actions (id DESC);
   `,
+  `
+  -- The original HTML of a message, fetched when it is first shown as HTML.
+  ALTER TABLE entries ADD COLUMN body_html TEXT;
+  `,
 ]
 
 export type Db = DatabaseSync

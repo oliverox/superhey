@@ -11,7 +11,7 @@ const csp: Plugin = {
   transformIndexHtml: (html) =>
     html.replace(
       '<head>',
-      `<head><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: myhey-file:; connect-src 'self' myhey-file:; object-src 'none'; base-uri 'none'; form-action 'none'">`,
+      `<head><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: myhey-file: https://gopher.hey.com; connect-src 'self' myhey-file:; object-src 'none'; base-uri 'none'; form-action 'none'">`,
     ),
 }
 

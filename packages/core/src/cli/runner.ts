@@ -118,6 +118,23 @@ export class HeyRunner {
     return envelope
   }
 
+  /** Runs a command whose output isn't JSON (e.g. `--html`) and returns stdout. */
+  async text(args: string[]): Promise<string> {
+    const full = [...args, ...(this.account ? ['--account', this.account] : [])]
+    const { stdout, stderr, exitCode } = await this.limiter.run(() => this.exec(this.binary, full, this.timeoutMs))
+    if (exitCode === 3) throw new HeyAuthError()
+    if (exitCode !== 0) {
+      try {
+        const env = JSON.parse(stdout) as Envelope<unknown>
+        if (env.code === 'not_found') throw new HeyNotFoundError(env.error)
+      } catch (e) {
+        if (e instanceof HeyNotFoundError) throw e
+      }
+      throw new HeyCliError(`hey ${args.join(' ')} failed (exit ${exitCode}): ${stderr.trim() || 'no output'}`, 'cli_error', exitCode, stderr)
+    }
+    return stdout
+  }
+
   /** Starts a long-running command (e.g. `hey watch`). Not subject to the concurrency limit. */
   spawn(args: string[]): ChildProcessWithoutNullStreams {
     const full = [...args, ...(this.account ? ['--account', this.account] : [])]

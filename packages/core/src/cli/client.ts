@@ -46,6 +46,15 @@ export class HeyClient {
     return this.data(['thread', 'read', String(topicId)], S.Thread)
   }
 
+  /**
+   * The original HTML of every message in a thread, by entry ID. The CLI prints one
+   * `<article id="entry-…">` per message; inner HTML (and any `<article>` written in an
+   * email) sits escaped inside attributes, so splitting on the top-level tags is safe.
+   */
+  async threadHtml(topicId: TopicId): Promise<Map<number, string>> {
+    return splitThreadHtml(await this.runner.text(['thread', 'read', String(topicId), '--html']))
+  }
+
   attachments(topicId: TopicId) {
     return this.data(['attachment', 'list', String(topicId)], z.array(S.Attachment))
   }
@@ -155,3 +164,17 @@ export class HeyClient {
 }
 
 export { PostingId, TopicId }
+
+export function splitThreadHtml(doc: string): Map<number, string> {
+  const out = new Map<number, string>()
+  const starts = [...doc.matchAll(/<article id="entry-(\d+)"[^>]*>/g)]
+  const bodyEnd = doc.lastIndexOf('</body>')
+  const docEnd = bodyEnd >= 0 ? bodyEnd : doc.length
+  starts.forEach((m, i) => {
+    const from = m.index + m[0].length
+    const to = i + 1 < starts.length ? starts[i + 1]!.index : docEnd
+    const inner = doc.slice(from, to).replace(/\s*<\/article>\s*$/, '')
+    out.set(Number(m[1]), inner)
+  })
+  return out
+}

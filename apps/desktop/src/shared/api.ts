@@ -36,6 +36,8 @@ export interface Api {
   postings(boxId: number, limit?: number): Promise<PostingRow[]>
   /** Cached thread, fetched from HEY first if missing or behind `entryCount`. */
   thread(topicId: number, entryCount: number | null): Promise<ThreadView | null>
+  /** Original HTML of each message in a thread, by entry ID (fetched on first use). */
+  threadHtml(topicId: number): Promise<Record<number, string>>
   search(query: string): Promise<SearchHit[]>
   events(from: string, to: string): Promise<EventRow[]>
   /** Recent threads from one sender, excluding the open one. */
@@ -50,7 +52,7 @@ export interface Api {
   openAttachment(id: string): Promise<void>
 }
 
-export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'search', 'events', 'senderThreads', 'openAttachment', 'posting', 'labels', 'runAction', 'undoAction', 'recentActions'] as const satisfies ReadonlyArray<keyof Api>
+export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'events', 'senderThreads', 'openAttachment', 'posting', 'labels', 'runAction', 'undoAction', 'recentActions'] as const satisfies ReadonlyArray<keyof Api>
 export type ApiMethod = (typeof API_METHODS)[number]
 
 export type ApiEvent =
