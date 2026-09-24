@@ -147,6 +147,11 @@ const MIGRATIONS: string[] = [
   -- A box in list order, so the first page is read directly instead of sorting the box.
   CREATE INDEX postings_box_order ON postings (box_id, bubbled_up DESC, seen ASC, active_at DESC);
   `,
+  `
+  -- Only HEY's kind makes a bundle; a posting without a thread (a HEY World post) is not one.
+  UPDATE postings SET is_bundle = 0
+   WHERE is_bundle = 1 AND coalesce(json_extract(raw_json, '$.kind'), 'bundle') != 'bundle';
+  `,
 ]
 
 export type Db = DatabaseSync

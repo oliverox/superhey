@@ -125,6 +125,16 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
 
             {target.isBundle ? (
               target.postingId != null && <BundleView bundleId={target.postingId} sender={target.sender ?? 'this sender'} onLeaveBox={onLeaveBox} />
+            ) : topicId == null ? (
+              // Not a thread (a HEY World post, say): nothing the CLI can read.
+              <p className="mt-6 text-ink-soft">
+                This isn't an email thread, so SuperHey can't show it.{' '}
+                {target.appUrl && (
+                  <a href={target.appUrl} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline">
+                    Open it in HEY ↗
+                  </a>
+                )}
+              </p>
             ) : thread.error ? (
               <p className="mt-6 text-danger">Couldn't load this thread: {thread.error}</p>
             ) : !thread.data ? (

@@ -96,6 +96,8 @@ const now = () => new Date().toISOString()
 
 const b = (v: boolean | null | undefined) => (v ? 1 : 0)
 const n = <T>(v: T | null | undefined): T | null => v ?? null
+/** HEY's kind decides; only a posting without one is taken for a bundle by its missing thread. */
+const isBundle = (p: { kind?: string | null; topic_id?: number | null }) => (p.kind == null ? p.topic_id == null : p.kind === 'bundle')
 
 export class Repo {
   constructor(readonly db: Db) {}
@@ -158,8 +160,12 @@ export class Repo {
          sender_email = excluded.sender_email, seen = excluded.seen,
          bubbled_up = excluded.bubbled_up, entry_count = excluded.entry_count,
          has_attachments = excluded.has_attachments,
-         -- A missing kind is not a bundle (json_extract answers NULL, which the column refuses).
-         is_bundle = (coalesce(json_extract(excluded.raw_json, '$.kind'), '') = 'bundle' OR coalesce(excluded.topic_id, postings.topic_id) IS NULL),
+         -- HEY's kind decides. Only without one does a missing thread ID mean a bundle: other
+         -- kinds lack it too (a HEY World post), and taking one for a bundle would hide its
+         -- sender's unread mail. (coalesce: json_extract answers NULL, which the column refuses.)
+         is_bundle = CASE WHEN json_extract(excluded.raw_json, '$.kind') IS NULL
+                          THEN coalesce(excluded.topic_id, postings.topic_id) IS NULL
+                          ELSE json_extract(excluded.raw_json, '$.kind') = 'bundle' END,
          created_at = excluded.created_at, active_at = excluded.active_at,
          updated_at = excluded.updated_at, app_url = excluded.app_url,
          raw_json = excluded.raw_json, synced_at = excluded.synced_at`,
@@ -174,7 +180,7 @@ export class Repo {
       b(p.bubbled_up),
       n(p.visible_entry_count),
       b(p.includes_attachments),
-      b(p.kind === 'bundle' || p.topic_id == null),
+      b(isBundle(p)),
       n(p.created_at),
       n(p.active_at),
       n(p.updated_at),

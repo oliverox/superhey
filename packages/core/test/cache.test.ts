@@ -77,6 +77,19 @@ describe('Repo postings', () => {
     expect(r.posting(PostingId(2))).not.toBeNull() // hidden from the list, still openable
   })
 
+  it("doesn't take a posting without a thread for a bundle when HEY says what it is", () => {
+    // A HEY World post of your own has no thread; it once hid all your unread mail as a "bundle".
+    const r = repo()
+    r.upsertPostings([
+      P({ id: 1, kind: 'world/post', topic_id: null, name: 'Good Software Is Still Hard', creator: me, seen: true }),
+      P({ id: 2, kind: 'topic', topic_id: 902, name: 'Test send', creator: me, active_at: '2026-09-24T17:48:00Z' }),
+    ])
+    expect(r.posting(PostingId(1))?.isBundle).toBe(false)
+    expect(r.postings(1).map((p) => p.id)).toEqual([2, 1])
+    r.upsertPostings([P({ id: 1, kind: 'world/post', topic_id: null, name: 'Good Software Is Still Hard', creator: me, seen: true })])
+    expect(r.posting(PostingId(1))?.isBundle).toBe(false) // the update path too
+  })
+
   it('prefers the alternative sender name', () => {
     const r = repo()
     r.upsertPostings([P({ alternative_sender_name: 'Example Newsletter' })])
