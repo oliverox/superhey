@@ -64,3 +64,27 @@ function joinAnd(parts: string[]) {
 export function formatAddressList(list: Addr[]): string {
   return list.map((p) => (hasRealName(p) ? `${displayName(p)} <${p.email}>` : p.email)).join(', ')
 }
+
+export interface MessagePeople {
+  from: Addr | null
+  to: Addr[]
+  cc: Addr[]
+}
+
+/**
+ * Who a reply goes to, the way HEY addresses one: `reply` answers the sender; `reply-all`
+ * adds everyone the message was addressed to, keeping Cc as Cc. You are never included,
+ * and replying to your own message goes back to its recipients.
+ */
+export function replyRecipients(msg: MessagePeople, mode: 'reply' | 'reply-all'): { to: string[]; cc: string[] } {
+  const notMe = (list: Addr[]) => list.filter((p) => !p.isMe)
+  const fromOther = msg.from && !msg.from.isMe ? [msg.from] : []
+  const base = fromOther.length ? fromOther : notMe(msg.to)
+  if (mode === 'reply') return { to: emails(dedupe(base)), cc: [] }
+  const to = dedupe([...base, ...notMe(msg.to)])
+  const toSet = new Set(to.map((p) => p.email.toLowerCase()))
+  const cc = dedupe(notMe(msg.cc)).filter((p) => !toSet.has(p.email.toLowerCase()))
+  return { to: emails(to), cc: emails(cc) }
+}
+
+const emails = (list: Addr[]) => list.map((p) => p.email)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { ActionRecord } from '@shared/api'
+import type { ActionRecord, OutgoingRecord } from '@shared/api'
 import { api, onApiEvent, useLive } from '../api'
 import { dayAndTime } from '../format'
 
@@ -12,6 +12,19 @@ const FAILED_TOAST_MS = 9000
  */
 export function Toasts() {
   const [toasts, setToasts] = useState<ActionRecord[]>([])
+  const [outgoing, setOutgoing] = useState<OutgoingRecord[]>([])
+
+  // Messages in their undo window, then "Sent" or the reason they failed.
+  useEffect(
+    () =>
+      onApiEvent((e) => {
+        if (e.type !== 'outgoing') return
+        const r = e.record
+        setOutgoing((list) => [...list.filter((o) => o.id !== r.id), r].filter((o) => o.status !== 'cancelled').slice(-3))
+        if (r.status === 'sent') setTimeout(() => setOutgoing((list) => list.filter((o) => o.id !== r.id)), 4000)
+      }),
+    [],
+  )
 
   useEffect(
     () =>
@@ -27,9 +40,12 @@ export function Toasts() {
     [],
   )
 
-  if (!toasts.length) return null
+  if (!toasts.length && !outgoing.length) return null
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-5 z-[60] flex flex-col items-center gap-2" aria-live="polite">
+      {outgoing.map((o) => (
+        <OutgoingToast key={`out-${o.id}`} record={o} onClose={() => setOutgoing((list) => list.filter((x) => x.id !== o.id))} />
+      ))}
       {toasts.map((t) => (
         <Toast key={t.id} record={t} onClose={() => setToasts((list) => list.filter((x) => x.id !== t.id))} />
       ))}
@@ -143,5 +159,60 @@ function ActivityRow({ record: a }: { record: ActionRecord }) {
         </button>
       )}
     </li>
+  )
+}
+
+const KIND_WORDS: Record<OutgoingRecord['kind'], string> = { new: 'message', reply: 'reply', 'reply-all': 'reply', forward: 'forward' }
+
+/** "Sending your reply in 4s · Undo", then "Sent", or why it failed with a way back to edit. */
+function OutgoingToast({ record: r, onClose }: { record: OutgoingRecord; onClose: () => void }) {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    if (r.status !== 'pending') return
+    const t = setInterval(() => setNow(Date.now()), 250)
+    return () => clearInterval(t)
+  }, [r.status])
+
+  const reopen = (message = r.message) =>
+    window.dispatchEvent(new CustomEvent('myhey:compose', { detail: { kind: r.kind, message, forwardOf: r.forwardOf } }))
+  const failed = r.status === 'failed'
+  const seconds = Math.max(0, Math.ceil((r.sendsAt - now) / 1000))
+  const what = KIND_WORDS[r.kind]
+  const text =
+    r.status === 'pending' ? `Sending your ${what} in ${seconds}s` : r.status === 'sending' ? `Sending your ${what}…` : r.status === 'sent' ? `Your ${what} was sent` : `Couldn't send your ${what}: ${r.error ?? 'unknown error'}`
+
+  return (
+    <div
+      role="status"
+      className={`rise pointer-events-auto flex max-w-[560px] items-center gap-3 rounded-ui-lg px-4 py-2.5 text-[13px] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.4)] ${failed ? 'bg-danger text-white' : 'bg-ink text-pane'}`}
+    >
+      <span className="min-w-0 flex-1 truncate">{text}</span>
+      {r.status === 'pending' && (
+        <button
+          onClick={async () => {
+            try {
+              const back = await api.cancelSend(r.id)
+              reopen(back.message)
+              onClose()
+            } catch {
+              // too late: it's already on its way
+            }
+          }}
+          className="shrink-0 rounded-ui px-2 py-0.5 font-semibold underline-offset-2 hover:underline"
+        >
+          Undo
+        </button>
+      )}
+      {failed && (
+        <button onClick={() => (reopen(), onClose())} className="shrink-0 rounded-ui px-2 py-0.5 font-semibold underline-offset-2 hover:underline">
+          Edit
+        </button>
+      )}
+      {r.status !== 'pending' && r.status !== 'sending' && (
+        <button onClick={onClose} aria-label="Dismiss" className="shrink-0 opacity-60 hover:opacity-100">
+          ✕
+        </button>
+      )}
+    </div>
   )
 }

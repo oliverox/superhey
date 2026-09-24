@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { app, BrowserWindow, ipcMain, nativeTheme, net, protocol, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, protocol, shell } from 'electron'
 import { fileHeaders, type ApiEvent } from '../shared/api'
 import { AppService } from './service'
 
@@ -12,6 +12,12 @@ const service = new AppService({
   openFile: async (path) => {
     const error = await shell.openPath(path)
     if (error) throw new Error(error)
+  },
+  pickFiles: async () => {
+    const win = BrowserWindow.getFocusedWindow()
+    const opts = { properties: ['openFile', 'multiSelections'] as Array<'openFile' | 'multiSelections'> }
+    const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    return res.canceled ? [] : res.filePaths
   },
 })
 
@@ -101,5 +107,22 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', () => service.stop())
+// A message in its undo window was sent on purpose, so quitting delivers it first; with
+// nothing pending, quitting is left alone. Delivery gets a time limit, then the app exits
+// regardless, so quitting can never hang.
+const FLUSH_LIMIT_MS = 15_000
+let exiting = false
+async function deliverThenExit() {
+  if (exiting) return
+  exiting = true
+  await Promise.race([service.flushOutbox(), new Promise((r) => setTimeout(r, FLUSH_LIMIT_MS))]).catch(() => {})
+  service.stop()
+  app.exit(0)
+}
+app.on('before-quit', (event) => {
+  if (!service.hasPendingSends()) return service.stop()
+  event.preventDefault()
+  void deliverThenExit()
+})
+for (const signal of ['SIGTERM', 'SIGINT'] as const) process.on(signal, () => void deliverThenExit())
 process.on('exit', () => service.stop())

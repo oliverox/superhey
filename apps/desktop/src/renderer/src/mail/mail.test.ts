@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseAddresses, parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes } from './forwarded'
-import { displayName, formatAddressList, shortName, summarizeRecipients, type Addr } from './people'
+import { displayName, formatAddressList, replyRecipients, shortName, summarizeRecipients, type Addr } from './people'
 
 // Shaped like HEY's Markdown for a Gmail forward (escaped dashes and brackets, bold name).
 const gmailForward = [
@@ -124,5 +124,28 @@ describe('subjects and dates', () => {
     expect([outlook.getMonth(), outlook.getDate(), outlook.getHours()]).toEqual([8, 3, 9])
     expect(parseForwardedDate('sometime last week')).toBeNull()
     expect(parseForwardedDate(null)).toBeNull()
+  })
+})
+
+describe('replyRecipients', () => {
+  const me: Addr = { name: 'Me', email: 'me@hey.example', isMe: true }
+  const ana: Addr = { name: 'Ana', email: 'ana@x.com', isMe: false }
+  const bo: Addr = { name: 'Bo', email: 'bo@x.com', isMe: false }
+  const cy: Addr = { name: 'Cy', email: 'cy@x.com', isMe: false }
+
+  it('replies to the sender, and to everyone for reply all (Cc stays Cc, never me)', () => {
+    const msg = { from: ana, to: [me, bo], cc: [cy, me] }
+    expect(replyRecipients(msg, 'reply')).toEqual({ to: ['ana@x.com'], cc: [] })
+    expect(replyRecipients(msg, 'reply-all')).toEqual({ to: ['ana@x.com', 'bo@x.com'], cc: ['cy@x.com'] })
+  })
+
+  it('replying to my own message goes back to its recipients', () => {
+    const mine = { from: me, to: [ana, bo], cc: [] }
+    expect(replyRecipients(mine, 'reply')).toEqual({ to: ['ana@x.com', 'bo@x.com'], cc: [] })
+  })
+
+  it('drops duplicates across To and Cc', () => {
+    const msg = { from: ana, to: [ana, bo], cc: [bo, cy] }
+    expect(replyRecipients(msg, 'reply-all')).toEqual({ to: ['ana@x.com', 'bo@x.com'], cc: ['cy@x.com'] })
   })
 })

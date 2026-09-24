@@ -5,6 +5,22 @@ import * as S from './schemas'
 
 export type BoxRef = string | number
 
+export interface OutgoingMessage {
+  to: string[]
+  cc?: string[]
+  bcc?: string[]
+  /** Required for a new message; a reply carries the thread's. */
+  subject?: string
+  /** Markdown. */
+  body: string
+  /** Local file paths. */
+  attach?: string[]
+  /** Reply into this thread instead of starting a new one. */
+  threadId?: TopicId
+  /** A configured sender address or ID. */
+  from?: string
+}
+
 export type BubbleWhen = { kind: 'now' | 'tomorrow' | 'weekend' | 'next-week' } | { kind: 'on'; date: string }
 
 export interface BoxPage {
@@ -63,6 +79,39 @@ export class HeyClient {
   async saveAttachment(id: string, dir: string): Promise<string> {
     const saved = await this.data(['attachment', 'save', id, '--output', `${dir}/`, '--force'], S.SavedAttachment)
     return saved.path
+  }
+
+  /** Configured sender addresses (e.g. an @hey.com address and a linked one). */
+  senders() {
+    return this.data(['account', 'senders'], z.array(z.looseObject({ id: z.number(), email: z.string(), default: z.boolean().nullish() })))
+  }
+
+  /**
+   * Sends a new message, or a reply into a thread (`threadId`) with explicit recipients,
+   * or saves either as a HEY draft. Returns the draft ID when `draft` is set.
+   */
+  async compose(msg: OutgoingMessage, opts: { draft?: boolean } = {}): Promise<{ draftId: number | null }> {
+    const list = (flag: string, addrs?: string[]) => (addrs?.length ? [flag, addrs.join(',')] : [])
+    const args = [
+      'compose',
+      ...(msg.threadId != null ? ['--thread-id', String(msg.threadId)] : ['--subject', msg.subject ?? '']),
+      ...list('--to', msg.to),
+      ...list('--cc', msg.cc),
+      ...list('--bcc', msg.bcc),
+      ...(msg.from ? ['--from', msg.from] : []),
+      '-m',
+      msg.body,
+      ...(msg.attach ?? []).flatMap((path) => ['--attach', path]),
+      ...(opts.draft ? ['--draft'] : []),
+    ]
+    const data = (await this.runner.json<{ id?: number } | null>(args)).data
+    return { draftId: opts.draft ? (data?.id ?? null) : null }
+  }
+
+  /** Forwards a thread's latest message with an optional note. Sends at once (no draft form). */
+  async forward(topicId: TopicId, msg: Pick<OutgoingMessage, 'to' | 'cc' | 'bcc' | 'body'>) {
+    const list = (flag: string, addrs?: string[]) => (addrs?.length ? [flag, addrs.join(',')] : [])
+    await this.runner.json(['forward', String(topicId), ...list('--to', msg.to), ...list('--cc', msg.cc), ...list('--bcc', msg.bcc), ...(msg.body ? ['-m', msg.body] : [])])
   }
 
   /** The account's own sender addresses; used to tell sent entries from received ones. */

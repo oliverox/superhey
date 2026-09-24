@@ -13,6 +13,7 @@ import { ContextPanel } from './ContextPanel'
 import { useShortcut, withShortcut } from '../shortcuts'
 import { HtmlBody } from './HtmlBody'
 import { PersonChip, RecipientsButton } from './People'
+import { ReplyArea } from './ReplyArea'
 
 export interface ReaderTarget {
   postingId: number | null
@@ -123,7 +124,10 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
             ) : !thread.data ? (
               <ReaderSkeleton />
             ) : (
-              <Conversation entries={thread.data.entries} subject={subject} htmlByEntry={html.data ?? {}} />
+              <>
+                <Conversation entries={thread.data.entries} subject={subject} htmlByEntry={html.data ?? {}} />
+                <ReplyArea key={thread.data.topicId} thread={thread.data} />
+              </>
             )}
           </article>
         </div>

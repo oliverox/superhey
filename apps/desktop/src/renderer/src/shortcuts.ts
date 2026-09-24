@@ -36,6 +36,11 @@ export const SHORTCUTS = {
   trash: { keys: ['#'], label: 'Move to Trash', group: 'Act' },
   undo: { keys: ['z', 'mod+z'], label: 'Undo last action', group: 'Act' },
 
+  reply: { keys: ['R'], label: 'Reply', group: 'Act' },
+  replyAll: { keys: ['a'], label: 'Reply all', group: 'Act' },
+  forward: { keys: ['F'], label: 'Forward', group: 'Act' },
+  compose: { keys: ['c'], label: 'New message', group: 'App' },
+
   help: { keys: ['?'], label: 'Keyboard shortcuts', group: 'App' },
   theme: { keys: ['T'], label: 'Switch theme', group: 'App' },
 } as const satisfies Record<string, ShortcutDef>
@@ -102,11 +107,15 @@ export function installShortcuts(target: Window = window): () => void {
 }
 
 const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform)
-const KEY_NAMES: Record<string, string> = { ArrowDown: '↓', ArrowUp: '↑', T: '⇧T' }
+const KEY_NAMES: Record<string, string> = { ArrowDown: '↓', ArrowUp: '↑', enter: '↵', Enter: '↵' }
 
-/** How a key is written in the UI: "r", "⌘Z", "↓". */
+/** How a key is written in the UI: "r", "⇧R", "⌘Z", "⌘↵", "↓". */
 export function keyLabel(key: string): string {
-  if (key.startsWith('mod+')) return `${isMac ? '⌘' : 'Ctrl+'}${key.slice(4).toUpperCase()}`
+  if (key.startsWith('mod+')) {
+    const k = key.slice(4)
+    return `${isMac ? '⌘' : 'Ctrl+'}${KEY_NAMES[k] ?? k.toUpperCase()}`
+  }
+  if (/^[A-Z]$/.test(key)) return `⇧${key}`
   return KEY_NAMES[key] ?? key
 }
 

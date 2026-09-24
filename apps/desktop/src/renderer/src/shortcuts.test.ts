@@ -86,6 +86,8 @@ describe('shortcuts', () => {
     expect(new Set(all).size).toBe(all.length)
     expect(keyLabel('ArrowDown')).toBe('↓')
     expect(keyLabel('T')).toBe('⇧T')
+    expect(keyLabel('R')).toBe('⇧R')
+    expect(keyLabel('mod+enter')).toMatch(/↵$/)
     expect(keyLabel('r')).toBe('r')
   })
 })

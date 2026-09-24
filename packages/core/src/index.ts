@@ -1,7 +1,8 @@
 export * from './ids'
 export * from './cli/errors'
 export { HeyRunner, locateCli, MIN_CLI_VERSION, type Exec, type ExecResult } from './cli/runner'
-export { HeyClient, type BoxPage, type BubbleWhen, type Verified } from './cli/client'
+export { HeyClient, type BoxPage, type BubbleWhen, type OutgoingMessage, type Verified } from './cli/client'
+export { Outbox, UNDO_SEND_MS, type OutgoingKind, type OutgoingRecord, type OutgoingStatus } from './actions/outbox'
 export { ActionRunner, type Action, type ActionRecord, type ActionSource, type ActionStatus, type MoveTarget } from './actions/runner'
 export * as schemas from './cli/schemas'
 export { openDb, type Db } from './cache/db'
@@ -18,9 +19,10 @@ import { AvatarCache } from './cache/avatars'
 import { Repo } from './cache/repo'
 import { SyncEngine } from './sync/engine'
 import { ActionRunner } from './actions/runner'
+import { Outbox } from './actions/outbox'
 
 /** Wires the core together: finds the CLI, opens the cache, builds the sync engine. */
-export async function createCore(opts: { dbPath: string; cliPath?: string; account?: string }) {
+export async function createCore(opts: { dbPath: string; cliPath?: string; account?: string; sendingDisabled?: boolean }) {
   const cli = await locateCli(opts.cliPath)
   const runner = new HeyRunner({ binary: cli.path, account: opts.account })
   const client = new HeyClient(runner)
@@ -30,7 +32,8 @@ export async function createCore(opts: { dbPath: string; cliPath?: string; accou
   })
   const actions = new ActionRunner(client, repo, engine)
   const avatars = new AvatarCache(join(dirname(opts.dbPath), 'avatars'))
-  return { cli, runner, client, repo, engine, actions, avatars }
+  const outbox = new Outbox(client, undefined, opts.sendingDisabled)
+  return { cli, runner, client, repo, engine, actions, avatars, outbox }
 }
 
 export type Core = Awaited<ReturnType<typeof createCore>>

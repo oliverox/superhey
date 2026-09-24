@@ -1,10 +1,14 @@
 // The app's backend: boots the core and implements the UI API. No Electron imports, so the
 // dev web server can host it too.
 import { EventEmitter } from 'node:events'
+import { statSync } from 'node:fs'
+import { isAbsolute } from 'node:path'
 import {
   createCore,
   type Action,
   type MoveTarget,
+  type OutgoingKind,
+  type OutgoingMessage,
   HeyAuthError,
   HeyBinaryError,
   PostingId,
@@ -26,7 +30,13 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
   }
 
   constructor(
-    private readonly opts: { dbPath: string; cliPath?: string; openFile: (path: string) => Promise<void> },
+    private readonly opts: {
+      dbPath: string
+      cliPath?: string
+      openFile: (path: string) => Promise<void>
+      /** The system file picker; absent where there isn't one (browser dev mode). */
+      pickFiles?: () => Promise<string[]>
+    },
   ) {
     super()
   }
@@ -36,13 +46,14 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     this.core = null
     this.update({ phase: 'starting', problem: null })
     try {
-      const core = await createCore(this.opts)
+      const core = await createCore({ ...this.opts, sendingDisabled: process.env.MYHEY_TEST_NO_SEND === '1' })
       this.core = core
       this.update({ cli: core.cli })
       core.engine.on('change', (change) => this.emit('event', { type: 'change', change }))
       core.engine.on('status', (sync) => this.update({ sync }))
       core.engine.on('error', (err) => console.error('[sync]', err.message))
       core.actions.on('action', (action) => this.emit('event', { type: 'action', action }))
+      core.outbox.on('outgoing', (record) => this.emit('event', { type: 'outgoing', record }))
       await core.engine.start()
       this.update({ phase: 'ready', sync: core.engine.getStatus() })
       void this.backfill(core)
@@ -125,6 +136,46 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
 
   async recentActions(limit = 50) {
     return this.need().actions.recent(Math.min(int(limit), 200))
+  }
+
+  private sendersCache: Promise<Array<{ id: number; email: string; default?: boolean | null }>> | null = null
+
+  /** Sender addresses rarely change; fetched once per session. */
+  async senders() {
+    this.sendersCache ??= this.need().client.senders().catch((err) => {
+      this.sendersCache = null
+      throw err
+    })
+    return this.sendersCache
+  }
+
+  async pickFiles() {
+    return this.opts.pickFiles ? this.opts.pickFiles() : []
+  }
+
+  async sendMessage(message: unknown, kind: unknown, forwardOf: unknown = null) {
+    if (!['new', 'reply', 'reply-all', 'forward'].includes(kind as string)) throw new Error('bad message kind')
+    const msg = validateMessage(message, kind === 'new')
+    const fwd = kind === 'forward' ? TopicId(int(forwardOf)) : null
+    return this.need().outbox.send(msg, kind as OutgoingKind, fwd)
+  }
+
+  async cancelSend(id: number) {
+    return this.need().outbox.cancel(int(id))
+  }
+
+  async saveDraft(message: unknown) {
+    return this.need().outbox.saveDraft(validateMessage(message, false, true))
+  }
+
+  /** Whether a message is still in its undo window. */
+  hasPendingSends(): boolean {
+    return this.core?.outbox.hasPending() ?? false
+  }
+
+  /** Delivers anything still in its undo window (the person pressed Send; quitting shouldn't cancel it). */
+  async flushOutbox() {
+    await this.core?.outbox.flush()
   }
 
   async openAttachment(id: string) {
@@ -219,4 +270,49 @@ function validateAction(input: unknown): Action {
       return { type: 'trash', postingId }
   }
   throw new Error('bad action')
+}
+
+const EMAIL = /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]+$/
+const MAX_RECIPIENTS = 50
+const MAX_ATTACHMENTS = 10
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+
+/** Checks an outgoing message from the UI; anything malformed is refused before HEY sees it. */
+function validateMessage(input: unknown, needsSubject: boolean, isDraft = false): OutgoingMessage {
+  const m = input as Record<string, unknown>
+  if (!m || typeof m !== 'object') throw new Error('bad message')
+  const addrs = (v: unknown, label: string): string[] => {
+    if (v == null) return []
+    if (!Array.isArray(v) || v.length > MAX_RECIPIENTS) throw new Error(`bad ${label} list`)
+    return v.map((a) => {
+      if (typeof a !== 'string' || !EMAIL.test(a.trim())) throw new Error(`Not an email address: ${String(a)}`)
+      return a.trim()
+    })
+  }
+  const to = addrs(m.to, 'To')
+  const cc = addrs(m.cc, 'Cc')
+  const bcc = addrs(m.bcc, 'Bcc')
+  if (!isDraft && to.length + cc.length + bcc.length === 0) throw new Error('Add at least one recipient')
+  if (typeof m.body !== 'string' || m.body.length > 500_000) throw new Error('bad message body')
+  if (needsSubject && (typeof m.subject !== 'string' || !m.subject.trim())) throw new Error('Add a subject')
+  if (m.subject != null && (typeof m.subject !== 'string' || m.subject.length > 998)) throw new Error('bad subject')
+  const attach = m.attach == null ? [] : m.attach
+  if (!Array.isArray(attach) || attach.length > MAX_ATTACHMENTS) throw new Error(`At most ${MAX_ATTACHMENTS} attachments`)
+  for (const path of attach) {
+    if (typeof path !== 'string' || !isAbsolute(path)) throw new Error('bad attachment path')
+    const st = statSync(path, { throwIfNoEntry: false })
+    if (!st?.isFile()) throw new Error(`Attachment not found: ${path}`)
+    if (st.size > MAX_ATTACHMENT_BYTES) throw new Error(`Attachment too large (25 MB max): ${path}`)
+  }
+  if (m.from != null && (typeof m.from !== 'string' || m.from.length > 320)) throw new Error('bad sender')
+  return {
+    to,
+    cc,
+    bcc,
+    subject: typeof m.subject === 'string' ? m.subject.trim() : undefined,
+    body: m.body,
+    attach: attach as string[],
+    threadId: m.threadId == null ? undefined : TopicId(int(m.threadId)),
+    from: typeof m.from === 'string' && m.from ? m.from : undefined,
+  }
 }

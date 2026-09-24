@@ -10,6 +10,7 @@ import { SetupScreen, StartingScreen } from './components/Setup'
 import { useTheme } from './theme'
 import { useShortcut } from './shortcuts'
 import { ShortcutHelp } from './components/ShortcutHelp'
+import { Composer, type ComposeRequest } from './components/Composer'
 
 type PaneId = 'sidebar' | 'list' | 'reader'
 
@@ -45,6 +46,14 @@ function Workspace({ status }: { status: AppStatus }) {
   const [activePane, setActivePane] = useState<PaneId>('list')
   const [showActivity, setShowActivity] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
+  const [composing, setComposing] = useState<ComposeRequest | null>(null)
+  useShortcut('compose', () => setComposing({ kind: 'new', message: { to: [], subject: '', body: '' } }), !composing)
+  // An undone or failed send comes back here for editing (see the toasts).
+  useEffect(() => {
+    const onRestore = (e: Event) => setComposing((e as CustomEvent<ComposeRequest>).detail)
+    window.addEventListener('myhey:compose', onRestore)
+    return () => window.removeEventListener('myhey:compose', onRestore)
+  }, [])
 
   const list = postings.data ?? []
   const selectedIndex = target?.postingId != null ? list.findIndex((p) => p.id === target.postingId) : -1
@@ -176,6 +185,13 @@ function Workspace({ status }: { status: AppStatus }) {
       <Toasts />
       {showActivity && <ActivityDrawer onClose={() => setShowActivity(false)} />}
       {showHelp && <ShortcutHelp onClose={() => setShowHelp(false)} />}
+      {composing && (
+        <div className="fixed inset-0 z-[65] flex items-start justify-center bg-ink/20 p-6 pt-[10vh]">
+          <div className="rise w-full max-w-[680px]">
+            <Composer request={composing} variant="dialog" onClose={() => setComposing(null)} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
