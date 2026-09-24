@@ -4,7 +4,7 @@ import { api, useLive } from '../api'
 import { stripSubjectPrefixes } from '../mail/forwarded'
 import { useShortcut, withShortcut } from '../shortcuts'
 import { Avatar } from './Avatar'
-import { MessageCard, Time, useDesignedView } from './Reader'
+import { Conversation, Time } from './Reader'
 
 /**
  * A bundle, read as one digest: the sender once at the top, then their emails on a quiet
@@ -100,7 +100,8 @@ function BundleItem({
           <span className={`block text-[17px] leading-snug font-semibold tracking-[-0.01em] ${expanded ? 'text-ink' : 'text-ink-soft group-hover:text-ink'}`}>{subject}</span>
           {!expanded && preview && <span className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-ink-faint">{preview}</span>}
         </button>
-        {p.activeAt && (
+        {/* Open, the message header below carries the time, as in a thread. */}
+        {!expanded && p.activeAt && (
           <span className="mt-[3px] shrink-0">
             <Time iso={p.activeAt} />
           </span>
@@ -111,45 +112,30 @@ function BundleItem({
   )
 }
 
-/** One bundled email, read in place: its latest message, full width, fetched on first open. */
+/** One bundled email, read in place exactly as the thread view draws it; fetched on first open. */
 function BundleEmail({ posting: p, onOpenThread }: { posting: PostingRow; onOpenThread: () => void }) {
   const thread = useLive<ThreadView | null>(() => (p.topicId == null ? Promise.resolve(null) : api.thread(p.topicId, p.entryCount)), [p.topicId, p.entryCount])
   const html = useLive<Record<number, string>>(
     () => (p.topicId == null || !thread.data ? Promise.resolve({}) : api.threadHtml(p.topicId)),
     [p.topicId, thread.data?.fetchedAt],
   )
-  const latest = thread.data?.entries.at(-1)
-  const entryHtml = latest ? html.data?.[latest.id] : undefined
-  const view = useDesignedView(entryHtml)
-  const count = thread.data?.entries.length ?? 0
 
-  return (
-    <div className="mt-3">
-      <div className="mb-2.5 flex items-center gap-3 text-[12px] text-ink-faint">
-        {count > 1 && <span>Latest of {count} messages</span>}
-        <span className="ml-auto flex items-center gap-1">
-          {view.designed && (
-            <button onClick={view.toggle} className="rounded-ui px-1.5 py-0.5 font-medium hover:bg-pane-sunk hover:text-ink">
-              {view.showOriginal ? 'Simplified' : 'Original'}
-            </button>
-          )}
-          <button onClick={onOpenThread} className="rounded-ui px-1.5 py-0.5 font-medium hover:bg-pane-sunk hover:text-ink" title="Open as a thread, with replies and actions">
-            Open thread →
-          </button>
-        </span>
+  if (thread.error) return <p className="mt-3 text-danger">Couldn't load this email: {thread.error}</p>
+  if (!thread.data)
+    return (
+      <div className="mt-4 space-y-2.5 rounded-ui-lg border border-rule bg-pane px-7 py-6" aria-label="Loading email">
+        {[94, 100, 78].map((w, i) => (
+          <div key={i} className="pulse h-2.5 rounded bg-pane-sunk" style={{ width: `${w}%`, animationDelay: `${i * 90}ms` }} />
+        ))}
       </div>
-      {thread.error ? (
-        <p className="text-danger">Couldn't load this email: {thread.error}</p>
-      ) : !latest ? (
-        <div className="space-y-2.5 rounded-ui-lg border border-rule bg-pane px-7 py-6" aria-label="Loading email">
-          {[94, 100, 78].map((w, i) => (
-            <div key={i} className="pulse h-2.5 rounded bg-pane-sunk" style={{ width: `${w}%`, animationDelay: `${i * 90}ms` }} />
-          ))}
-        </div>
-      ) : (
-        <MessageCard entry={latest} index={count - 1} entryHtml={entryHtml} showOriginal={view.showOriginal} />
-      )}
-    </div>
+    )
+  return (
+    <>
+      <Conversation entries={thread.data.entries} subject={thread.data.subject ?? p.subject ?? ""} htmlByEntry={html.data ?? {}} keys={false} />
+      <button onClick={onOpenThread} className="mt-2.5 rounded-ui px-1.5 py-0.5 text-[12px] font-medium text-ink-faint hover:bg-pane-sunk hover:text-ink" title="Open as a thread, with replies and actions">
+        Open thread →
+      </button>
+    </>
   )
 }
 

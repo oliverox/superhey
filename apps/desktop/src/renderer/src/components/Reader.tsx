@@ -145,15 +145,18 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
 }
 
 /** The newest message is open; earlier ones are one line each until clicked. */
-function Conversation({
+export function Conversation({
   entries,
   subject,
   htmlByEntry,
+  keys = true,
 }: {
   entries: EntryRow[]
   subject: string
   /** Original HTML by entry ID; arrives shortly after the thread, then cached. */
   htmlByEntry: Record<number, string>
+  /** Whether `;` / `:` act on this conversation (off inside a bundle, where they act on the bundle). */
+  keys?: boolean
 }) {
   const [open, setOpen] = useState<Set<number>>(() => new Set(entries.length ? [entries.at(-1)!.id] : []))
   const [showAll, setShowAll] = useState(false)
@@ -169,8 +172,8 @@ function Conversation({
     setOpen(new Set(entries.map((e) => e.id)))
     setShowAll(true)
   }
-  useShortcut('expandAll', expandAll, multiple)
-  useShortcut('collapseAll', () => setOpen(new Set()), multiple)
+  useShortcut('expandAll', expandAll, keys && multiple)
+  useShortcut('collapseAll', () => setOpen(new Set()), keys && multiple)
   const allOpen = multiple && entries.every((e) => open.has(e.id))
   const openCount = entries.filter((e) => open.has(e.id)).length
 
