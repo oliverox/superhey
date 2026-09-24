@@ -65,5 +65,5 @@ export function ShortcutHelp({ onClose }: { onClose: () => void }) {
 }
 
 function Kbd({ k }: { k: string }) {
-  return <kbd className="min-w-[20px] text-center text-[11px] text-ink-soft">{k}</kbd>
+  return <kbd>{k}</kbd>
 }
