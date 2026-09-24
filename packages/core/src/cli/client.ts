@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { PostingId, TopicId } from '../ids'
-import type { HeyRunner } from './runner'
+import type { HeyRunner, Priority } from './runner'
 import * as S from './schemas'
 
 export type BoxRef = string | number
@@ -42,8 +42,8 @@ const VERIFY_PAGES = 3
 export class HeyClient {
   constructor(private readonly runner: HeyRunner) {}
 
-  private async data<T extends z.ZodType>(args: string[], schema: T): Promise<z.infer<T>> {
-    const env = await this.runner.json<unknown>(args)
+  private async data<T extends z.ZodType>(args: string[], schema: T, priority: Priority = 'normal'): Promise<z.infer<T>> {
+    const env = await this.runner.json<unknown>(args, priority)
     return schema.parse(env.data)
   }
 
@@ -51,15 +51,17 @@ export class HeyClient {
     return this.data(['box', 'list'], z.array(S.Box))
   }
 
-  async boxPage(box: BoxRef, page?: string): Promise<BoxPage> {
+  /** `priority`: 'low' for background paging, so it never holds up what someone is reading. */
+  async boxPage(box: BoxRef, page?: string, priority: Priority = 'normal'): Promise<BoxPage> {
     const args = ['box', 'view', String(box), ...(page ? ['--page', page] : [])]
-    const view = await this.data(args, S.BoxView)
+    const view = await this.data(args, S.BoxView, priority)
     const { postings, next_page, ...rest } = view
     return { box: S.Box.parse(rest), postings, nextPage: next_page ?? null }
   }
 
-  thread(topicId: TopicId) {
-    return this.data(['thread', 'read', String(topicId)], S.Thread)
+  // Reading a thread is what someone is waiting for, so it goes first by default.
+  thread(topicId: TopicId, priority: Priority = 'high') {
+    return this.data(['thread', 'read', String(topicId)], S.Thread, priority)
   }
 
   /**
@@ -67,8 +69,8 @@ export class HeyClient {
    * `<article id="entry-…">` per message; inner HTML (and any `<article>` written in an
    * email) sits escaped inside attributes, so splitting on the top-level tags is safe.
    */
-  async threadHtml(topicId: TopicId): Promise<Map<number, string>> {
-    return splitThreadHtml(await this.runner.text(['thread', 'read', String(topicId), '--html']))
+  async threadHtml(topicId: TopicId, priority: Priority = 'high'): Promise<Map<number, string>> {
+    return splitThreadHtml(await this.runner.text(['thread', 'read', String(topicId), '--html'], priority))
   }
 
   /** The unread threads a bundle row groups (HEY shows them only inside the bundle). */
@@ -76,8 +78,8 @@ export class HeyClient {
     return (await this.data(['bundle', 'view', String(id), '--all'], S.Bundle)).postings
   }
 
-  attachments(topicId: TopicId) {
-    return this.data(['attachment', 'list', String(topicId)], z.array(S.Attachment))
+  attachments(topicId: TopicId, priority: Priority = 'high') {
+    return this.data(['attachment', 'list', String(topicId)], z.array(S.Attachment), priority)
   }
 
   /** Downloads one attachment into `dir` under its original filename; returns the file path. */
@@ -149,8 +151,13 @@ export class HeyClient {
   // Mutations. `seen`, `unseen` and `move` answer success even for IDs that are not box
   // items, so each one is checked against the box afterwards.
 
-  async markSeen(id: PostingId, boxId: number, seen = true): Promise<Verified> {
+  /**
+   * `verify: false` skips re-reading the box (up to 3 more calls) and answers unconfirmed;
+   * for automatic marks, where the live watch reports HEY's change anyway.
+   */
+  async markSeen(id: PostingId, boxId: number, seen = true, opts: { verify?: boolean } = {}): Promise<Verified> {
     await this.runner.json([seen ? 'seen' : 'unseen', String(id)])
+    if (opts.verify === false) return { verified: null }
     const found = await this.findInBox(boxId, (p) => p.id === id)
     return { verified: found ? (found.seen === true) === seen : null }
   }

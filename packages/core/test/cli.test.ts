@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { HeyClient, splitThreadHtml } from '../src/cli/client'
 import { HeyAuthError, HeyBinaryError, HeyCliError, HeyNotFoundError } from '../src/cli/errors'
-import { compareVersions, HeyRunner, locateCli } from '../src/cli/runner'
+import { compareVersions, HeyRunner, locateCli, PrioritySemaphore } from '../src/cli/runner'
 import { PostingId } from '../src/ids'
 import { fakeExec, ok, posting } from './fixtures'
 
@@ -197,5 +197,40 @@ describe('thread HTML', () => {
     await expect(runner.text(['thread', 'read', '1'])).rejects.toBeInstanceOf(HeyAuthError)
     await expect(runner.text(['thread', 'read', '2'])).rejects.toBeInstanceOf(HeyNotFoundError)
     await expect(runner.text(['thread', 'read', '3'])).rejects.toThrow(/boom/)
+  })
+})
+
+describe('PrioritySemaphore', () => {
+  it('runs waiting calls highest priority first, in order within a priority', async () => {
+    const sem = new PrioritySemaphore(1)
+    const order: string[] = []
+    let release!: () => void
+    const blocker = sem.run(() => new Promise<void>((r) => (release = r)))
+    const queued = [
+      sem.run(async () => void order.push('low-1'), 'low'),
+      sem.run(async () => void order.push('normal-1'), 'normal'),
+      sem.run(async () => void order.push('high-1'), 'high'),
+      sem.run(async () => void order.push('low-2'), 'low'),
+      sem.run(async () => void order.push('high-2'), 'high'),
+    ]
+    release()
+    await Promise.all([blocker, ...queued])
+    expect(order).toEqual(['high-1', 'high-2', 'normal-1', 'low-1', 'low-2'])
+  })
+
+  it('never runs more than the limit at once', async () => {
+    const sem = new PrioritySemaphore(2)
+    let active = 0
+    let peak = 0
+    await Promise.all(
+      Array.from({ length: 8 }, (_, i) =>
+        sem.run(async () => {
+          peak = Math.max(peak, ++active)
+          await new Promise((r) => setTimeout(r, 5))
+          active--
+        }, (['high', 'normal', 'low'] as const)[i % 3]),
+      ),
+    )
+    expect(peak).toBe(2)
   })
 })

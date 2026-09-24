@@ -75,7 +75,7 @@ export class ActionRunner extends EventEmitter<{ action: [ActionRecord] }> {
 
     try {
       this.applyOptimistic(action)
-      const verified = await this.execute(action, posting.boxId)
+      const verified = await this.execute(action, posting.boxId, source)
       if (verified === false) throw new Error("HEY didn't apply the change")
       this.finish(id, 'done', verified, null)
     } catch (err) {
@@ -83,8 +83,9 @@ export class ActionRunner extends EventEmitter<{ action: [ActionRecord] }> {
       this.engine.notify({ kind: 'postings', boxId: posting.boxId })
       this.finish(id, 'failed', null, err instanceof Error ? err.message : String(err))
     }
-    // Whatever happened, re-read the boxes involved so the cache matches HEY.
-    for (const boxId of this.boxesTouched(action, posting.boxId)) this.engine.requestBoxRefresh(boxId)
+    // Re-read the boxes involved so the cache matches HEY (automatic marks leave that to
+    // the live watch).
+    if (source !== 'auto') for (const boxId of this.boxesTouched(action, posting.boxId)) this.engine.requestBoxRefresh(boxId)
     return this.publish(id)
   }
 
@@ -181,12 +182,14 @@ export class ActionRunner extends EventEmitter<{ action: [ActionRecord] }> {
     for (const boxId of boxes) this.engine.notify({ kind: 'postings', boxId })
   }
 
-  private async execute(action: Action, fromBoxId: number): Promise<boolean | null> {
+  private async execute(action: Action, fromBoxId: number, source: ActionSource): Promise<boolean | null> {
     const id = PostingId(action.postingId)
     switch (action.type) {
       case 'seen': {
         const box = this.repo.posting(id)?.boxId
-        return box == null ? null : (await this.client.markSeen(id, box, action.seen)).verified
+        // Automatic marks (seen-on-open) aren't re-checked: one CLI call instead of up to
+        // four, and the live watch reports HEY's change anyway.
+        return box == null ? null : (await this.client.markSeen(id, box, action.seen, { verify: source !== 'auto' })).verified
       }
       case 'move':
         return (await this.client.move(id, action.to, fromBoxId)).verified

@@ -214,7 +214,7 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
     while (pages < maxPages && !this.backfillPaused) {
       const cursor = this.repo.getState(`backfill:${boxId}`)
       if (!cursor || cursor === 'done') break
-      const page = await this.client.boxPage(boxId, cursor)
+      const page = await this.client.boxPage(boxId, cursor, 'low')
       this.repo.upsertPostings(page.postings, boxId)
       this.repo.setState(`backfill:${boxId}`, page.nextPage ?? 'done')
       this.emit('change', { kind: 'postings', boxId })

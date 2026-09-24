@@ -125,6 +125,31 @@ describe('ActionRunner', () => {
     await expect(actions.undo(done.id)).rejects.toThrow(/can't be undone/)
   })
 
+  it('marks seen with a single CLI call when it happens automatically (seen-on-open)', async () => {
+    const t: Thread = { id: 100, topic_id: 900, box: 'imbox', seen: false, bubbled: false, scheduled: false, labels: [] }
+    const hey = fakeHey([t])
+    const calls: string[][] = []
+    const runner = new HeyRunner({ binary: 'hey', exec: async (bin, args, ms) => (calls.push(args), hey.exec(bin, args, ms)) })
+    const client = new HeyClient(runner)
+    const repo = new Repo(openDb(':memory:'))
+    const engine = new SyncEngine(client, repo, runner, { attachmentsDir: mkdtempSync(join(tmpdir(), 'att-')) })
+    const refresh = vi.spyOn(engine, 'requestBoxRefresh').mockImplementation(() => {})
+    repo.replaceBoxes(Object.entries(BOXES).map(([kind, id]) => ({ id, kind, name: kind })))
+    repo.upsertPostings([S.Posting.parse(posting({ id: 100, topic_id: 900, box_id: 1 }))])
+    const actions = new ActionRunner(client, repo, engine)
+
+    const auto = await actions.run({ type: 'seen', postingId: 100, seen: true }, 'auto')
+    expect(auto).toMatchObject({ status: 'done', verified: null })
+    expect(calls.map((c) => c[0])).toEqual(['seen'])
+    expect(refresh).not.toHaveBeenCalled()
+    expect(hey.state.get(100)!.seen).toBe(true)
+
+    calls.length = 0
+    await actions.run({ type: 'seen', postingId: 100, seen: false }) // chosen by the user: fully checked
+    expect(calls.map((c) => c[0])).toEqual(['unseen', 'box'])
+    expect(refresh).toHaveBeenCalled()
+  })
+
   it('rolls the cache back when HEY silently ignores the change', async () => {
     const { actions, hey, cached } = setup()
     hey.opts.ignoreSeen = true

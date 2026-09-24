@@ -58,19 +58,29 @@ export function cliEnv(): NodeJS.ProcessEnv {
   return { ...process.env, HEY_NONINTERACTIVE: '1', NO_COLOR: '1' }
 }
 
-class Semaphore {
-  private queue: Array<() => void> = []
+/** How soon a CLI call should run when the limit is reached. */
+export type Priority = 'high' | 'normal' | 'low'
+const ORDER: Priority[] = ['high', 'normal', 'low']
+
+/**
+ * Limits concurrent CLI calls. Waiting calls run highest priority first (FIFO within a
+ * priority), so the thread someone just opened isn't stuck behind background caching.
+ */
+export class PrioritySemaphore {
+  private readonly waiting: Record<Priority, Array<() => void>> = { high: [], normal: [], low: [] }
   private active = 0
   constructor(private readonly max: number) {}
 
-  async run<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.active >= this.max) await new Promise<void>((r) => this.queue.push(r))
-    this.active++
+  async run<T>(fn: () => Promise<T>, priority: Priority = 'normal'): Promise<T> {
+    if (this.active >= this.max) await new Promise<void>((r) => this.waiting[priority].push(r))
+    else this.active++
     try {
       return await fn()
     } finally {
-      this.active--
-      this.queue.shift()?.()
+      // Hand the slot straight to the next waiter (it doesn't re-count), or free it.
+      const next = ORDER.map((p) => this.waiting[p]).find((q) => q.length)?.shift()
+      if (next) next()
+      else this.active--
     }
   }
 }
@@ -80,22 +90,20 @@ export class HeyRunner {
   private readonly exec: Exec
   private readonly timeoutMs: number
   private readonly account?: string
-  private readonly limiter: Semaphore
+  private readonly limiter: PrioritySemaphore
 
   constructor(opts: RunnerOptions) {
     this.binary = opts.binary
     this.exec = opts.exec ?? spawnExec
     this.timeoutMs = opts.timeoutMs ?? 30_000
     this.account = opts.account
-    this.limiter = new Semaphore(opts.maxConcurrent ?? 3)
+    this.limiter = new PrioritySemaphore(opts.maxConcurrent ?? 3)
   }
 
   /** Runs a command with `--json` and returns the success envelope, or throws a typed error. */
-  async json<T>(args: string[]): Promise<Envelope<T>> {
+  async json<T>(args: string[], priority: Priority = 'normal'): Promise<Envelope<T>> {
     const full = [...args, '--json', ...(this.account ? ['--account', this.account] : [])]
-    const { stdout, stderr, exitCode } = await this.limiter.run(() =>
-      this.exec(this.binary, full, this.timeoutMs),
-    )
+    const { stdout, stderr, exitCode } = await this.limiter.run(() => this.exec(this.binary, full, this.timeoutMs), priority)
 
     let envelope: Envelope<T>
     try {
@@ -119,9 +127,9 @@ export class HeyRunner {
   }
 
   /** Runs a command whose output isn't JSON (e.g. `--html`) and returns stdout. */
-  async text(args: string[]): Promise<string> {
+  async text(args: string[], priority: Priority = 'normal'): Promise<string> {
     const full = [...args, ...(this.account ? ['--account', this.account] : [])]
-    const { stdout, stderr, exitCode } = await this.limiter.run(() => this.exec(this.binary, full, this.timeoutMs))
+    const { stdout, stderr, exitCode } = await this.limiter.run(() => this.exec(this.binary, full, this.timeoutMs), priority)
     if (exitCode === 3) throw new HeyAuthError()
     if (exitCode !== 0) {
       try {
