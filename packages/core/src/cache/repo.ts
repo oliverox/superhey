@@ -94,12 +94,6 @@ export interface SearchHit {
 
 const now = () => new Date().toISOString()
 
-/**
- * SQL condition: posting {p} is an unread thread shown inside bundle {b} (same box, same
- * sender). HEY lists only the bundle for these.
- */
-const BUNDLE_MEMBER = `{b}.box_id = {p}.box_id AND {b}.is_bundle = 1 AND {p}.is_bundle = 0 AND {p}.seen = 0
-  AND {b}.sender_email = {p}.sender_email AND {b}.id != {p}.id`
 const b = (v: boolean | null | undefined) => (v ? 1 : 0)
 const n = <T>(v: T | null | undefined): T | null => v ?? null
 
@@ -126,11 +120,13 @@ export class Repo {
   }
 
   boxes(): BoxRow[] {
-    // Unread rows as HEY counts them: a bundle counts once, its members not at all.
+    // Unread rows as HEY counts them: a bundle counts once, the mail inside it not at all.
     return this.all<BoxRow>(`
       SELECT b.id, b.kind, b.name,
-             (SELECT count(*) FROM postings p WHERE p.box_id = b.id AND p.seen = 0
-                AND NOT EXISTS (SELECT 1 FROM postings x WHERE ${BUNDLE_MEMBER.replaceAll('{p}', 'p').replaceAll('{b}', 'x')})) AS unseen
+        (SELECT count(*) FROM postings p WHERE p.box_id = b.id AND p.seen = 0)
+        - (SELECT count(*) FROM postings m
+             WHERE m.box_id = b.id AND m.seen = 0 AND m.is_bundle = 0
+               AND m.sender_email IN (SELECT sender_email FROM postings x WHERE x.box_id = b.id AND x.is_bundle = 1)) AS unseen
       FROM boxes b ORDER BY b.id`)
   }
 
@@ -245,17 +241,25 @@ export class Repo {
    * A box as HEY lists it: bubbled up, then new, then previously seen. Unread mail from a
    * sender who has a bundle row in the box is left out (HEY shows it inside the bundle),
    * and each bundle carries how many of those it holds.
+   *
+   * Bundles are few, so their senders are gathered once (`bundled`) and rows are checked
+   * against that small set; checking every row against the whole box took seconds.
    */
   postings(boxId: number, limit = 100, offset = 0): PostingRow[] {
     return this.all<Record<string, unknown>>(
-      `SELECT p.*,
+      `WITH bundled AS (
+         SELECT id, sender_email FROM postings WHERE box_id = ?1 AND is_bundle = 1
+       )
+       SELECT p.*,
          CASE WHEN p.is_bundle = 1 THEN
-           (SELECT count(*) FROM postings m WHERE ${BUNDLE_MEMBER.replaceAll('{p}', 'm').replaceAll('{b}', 'p')})
+           (SELECT count(*) FROM postings m
+             WHERE m.box_id = ?1 AND m.sender_email = p.sender_email AND m.seen = 0 AND m.is_bundle = 0)
          END AS bundle_count
        FROM postings p
-       WHERE p.box_id = ?
-         AND NOT EXISTS (SELECT 1 FROM postings b WHERE ${BUNDLE_MEMBER.replaceAll('{p}', 'p').replaceAll('{b}', 'b')})
-       ORDER BY p.bubbled_up DESC, p.seen ASC, p.active_at DESC LIMIT ? OFFSET ?`,
+       WHERE p.box_id = ?1
+         AND NOT (p.is_bundle = 0 AND p.seen = 0
+                  AND p.sender_email IN (SELECT sender_email FROM bundled WHERE id != p.id))
+       ORDER BY p.bubbled_up DESC, p.seen ASC, p.active_at DESC LIMIT ?2 OFFSET ?3`,
       boxId,
       limit,
       offset,

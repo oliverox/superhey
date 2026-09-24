@@ -139,6 +139,14 @@ const MIGRATIONS: string[] = [
   -- The original HTML of a message, fetched when it is first shown as HTML.
   ALTER TABLE entries ADD COLUMN body_html TEXT;
   `,
+  `
+  -- For unread counts and hiding bundled mail without scanning whole boxes.
+  CREATE INDEX postings_box_seen ON postings (box_id, seen);
+  CREATE INDEX postings_box_sender ON postings (box_id, sender_email, seen);
+  CREATE INDEX postings_bundles ON postings (box_id, sender_email) WHERE is_bundle = 1;
+  -- A box in list order, so the first page is read directly instead of sorting the box.
+  CREATE INDEX postings_box_order ON postings (box_id, bubbled_up DESC, seen ASC, active_at DESC);
+  `,
 ]
 
 export type Db = DatabaseSync
