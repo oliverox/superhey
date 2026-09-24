@@ -7,6 +7,7 @@ import { parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes, 
 import { displayName } from '../mail/people'
 import { splitQuoted, type QuotedSplit } from '../mail/quoted'
 import { AttachmentStrip, stripAttachmentLines, visibleAttachments } from './Attachments'
+import { ActionBar } from './ActionBar'
 import { ContextPanel } from './ContextPanel'
 import { PersonChip, RecipientsButton } from './People'
 
@@ -42,9 +43,11 @@ interface ReaderProps {
   target: ReaderTarget | null
   active: boolean
   onOpenThread: (p: PostingRow) => void
+  /** Called when an action takes the open thread out of the box being viewed. */
+  onLeaveBox: () => void
 }
 
-export function Reader({ target, active, onOpenThread }: ReaderProps) {
+export function Reader({ target, active, onOpenThread, onLeaveBox }: ReaderProps) {
   if (!target) {
     return (
       <main className="pane flex flex-col bg-pane-alt" data-active={active}>
@@ -58,10 +61,10 @@ export function Reader({ target, active, onOpenThread }: ReaderProps) {
       </main>
     )
   }
-  return <ThreadReader key={`${target.postingId}-${target.topicId}`} target={target} active={active} onOpenThread={onOpenThread} />
+  return <ThreadReader key={`${target.postingId}-${target.topicId}`} target={target} active={active} onOpenThread={onOpenThread} onLeaveBox={onLeaveBox} />
 }
 
-function ThreadReader({ target, active, onOpenThread }: ReaderProps & { target: ReaderTarget }) {
+function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps & { target: ReaderTarget }) {
   const { topicId } = target
   const thread = useLive<ThreadView | null>(
     () => (topicId == null ? Promise.resolve(null) : api.thread(topicId, target.entryCount)),
@@ -77,6 +80,7 @@ function ThreadReader({ target, active, onOpenThread }: ReaderProps & { target: 
   return (
     <main ref={mainRef} className="pane flex min-h-0 flex-col bg-pane-alt" data-active={active}>
       <header className="drag flex h-[52px] shrink-0 items-center justify-end gap-1 border-b border-rule bg-pane px-4">
+        <div className="mr-auto">{target.postingId != null && <ActionBar postingId={target.postingId} onLeaveBox={onLeaveBox} />}</div>
         {target.appUrl && (
           <a
             href={target.appUrl}

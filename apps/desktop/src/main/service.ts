@@ -3,8 +3,11 @@
 import { EventEmitter } from 'node:events'
 import {
   createCore,
+  type Action,
+  type MoveTarget,
   HeyAuthError,
   HeyBinaryError,
+  PostingId,
   TopicId,
   type Core,
 } from '@myhey/core'
@@ -39,6 +42,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
       core.engine.on('change', (change) => this.emit('event', { type: 'change', change }))
       core.engine.on('status', (sync) => this.update({ sync }))
       core.engine.on('error', (err) => console.error('[sync]', err.message))
+      core.actions.on('action', (action) => this.emit('event', { type: 'action', action }))
       await core.engine.start()
       this.update({ phase: 'ready', sync: core.engine.getStatus() })
       void this.backfill(core)
@@ -96,6 +100,29 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     return this.need().repo.postingsFromSender(email, excludeTopicId == null ? null : TopicId(int(excludeTopicId)), 5)
   }
 
+  async posting(id: number) {
+    return this.need().repo.posting(PostingId(int(id)))
+  }
+
+  async labels() {
+    return this.need().repo.labels()
+  }
+
+  async runAction(action: unknown, source: unknown = 'user') {
+    if (source !== 'user' && source !== 'auto') throw new Error('bad action source')
+    // Test instances opening threads to check rendering must not mark real mail as seen.
+    if (source === 'auto' && process.env.MYHEY_TEST_NO_AUTO_ACTIONS === '1') throw new Error('automatic actions are off in this instance')
+    return this.need().actions.run(validateAction(action), source)
+  }
+
+  async undoAction(id: number) {
+    return this.need().actions.undo(int(id))
+  }
+
+  async recentActions(limit = 50) {
+    return this.need().actions.recent(Math.min(int(limit), 200))
+  }
+
   async openAttachment(id: string) {
     const file = await this.attachmentFile(id)
     await this.opts.openFile(file.path)
@@ -147,4 +174,39 @@ function toProblem(err: unknown): SetupProblem {
 function int(v: unknown): number {
   if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) throw new Error(`expected a positive integer, got ${String(v)}`)
   return v
+}
+
+const MOVE_TARGETS: MoveTarget[] = ['imbox', 'feedbox', 'trailbox', 'laterbox', 'asidebox']
+const BUBBLE_KINDS = ['now', 'tomorrow', 'weekend', 'next-week', 'on']
+
+/** Checks an action from the UI field by field; anything unexpected is refused. */
+function validateAction(input: unknown): Action {
+  const a = input as Record<string, unknown>
+  if (!a || typeof a !== 'object') throw new Error('bad action')
+  const postingId = int(a.postingId)
+  switch (a.type) {
+    case 'seen':
+      if (typeof a.seen !== 'boolean') break
+      return { type: 'seen', postingId, seen: a.seen }
+    case 'move':
+      if (!MOVE_TARGETS.includes(a.to as MoveTarget)) break
+      return { type: 'move', postingId, to: a.to as MoveTarget }
+    case 'bubble': {
+      const when = a.when as { kind?: unknown; date?: unknown } | undefined
+      if (!when || !BUBBLE_KINDS.includes(when.kind as string)) break
+      if (when.kind === 'on') {
+        if (typeof when.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(when.date)) break
+        return { type: 'bubble', postingId, when: { kind: 'on', date: when.date } }
+      }
+      return { type: 'bubble', postingId, when: { kind: when.kind as 'now' | 'tomorrow' | 'weekend' | 'next-week' } }
+    }
+    case 'unbubble':
+      return { type: 'unbubble', postingId }
+    case 'label':
+      if (typeof a.add !== 'boolean') break
+      return { type: 'label', postingId, labelId: int(a.labelId), add: a.add }
+    case 'trash':
+      return { type: 'trash', postingId }
+  }
+  throw new Error('bad action')
 }

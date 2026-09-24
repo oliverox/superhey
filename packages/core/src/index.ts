@@ -1,7 +1,8 @@
 export * from './ids'
 export * from './cli/errors'
 export { HeyRunner, locateCli, MIN_CLI_VERSION, type Exec, type ExecResult } from './cli/runner'
-export { HeyClient, type BoxPage, type Verified } from './cli/client'
+export { HeyClient, type BoxPage, type BubbleWhen, type Verified } from './cli/client'
+export { ActionRunner, type Action, type ActionRecord, type ActionSource, type ActionStatus, type MoveTarget } from './actions/runner'
 export * as schemas from './cli/schemas'
 export { openDb, type Db } from './cache/db'
 export * from './cache/repo'
@@ -14,6 +15,7 @@ import { dirname, join } from 'node:path'
 import { openDb } from './cache/db'
 import { Repo } from './cache/repo'
 import { SyncEngine } from './sync/engine'
+import { ActionRunner } from './actions/runner'
 
 /** Wires the core together: finds the CLI, opens the cache, builds the sync engine. */
 export async function createCore(opts: { dbPath: string; cliPath?: string; account?: string }) {
@@ -24,7 +26,8 @@ export async function createCore(opts: { dbPath: string; cliPath?: string; accou
   const engine = new SyncEngine(client, repo, runner, {
     attachmentsDir: join(dirname(opts.dbPath), 'attachments'),
   })
-  return { cli, runner, client, repo, engine }
+  const actions = new ActionRunner(client, repo, engine)
+  return { cli, runner, client, repo, engine, actions }
 }
 
 export type Core = Awaited<ReturnType<typeof createCore>>

@@ -4,3 +4,6 @@ dist/
 *.db
 *.db-*
 .DS_Store
+
+# Fizzy CLI config written by `fizzy setup` (contains an API token)
+.fizzy.yaml

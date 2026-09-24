@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { HeyClient } from '../src/cli/client'
 import { HeyAuthError, HeyBinaryError, HeyCliError, HeyNotFoundError } from '../src/cli/errors'
 import { compareVersions, HeyRunner, locateCli } from '../src/cli/runner'
-import { PostingId, TopicId } from '../src/ids'
+import { PostingId } from '../src/ids'
 import { fakeExec, ok, posting } from './fixtures'
 
 const runnerWith = (routes: Parameters<typeof fakeExec>[0]) => {
@@ -136,12 +136,29 @@ describe('HeyClient', () => {
     await expect(new HeyClient(runner).markSeen(PostingId(999), 1)).resolves.toEqual({ verified: null })
   })
 
-  it('confirms a move by thread ID in the destination box', async () => {
+  it('confirms a move by finding the same box item in the destination', async () => {
     const { runner } = runnerWith([
       ['move 100 --to feedbox', ok({})],
-      ['box view feedbox', box([posting({ id: 555, topic_id: 900 })])],
+      ['box view feedbox', box([posting({ id: 100 })])],
     ])
-    const result = await new HeyClient(runner).move(PostingId(100), TopicId(900), 'feedbox')
-    expect(result).toEqual({ verified: true })
+    expect(await new HeyClient(runner).move(PostingId(100), 'feedbox', 1)).toEqual({ verified: true })
+  })
+
+  it('reports a move that did not happen when the thread is still in its old box', async () => {
+    const { runner } = runnerWith([
+      ['move 100 --to feedbox', ok({})],
+      ['box view feedbox', box([])],
+      ['box view 1', box([posting({ id: 100 })])],
+    ])
+    expect(await new HeyClient(runner).move(PostingId(100), 'feedbox', 1)).toEqual({ verified: false })
+  })
+
+  it("can't confirm a move when the thread is in neither box", async () => {
+    const { runner } = runnerWith([
+      ['move 100 --to feedbox', ok({})],
+      ['box view feedbox', box([])],
+      ['box view 1', box([])],
+    ])
+    expect(await new HeyClient(runner).move(PostingId(100), 'feedbox', 1)).toEqual({ verified: null })
   })
 })

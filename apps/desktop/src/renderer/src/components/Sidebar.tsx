@@ -11,9 +11,10 @@ interface Props {
   theme: Theme
   onTheme: (t: Theme) => void
   active: boolean
+  onOpenActivity: () => void
 }
 
-export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onTheme, active }: Props) {
+export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onTheme, active, onOpenActivity }: Props) {
   return (
     <aside className="pane flex flex-col bg-side text-side-ink" data-pane="sidebar" data-active={active}>
       <div className="drag h-[52px] shrink-0" />
@@ -50,6 +51,15 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
       <Agenda />
 
       <footer className="shrink-0 border-t border-side-rule px-4 py-3 text-[11.5px] text-side-faint">
+        <button
+          onClick={onOpenActivity}
+          className="mb-2.5 flex w-full items-center gap-2 rounded-ui px-1 py-1 text-left text-[12px] text-side-soft hover:text-side-ink"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden>
+            <path d="M2 8h2.5L6 3.5l4 9L11.5 8H14" />
+          </svg>
+          Activity
+        </button>
         <ThemeSwitch theme={theme} onTheme={onTheme} />
         <SyncStatus status={status} />
       </footer>

@@ -128,6 +128,13 @@ const MIGRATIONS: string[] = [
   -- Recipients now keep contact names; fetch cached threads again to pick them up.
   DELETE FROM threads;
   `,
+  `
+  ALTER TABLE actions ADD COLUMN posting_id INTEGER;
+  ALTER TABLE actions ADD COLUMN summary TEXT;
+  ALTER TABLE actions ADD COLUMN inverse_json TEXT;
+  ALTER TABLE actions ADD COLUMN undone_by INTEGER;
+  CREATE INDEX actions_recent ON actions (id DESC);
+  `,
 ]
 
 export type Db = DatabaseSync

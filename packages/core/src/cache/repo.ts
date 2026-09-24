@@ -141,11 +141,13 @@ export class Repo {
          app_url, raw_json, synced_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (id) DO UPDATE SET
-         topic_id = excluded.topic_id, box_id = excluded.box_id, subject = excluded.subject,
+         -- An update that lacks the thread ID never erases a known one.
+         topic_id = coalesce(excluded.topic_id, postings.topic_id), box_id = excluded.box_id, subject = excluded.subject,
          summary = excluded.summary, sender_name = excluded.sender_name,
          sender_email = excluded.sender_email, seen = excluded.seen,
          bubbled_up = excluded.bubbled_up, entry_count = excluded.entry_count,
-         has_attachments = excluded.has_attachments, is_bundle = excluded.is_bundle,
+         has_attachments = excluded.has_attachments,
+         is_bundle = (coalesce(excluded.topic_id, postings.topic_id) IS NULL),
          created_at = excluded.created_at, active_at = excluded.active_at,
          updated_at = excluded.updated_at, app_url = excluded.app_url,
          raw_json = excluded.raw_json, synced_at = excluded.synced_at`,
@@ -168,6 +170,51 @@ export class Repo {
       JSON.stringify(p),
       now(),
     )
+  }
+
+  /** The raw cache row, for restoring after a failed optimistic change. */
+  postingSnapshot(id: number): Record<string, SQLInputValue> | null {
+    return this.get<Record<string, SQLInputValue>>('SELECT * FROM postings WHERE id = ?', id) ?? null
+  }
+
+  restorePosting(row: Record<string, SQLInputValue>) {
+    const cols = Object.keys(row)
+    this.run(
+      `INSERT OR REPLACE INTO postings (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
+      ...cols.map((c) => row[c]!),
+    )
+  }
+
+  setPostingBox(id: number, boxId: number) {
+    this.run('UPDATE postings SET box_id = ? WHERE id = ?', boxId, id)
+  }
+
+  setBubbledUp(id: number, bubbledUp: boolean) {
+    this.run('UPDATE postings SET bubbled_up = ? WHERE id = ?', b(bubbledUp), id)
+  }
+
+  /** Adds or removes a label in the cached posting (labels live in its raw JSON). */
+  setPostingLabel(id: number, label: { id: number; name: string }, present: boolean) {
+    const row = this.get<{ raw_json: string }>('SELECT raw_json FROM postings WHERE id = ?', id)
+    if (!row) return
+    const raw = JSON.parse(row.raw_json) as { folders?: Array<{ id: number; name: string }> | null }
+    const others = (raw.folders ?? []).filter((f) => f.id !== label.id)
+    raw.folders = present ? [...others, { id: label.id, name: label.name }] : others
+    this.run('UPDATE postings SET raw_json = ? WHERE id = ?', JSON.stringify(raw), id)
+  }
+
+  postingLabelIds(id: number): number[] {
+    const row = this.get<{ raw_json: string }>('SELECT raw_json FROM postings WHERE id = ?', id)
+    if (!row) return []
+    return ((JSON.parse(row.raw_json) as { folders?: Array<{ id: number }> | null }).folders ?? []).map((f) => f.id)
+  }
+
+  labels(): Array<{ id: number; name: string }> {
+    return this.all<{ id: number; name: string }>('SELECT id, name FROM labels ORDER BY name COLLATE NOCASE')
+  }
+
+  box(id: number) {
+    return this.get<{ id: number; kind: string; name: string }>('SELECT * FROM boxes WHERE id = ?', id)
   }
 
   deletePosting(id: number) {

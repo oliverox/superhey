@@ -4,6 +4,7 @@ import { api, useLive } from './api'
 import { useAppStatus } from './hooks'
 import { Sidebar } from './components/Sidebar'
 import { PostingList, SearchResults } from './components/Lists'
+import { ActivityDrawer, Toasts } from './components/Activity'
 import { Reader, type ReaderTarget } from './components/Reader'
 import { SetupScreen, StartingScreen } from './components/Setup'
 import { useTheme } from './theme'
@@ -40,11 +41,14 @@ function Workspace({ status }: { status: AppStatus }) {
   const searchRef = useRef<HTMLInputElement>(null)
   const { theme, setTheme, toggle: toggleTheme } = useTheme()
   const [activePane, setActivePane] = useState<PaneId>('list')
+  const [showActivity, setShowActivity] = useState(false)
 
   const list = postings.data ?? []
   const selectedIndex = target?.postingId != null ? list.findIndex((p) => p.id === target.postingId) : -1
 
   const open = useCallback((p: PostingRow) => {
+    // Opening a thread marks it seen, as in HEY. Kept out of the activity log.
+    if (!p.seen && !p.isBundle) api.runAction({ type: 'seen', postingId: p.id, seen: true }, 'auto').catch(() => {})
     setTarget({
       postingId: p.id,
       topicId: p.topicId,
@@ -108,6 +112,7 @@ function Workspace({ status }: { status: AppStatus }) {
         theme={theme}
         onTheme={setTheme}
         active={activePane === 'sidebar'}
+        onOpenActivity={() => setShowActivity(true)}
       />
 
       <section className="pane flex flex-col bg-pane" data-pane="list" data-active={activePane === 'list'}>
@@ -151,8 +156,21 @@ function Workspace({ status }: { status: AppStatus }) {
       </section>
 
       <div data-pane="reader" className="contents">
-        <Reader target={target} active={activePane === 'reader'} onOpenThread={open} />
+        <Reader
+          target={target}
+          active={activePane === 'reader'}
+          onOpenThread={open}
+          onLeaveBox={() => {
+            // Move on to the next thread (or the previous one at the end), like HEY.
+            const i = list.findIndex((p) => p.id === target?.postingId)
+            const next = i < 0 ? undefined : (list[i + 1] ?? list[i - 1])
+            if (next) open(next)
+            else setTarget(null)
+          }}
+        />
       </div>
+      <Toasts />
+      {showActivity && <ActivityDrawer onClose={() => setShowActivity(false)} />}
     </div>
   )
 }

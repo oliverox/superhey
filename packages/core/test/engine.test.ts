@@ -39,6 +39,16 @@ describe('SyncEngine watch handling', () => {
     expect(changes).toEqual([{ kind: 'postings', boxId: 1 }])
   })
 
+  it('takes the thread ID from the watch line, since watch postings omit it', () => {
+    const { repo, feed } = setup()
+    const { topic_id: _omit, ...withoutTopic } = posting()
+    feed({ change: 'added', box: imbox, posting_id: 100, thread_id: 900, posting: withoutTopic })
+    expect(repo.posting(PostingId(100))).toMatchObject({ topicId: 900, isBundle: false })
+    // A later update that lacks both keeps the known thread ID.
+    feed({ change: 'updated', box: imbox, posting_id: 100, posting: { ...withoutTopic, name: 'Renamed' } })
+    expect(repo.posting(PostingId(100))).toMatchObject({ topicId: 900, isBundle: false, subject: 'Renamed' })
+  })
+
   it('removes deleted postings', () => {
     const { repo, feed } = setup()
     feed({ change: 'added', box: imbox, posting: posting() })

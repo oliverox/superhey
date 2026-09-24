@@ -195,6 +195,16 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
     return pages
   }
 
+  /** Tells listeners the cache changed outside the engine (e.g. an optimistic action). */
+  notify(change: CacheChange) {
+    this.emit('change', change)
+  }
+
+  /** Re-reads a box soon, coalescing repeated requests. */
+  requestBoxRefresh(boxId: number) {
+    this.scheduleBoxRefresh(boxId)
+  }
+
   pauseBackfill() {
     this.backfillPaused = true
   }
@@ -208,7 +218,9 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
       case 'added':
       case 'updated':
         if (line.posting && line.box) {
-          this.repo.upsertPostings([line.posting], line.box.id)
+          // Watch postings carry the thread ID on the line, not in the posting.
+          const posting = { ...line.posting, topic_id: line.posting.topic_id ?? line.thread_id ?? null }
+          this.repo.upsertPostings([posting], line.box.id)
           this.emit('change', { kind: 'postings', boxId: line.box.id })
         } else if (line.box) {
           // Some updates name the posting without its content: re-read that box.
