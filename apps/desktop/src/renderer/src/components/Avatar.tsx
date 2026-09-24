@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { PostingRow } from '@shared/api'
 import { avatarUrl } from '../api'
+import { paletteColor } from '../avatarColor'
 
 /**
  * A sender's avatar, as HEY draws it: their logo or photo when they have one, otherwise
@@ -12,8 +13,11 @@ export function Avatar({
   size = 36,
   stacked = false,
   blockedTrackers = false,
+  seed,
 }: {
   avatar: PostingRow['avatar']
+  /** Picks a stable colour when HEY gave none (e.g. the sender's address). */
+  seed?: string
   size?: number
   /** Several emails bundled into one row. */
   stacked?: boolean
@@ -23,7 +27,7 @@ export function Avatar({
   const letters = avatar.initials.slice(0, 3)
   // HEY fits the letters to the width; scale down as they get more numerous.
   const fontSize = size * (letters.length >= 3 ? 0.3 : letters.length === 2 ? 0.36 : 0.44)
-  const face = { width: size, height: size, background: avatar.color ?? 'var(--pane-sunk)' }
+  const face = { width: size, height: size, background: avatar.color ?? paletteColor(seed ?? avatar.initials) }
 
   return (
     <span className="relative inline-flex shrink-0" style={{ width: size, height: size }} aria-hidden>
