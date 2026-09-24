@@ -208,6 +208,29 @@ body {
   margin-left: auto;
 }
 
+/* A bundle's timeline: a thin rail joining its emails' nodes. */
+.bundle-timeline {
+  position: relative;
+}
+.bundle-timeline::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 14px;
+  bottom: 18px;
+  width: 1.5px;
+  background: var(--rule);
+}
+/* In a bundle, designed mail stays in the timeline's column (it scales to fit) rather than
+   breaking out across the rail. */
+.bundle-item .email-wide {
+  width: auto;
+  margin-inline: 0;
+}
+[data-theme='omarchy'] .bundle-node {
+  border-radius: 0;
+}
+
 /* Round avatars by default; square tiles under Omarchy. */
 .avatar-shape {
   border-radius: var(--avatar-r);

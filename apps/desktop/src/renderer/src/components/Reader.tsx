@@ -120,7 +120,8 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
       <div className="flex min-h-0 flex-1">
         <div className="scroll min-h-0 min-w-0 flex-1 [container-type:inline-size]">
           <article className="reading-column mx-auto px-10 pt-9 pb-24">
-            <h1 className="rise font-app text-[26px] leading-[1.2] font-semibold tracking-[-0.02em] text-balance">{title}</h1>
+            {/* A bundle draws its own heading (the sender, with their avatar). */}
+          {!target.isBundle && <h1 className="rise font-app text-[26px] leading-[1.2] font-semibold tracking-[-0.02em] text-balance">{title}</h1>}
 
             {target.isBundle ? (
               target.postingId != null && <BundleView bundleId={target.postingId} sender={target.sender ?? 'this sender'} onOpen={onOpenThread} />
@@ -260,8 +261,7 @@ function Message({
   entryHtml?: string
   index: number
 }) {
-  const [view, setView] = useState<'original' | 'simplified'>('original')
-  const designed = useMemo(() => entryHtml != null && isDesigned(entryHtml), [entryHtml])
+  const { designed, showOriginal, toggle } = useDesignedView(entryHtml)
   const surface = entry.from?.isMe ? 'bg-mine' : 'bg-pane'
   const time = <Time iso={entry.createdAt} />
 
@@ -284,12 +284,7 @@ function Message({
     )
   }
 
-  const showOriginal = designed && view === 'original'
-  const full = stripAttachmentLines(entry.bodyMd, entry.attachments)
-  // Replies carry the conversation below them; show only what this message adds.
-  const quote = splitQuoted(full, index > 0)
-  const body = quote ? quote.fresh : full
-  const forwarded = splitForwarded(body)
+  const { forwarded } = messageParts(entry, index)
 
   return (
     // The header sits outside the card, under the subject (or the message before); the card
@@ -309,7 +304,7 @@ function Message({
           </div>
           {designed && (
             <button
-              onClick={() => setView(showOriginal ? 'simplified' : 'original')}
+              onClick={toggle}
               title={showOriginal ? 'Show as plain text in the app’s style' : 'Show as the sender designed it'}
               className="shrink-0 self-center rounded-ui px-1.5 py-0.5 text-[11.5px] font-medium text-ink-faint hover:bg-pane-sunk hover:text-ink"
             >
@@ -333,37 +328,77 @@ function Message({
         {forwarded && <ForwardedLine header={forwarded.header} threadSubject={subject} />}
       </header>
 
-      {showOriginal ? (
-        // Designed mail assumes a white page, so it gets one in every theme. It's built for
-        // ~600–700px, so its card may grow past the text measure (centred, within the pane).
-        <div className={`email-wide overflow-hidden rounded-ui-lg border border-rule ${surface}`}>
-          <div className="bg-white p-3">
-            <HtmlBody entryHtml={entryHtml!} />
-          </div>
-          {visibleAttachments(entry.attachments).length > 0 && (
-            <div className="px-6 pb-4">
-              <AttachmentStrip attachments={visibleAttachments(entry.attachments)} />
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className={`rounded-ui-lg border border-rule px-7 pt-6 pb-4 ${surface}`}>
-          <div className="prose-mail">
-            {forwarded ? (
-              <>
-                {forwarded.before && <Markdown components={mdComponents}>{forwarded.before}</Markdown>}
-                <Markdown components={mdComponents}>{forwarded.after}</Markdown>
-              </>
-            ) : (
-              <Markdown components={mdComponents}>{body}</Markdown>
-            )}
-            {quote && <QuotedHistory quote={quote} />}
-          </div>
-          <AttachmentStrip attachments={visibleAttachments(entry.attachments)} />
-        </div>
-      )}
+      <MessageCard entry={entry} index={index} entryHtml={entryHtml} showOriginal={showOriginal} surface={surface} />
     </li>
   )
+}
+
+/** A message's body split for display: what it adds, the history it quotes, any forward. */
+function messageParts(entry: EntryRow, index: number) {
+  const full = stripAttachmentLines(entry.bodyMd, entry.attachments)
+  // Replies carry the conversation below them; show only what this message adds.
+  const quote = splitQuoted(full, index > 0)
+  const body = quote ? quote.fresh : full
+  return { quote, body, forwarded: splitForwarded(body) }
+}
+
+/**
+ * The body of one message: the sender's design (for designed mail, when `showOriginal`) or
+ * the clean view with quote folding and forwards tidied; attachments underneath. Used by
+ * threads and bundles alike.
+ */
+export function MessageCard({
+  entry,
+  index,
+  entryHtml,
+  showOriginal,
+  surface = 'bg-pane',
+}: {
+  entry: EntryRow
+  /** Position in its thread; a reply's quoted history is only folded after the first. */
+  index: number
+  entryHtml?: string
+  showOriginal: boolean
+  surface?: string
+}) {
+  const { quote, body, forwarded } = messageParts(entry, index)
+  return showOriginal ? (
+      // Designed mail assumes a white page, so it gets one in every theme. It's built for
+      // ~600–700px, so its card may grow past the text measure (centred, within the pane).
+      <div className={`email-wide overflow-hidden rounded-ui-lg border border-rule ${surface}`}>
+        <div className="bg-white p-3">
+          <HtmlBody entryHtml={entryHtml!} />
+        </div>
+        {visibleAttachments(entry.attachments).length > 0 && (
+          <div className="px-6 pb-4">
+            <AttachmentStrip attachments={visibleAttachments(entry.attachments)} />
+          </div>
+        )}
+      </div>
+    ) : (
+      <div className={`rounded-ui-lg border border-rule px-7 pt-6 pb-4 ${surface}`}>
+        <div className="prose-mail">
+          {forwarded ? (
+            <>
+              {forwarded.before && <Markdown components={mdComponents}>{forwarded.before}</Markdown>}
+              <Markdown components={mdComponents}>{forwarded.after}</Markdown>
+            </>
+          ) : (
+            <Markdown components={mdComponents}>{body}</Markdown>
+          )}
+          {quote && <QuotedHistory quote={quote} />}
+        </div>
+        <AttachmentStrip attachments={visibleAttachments(entry.attachments)} />
+      </div>
+    )
+}
+
+/** Whether a message is designed, and which view to show (Original / Simplified). */
+export function useDesignedView(entryHtml: string | undefined) {
+  const [view, setView] = useState<'original' | 'simplified'>('original')
+  const designed = useMemo(() => entryHtml != null && isDesigned(entryHtml), [entryHtml])
+  const showOriginal = designed && view === 'original'
+  return { designed, showOriginal, toggle: () => setView(showOriginal ? 'simplified' : 'original') }
 }
 
 /**
@@ -431,7 +466,7 @@ function QuotedHistory({ quote }: { quote: QuotedSplit }) {
 }
 
 /** The message time as a small tag: day, hairline, time. Full date on hover. */
-function Time({ iso }: { iso: string }) {
+export function Time({ iso }: { iso: string }) {
   const { day, time } = dayAndTime(iso)
   return (
     <time
@@ -447,7 +482,7 @@ function Time({ iso }: { iso: string }) {
 }
 
 /** A plain one-line preview of a Markdown body. */
-function snippet(markdown: string) {
+export function snippet(markdown: string) {
   return markdown
     .replace(/^📎.*$/gmu, '')
     .replace(/^\\?-{2,}.*(Forwarded|Original).*$/gim, '')
