@@ -27,6 +27,8 @@ export interface PostingRow {
   avatar: { url: string | null; color: string | null; initials: string }
   /** HEY blocked spy trackers in this email. */
   blockedTrackers: boolean
+  /** For a bundle row: how many unread threads it holds (from the cache). */
+  bundleCount: number | null
 }
 
 export interface AttachmentRow {
@@ -91,6 +93,13 @@ export interface SearchHit {
 }
 
 const now = () => new Date().toISOString()
+
+/**
+ * SQL condition: posting {p} is an unread thread shown inside bundle {b} (same box, same
+ * sender). HEY lists only the bundle for these.
+ */
+const BUNDLE_MEMBER = `{b}.box_id = {p}.box_id AND {b}.is_bundle = 1 AND {p}.is_bundle = 0 AND {p}.seen = 0
+  AND {b}.sender_email = {p}.sender_email AND {b}.id != {p}.id`
 const b = (v: boolean | null | undefined) => (v ? 1 : 0)
 const n = <T>(v: T | null | undefined): T | null => v ?? null
 
@@ -117,9 +126,11 @@ export class Repo {
   }
 
   boxes(): BoxRow[] {
+    // Unread rows as HEY counts them: a bundle counts once, its members not at all.
     return this.all<BoxRow>(`
       SELECT b.id, b.kind, b.name,
-             (SELECT count(*) FROM postings p WHERE p.box_id = b.id AND p.seen = 0) AS unseen
+             (SELECT count(*) FROM postings p WHERE p.box_id = b.id AND p.seen = 0
+                AND NOT EXISTS (SELECT 1 FROM postings x WHERE ${BUNDLE_MEMBER.replaceAll('{p}', 'p').replaceAll('{b}', 'x')})) AS unseen
       FROM boxes b ORDER BY b.id`)
   }
 
@@ -151,7 +162,8 @@ export class Repo {
          sender_email = excluded.sender_email, seen = excluded.seen,
          bubbled_up = excluded.bubbled_up, entry_count = excluded.entry_count,
          has_attachments = excluded.has_attachments,
-         is_bundle = (coalesce(excluded.topic_id, postings.topic_id) IS NULL),
+         -- A missing kind is not a bundle (json_extract answers NULL, which the column refuses).
+         is_bundle = (coalesce(json_extract(excluded.raw_json, '$.kind'), '') = 'bundle' OR coalesce(excluded.topic_id, postings.topic_id) IS NULL),
          created_at = excluded.created_at, active_at = excluded.active_at,
          updated_at = excluded.updated_at, app_url = excluded.app_url,
          raw_json = excluded.raw_json, synced_at = excluded.synced_at`,
@@ -166,7 +178,7 @@ export class Repo {
       b(p.bubbled_up),
       n(p.visible_entry_count),
       b(p.includes_attachments),
-      b(p.topic_id == null),
+      b(p.kind === 'bundle' || p.topic_id == null),
       n(p.created_at),
       n(p.active_at),
       n(p.updated_at),
@@ -229,11 +241,21 @@ export class Repo {
     this.run('UPDATE postings SET seen = ? WHERE id = ?', b(seen), id)
   }
 
-  /** HEY's own order for the Imbox: bubbled up, then new, then previously seen. */
+  /**
+   * A box as HEY lists it: bubbled up, then new, then previously seen. Unread mail from a
+   * sender who has a bundle row in the box is left out (HEY shows it inside the bundle),
+   * and each bundle carries how many of those it holds.
+   */
   postings(boxId: number, limit = 100, offset = 0): PostingRow[] {
     return this.all<Record<string, unknown>>(
-      `SELECT * FROM postings WHERE box_id = ?
-       ORDER BY bubbled_up DESC, seen ASC, active_at DESC LIMIT ? OFFSET ?`,
+      `SELECT p.*,
+         CASE WHEN p.is_bundle = 1 THEN
+           (SELECT count(*) FROM postings m WHERE ${BUNDLE_MEMBER.replaceAll('{p}', 'm').replaceAll('{b}', 'p')})
+         END AS bundle_count
+       FROM postings p
+       WHERE p.box_id = ?
+         AND NOT EXISTS (SELECT 1 FROM postings b WHERE ${BUNDLE_MEMBER.replaceAll('{p}', 'p').replaceAll('{b}', 'b')})
+       ORDER BY p.bubbled_up DESC, p.seen ASC, p.active_at DESC LIMIT ? OFFSET ?`,
       boxId,
       limit,
       offset,
@@ -574,6 +596,7 @@ function toPostingRow(r: Record<string, unknown>): PostingRow {
     activeAt: r.active_at as string | null,
     appUrl: r.app_url as string | null,
     ...fromRaw(r.raw_json as string, (r.sender_name as string | null) ?? (r.sender_email as string | null)),
+    bundleCount: r.is_bundle === 1 ? ((r.bundle_count as number | null) ?? null) : null,
   }
 }
 

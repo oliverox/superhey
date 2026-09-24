@@ -51,7 +51,7 @@ export function PostingList({ postings, loading, selectedId, onOpen }: ListProps
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
                   <span className={`min-w-0 truncate ${p.seen ? 'text-ink-soft' : 'font-semibold text-ink'}`}>
-                    {p.subject ? stripSubjectPrefixes(p.subject) : '(no subject)'}
+                    {p.subject ? stripSubjectPrefixes(p.isBundle ? p.subject.split(' • ')[0]! : p.subject) : '(no subject)'}
                   </span>
                   {p.hasAttachments && <Paperclip />}
                   {(p.entryCount ?? 0) > 1 && <span className="shrink-0 text-[11px] text-ink-faint">{p.entryCount}</span>}
@@ -65,7 +65,7 @@ export function PostingList({ postings, loading, selectedId, onOpen }: ListProps
                   ))}
                   <span className="min-w-0 truncate">
                     <span className="font-medium text-ink-soft">{senderLabel(p)}</span>
-                    {p.summary && <> – {p.summary}</>}
+                    {p.isBundle ? <> · {bundleNote(p)}</> : p.summary && <> – {p.summary}</>}
                   </span>
                 </div>
               </div>
@@ -133,6 +133,12 @@ function Snippet({ text }: { text: string }) {
 function senderLabel(p: PostingRow) {
   const name = p.senderName?.replace(/^["'\s]+|["'\s]+$/g, '')
   return name || p.senderEmail || 'Unknown'
+}
+
+/** "2 new" for a bundle: from the cache, or HEY's joined subjects when not yet loaded. */
+function bundleNote(p: PostingRow) {
+  const n = Math.max(p.bundleCount ?? 0, p.subject.split(' • ').length)
+  return n > 1 ? `${n} new` : 'new'
 }
 
 function Empty({ children }: { children: React.ReactNode }) {

@@ -68,6 +68,7 @@ function Workspace({ status }: { status: AppStatus }) {
       subject: p.subject,
       appUrl: p.appUrl,
       isBundle: p.isBundle,
+      sender: p.senderName ?? p.senderEmail,
     })
   }, [])
 

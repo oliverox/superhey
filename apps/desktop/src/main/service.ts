@@ -119,6 +119,10 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     return this.need().repo.posting(PostingId(int(id)))
   }
 
+  async bundleThreads(postingId: number) {
+    return this.need().engine.bundleThreads(PostingId(int(postingId)))
+  }
+
   async labels() {
     return this.need().repo.labels()
   }

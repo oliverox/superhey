@@ -71,6 +71,11 @@ export class HeyClient {
     return splitThreadHtml(await this.runner.text(['thread', 'read', String(topicId), '--html']))
   }
 
+  /** The unread threads a bundle row groups (HEY shows them only inside the bundle). */
+  async bundle(id: PostingId): Promise<S.Posting[]> {
+    return (await this.data(['bundle', 'view', String(id), '--all'], S.Bundle)).postings
+  }
+
   attachments(topicId: TopicId) {
     return this.data(['attachment', 'list', String(topicId)], z.array(S.Attachment))
   }

@@ -46,6 +46,8 @@ export interface Api {
   /** Recent threads from one sender, excluding the open one. */
   senderThreads(email: string, excludeTopicId: number | null): Promise<PostingRow[]>
   posting(id: number): Promise<PostingRow | null>
+  /** The unread threads inside a bundle row. */
+  bundleThreads(postingId: number): Promise<PostingRow[]>
   labels(): Promise<Array<{ id: number; name: string }>>
   /** Runs an action on HEY. `auto` is for behaviours like seen-on-open, kept out of the log. */
   runAction(action: Action, source?: 'user' | 'auto'): Promise<ActionRecord>
@@ -65,7 +67,7 @@ export interface Api {
   openAttachment(id: string): Promise<void>
 }
 
-export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'events', 'senderThreads', 'openAttachment', 'posting', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft'] as const satisfies ReadonlyArray<keyof Api>
+export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft'] as const satisfies ReadonlyArray<keyof Api>
 export type ApiMethod = (typeof API_METHODS)[number]
 
 export type ApiEvent =

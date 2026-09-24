@@ -5,8 +5,8 @@ import { HeyNotFoundError } from '../cli/errors'
 import type { HeyClient } from '../cli/client'
 import type { HeyRunner } from '../cli/runner'
 import type { WatchLine } from '../cli/schemas'
-import type { TopicId } from '../ids'
-import type { Repo, ThreadView } from '../cache/repo'
+import { PostingId, type TopicId } from '../ids'
+import type { PostingRow, Repo, ThreadView } from '../cache/repo'
 import { Watcher, type WatchStatus } from './watcher'
 
 export type CacheChange =
@@ -152,6 +152,18 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
 
     this.threadFetches.set(topicId, fetch)
     return fetch
+  }
+
+  /** The unread threads inside a bundle row, fetched from HEY and cached (newest first). */
+  async bundleThreads(id: PostingId): Promise<PostingRow[]> {
+    const bundle = this.repo.posting(id)
+    if (!bundle?.isBundle) throw new Error(`${id} is not a bundle`)
+    const members = await this.client.bundle(id)
+    this.repo.upsertPostings(members, bundle.boxId)
+    this.emit('change', { kind: 'postings', boxId: bundle.boxId })
+    return members
+      .flatMap((m) => this.repo.posting(PostingId(m.id)) ?? [])
+      .sort((a, b) => (b.activeAt ?? '').localeCompare(a.activeAt ?? ''))
   }
 
   /** Original HTML of each message in a thread, fetched once and cached. */

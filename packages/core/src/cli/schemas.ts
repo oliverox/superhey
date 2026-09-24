@@ -36,6 +36,8 @@ export const Posting = z.looseObject({
   // A bundle row names a sender rather than a thread and can omit topic_id.
   topic_id: nullish(z.number()),
   box_id: nullish(z.number()),
+  /** "topic" for a thread; "bundle" for one sender's unread mail rolled into a row. */
+  kind: nullish(z.string()),
   name: z.string().default(''),
   // HEY sends `seen: true` or leaves it out; absent means unseen.
   seen: nullish(z.boolean()),
@@ -133,6 +135,11 @@ export type Attachment = z.infer<typeof Attachment>
 export const SavedAttachment = z.looseObject({
   id: z.string(),
   path: z.string(),
+})
+
+export const Bundle = z.looseObject({
+  id: z.number(),
+  postings: z.array(Posting).default([]),
 })
 
 export const Named = z.looseObject({ id: z.number(), name: z.string() })

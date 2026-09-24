@@ -57,6 +57,26 @@ describe('Repo postings', () => {
     expect(r.posting(PostingId(101))).toMatchObject({ avatar: { url: null, color: null, initials: 'BL' }, blockedTrackers: false })
   })
 
+  it('lists a bundle once and hides the unread mail it holds, as HEY does', () => {
+    const r = repo()
+    const wise = { id: 50, name: 'Wise', email_address: 'noreply@wise.com' }
+    r.upsertPostings([
+      P({ id: 1, kind: 'bundle', topic_id: 901, name: 'Money received', creator: wise, active_at: '2026-09-24T13:24:00Z' }),
+      P({ id: 2, kind: 'topic', topic_id: 901, name: 'Money received', creator: wise, active_at: '2026-09-24T13:24:00Z' }),
+      P({ id: 3, kind: 'topic', topic_id: 902, name: 'Old statement', creator: wise, seen: true, active_at: '2026-09-01T00:00:00Z' }),
+      P({ id: 4, name: 'Lunch', active_at: '2026-09-23T00:00:00Z' }),
+    ])
+    const rows = r.postings(1)
+    expect(rows.map((p) => [p.id, p.isBundle, p.bundleCount])).toEqual([
+      [1, true, 1],
+      [4, false, null],
+      [3, false, null], // already read: HEY lists it on its own
+    ])
+    r.replaceBoxes([{ id: 1, kind: 'imbox', name: 'Imbox' }])
+    expect(r.boxes().find((b) => b.id === 1)?.unseen).toBe(2) // the bundle and Lunch
+    expect(r.posting(PostingId(2))).not.toBeNull() // hidden from the list, still openable
+  })
+
   it('prefers the alternative sender name', () => {
     const r = repo()
     r.upsertPostings([P({ alternative_sender_name: 'Example Newsletter' })])

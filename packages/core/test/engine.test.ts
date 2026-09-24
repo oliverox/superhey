@@ -110,6 +110,19 @@ describe('SyncEngine threads and backfill', () => {
   })
 })
 
+describe('SyncEngine bundles', () => {
+  it('loads the threads inside a bundle and caches them', async () => {
+    const wise = { id: 50, name: 'Wise', email_address: 'noreply@wise.com' }
+    const { engine, repo } = setup([
+      ['bundle view 1', ok({ id: 1, contact: wise, postings: [posting({ id: 2, topic_id: 901, creator: wise, name: 'Money received' })] })],
+    ])
+    repo.upsertPostings([S.Posting.parse(posting({ id: 1, kind: 'bundle', topic_id: 901, creator: wise }))])
+    const threads = await engine.bundleThreads(PostingId(1))
+    expect(threads.map((t) => [t.id, t.subject, t.isBundle])).toEqual([[2, 'Money received', false]])
+    await expect(engine.bundleThreads(PostingId(2))).rejects.toThrow(/not a bundle/)
+  })
+})
+
 describe('SyncEngine thread HTML', () => {
   it('fetches message HTML once, then serves it from the cache', async () => {
     let fetches = 0

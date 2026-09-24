@@ -9,6 +9,7 @@ import { isDesigned } from '../mail/html'
 import { splitQuoted, type QuotedSplit } from '../mail/quoted'
 import { AttachmentStrip, stripAttachmentLines, visibleAttachments } from './Attachments'
 import { ActionBar } from './ActionBar'
+import { BundleView } from './BundleView'
 import { ContextPanel } from './ContextPanel'
 import { useShortcut, withShortcut } from '../shortcuts'
 import { HtmlBody } from './HtmlBody'
@@ -22,6 +23,8 @@ export interface ReaderTarget {
   subject: string
   appUrl: string | null
   isBundle: boolean
+  /** Who a bundle is from, for its heading. */
+  sender?: string | null
 }
 
 // Email is untrusted: react-markdown drops raw HTML, and remote images are not loaded
@@ -81,7 +84,7 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
     () => (topicId == null || !thread.data ? Promise.resolve({}) : api.threadHtml(topicId)),
     [topicId, thread.data?.fetchedAt],
   )
-  const title = stripSubjectPrefixes(subject)
+  const title = stripSubjectPrefixes(target.isBundle ? (target.sender ?? subject) : subject)
   const mainRef = useRef<HTMLElement>(null)
   const panel = useContextPanel(mainRef)
   const showPanel = panel.open && !!thread.data && !target.isBundle
@@ -118,7 +121,7 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
             <h1 className="rise font-app text-[26px] leading-[1.2] font-semibold tracking-[-0.02em] text-balance">{title}</h1>
 
             {target.isBundle ? (
-              <p className="mt-6 text-ink-soft">This row bundles several emails from one sender. Open it in HEY to see them.</p>
+              target.postingId != null && <BundleView bundleId={target.postingId} sender={target.sender ?? 'this sender'} onOpen={onOpenThread} />
             ) : thread.error ? (
               <p className="mt-6 text-danger">Couldn't load this thread: {thread.error}</p>
             ) : !thread.data ? (
