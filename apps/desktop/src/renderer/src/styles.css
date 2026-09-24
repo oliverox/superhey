@@ -33,6 +33,11 @@
   --danger: #d4343a;
   --selection: #edf0ff;
   --mine: #f5f7ff;
+  /* Tooltips: the sidebar's graphite. */
+  --tip-bg: #17191e;
+  --tip-ink: #f1f2f5;
+  --tip-rule: #17191e;
+  --tip-key-rule: rgba(255, 255, 255, 0.24);
 
   --font-ui: 'Onest Variable', ui-sans-serif, sans-serif;
   --font-read: 'Onest Variable', ui-sans-serif, sans-serif;
@@ -68,6 +73,9 @@
     --danger: #ff6b6b;
     --selection: #1c2240;
     --mine: #171b2c;
+    --tip-bg: #262a31;
+    --tip-ink: #eceef2;
+    --tip-rule: #33373f;
     color-scheme: dark;
   }
 }
@@ -96,6 +104,10 @@
   --danger: #f7768e;
   --selection: #283457;
   --mine: #1f2335;
+  --tip-bg: #24283b;
+  --tip-ink: #c0caf5;
+  --tip-rule: #414868;
+  --tip-key-rule: #414868;
 
   /* Uses the Omarchy system font when installed, else the bundled JetBrains Mono. */
   --font-ui: 'CaskaydiaMono Nerd Font', 'JetBrainsMono Nerd Font', 'JetBrains Mono Variable', ui-monospace, monospace;
@@ -299,6 +311,64 @@ kbd.sidebar-key.is-selected,
 button:hover > kbd.sidebar-key {
   color: var(--side-soft);
   border-color: var(--side-faint);
+}
+
+/* Tooltips: small and quiet, one step darker than the chrome in every theme. */
+.tooltip {
+  position: fixed;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 280px;
+  padding: 4px 8px;
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--tip-ink);
+  background: var(--tip-bg);
+  border: 1px solid var(--tip-rule);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  animation: tip-in 120ms ease-out;
+}
+.tooltip[data-above='true'] {
+  animation-name: tip-in-above;
+}
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+@keyframes tip-in-above {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+kbd.tooltip-key {
+  min-width: 16px;
+  padding: 0 4px;
+  font-size: 10.5px;
+  line-height: 14px;
+  color: var(--tip-ink);
+  background: transparent;
+  border-color: var(--tip-key-rule);
+  border-bottom-width: 1px;
+  border-radius: 4px;
+  opacity: 0.75;
+}
+[data-theme='omarchy'] .tooltip,
+[data-theme='omarchy'] kbd.tooltip-key {
+  border-radius: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tooltip {
+    animation: none;
+  }
 }
 
 [data-theme='omarchy'] kbd {

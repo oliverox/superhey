@@ -10,6 +10,7 @@ import { SetupScreen, StartingScreen } from './components/Setup'
 import { useTheme } from './theme'
 import { useShortcut } from './shortcuts'
 import { ShortcutHelp } from './components/ShortcutHelp'
+import { Tooltips } from './components/Tooltips'
 import { Composer, type ComposeRequest } from './components/Composer'
 import { ScreenerBanner, ScreenerList, useScreener } from './components/ScreenerView'
 
@@ -235,6 +236,7 @@ function Workspace({ status }: { status: AppStatus }) {
       <Toasts />
       {showActivity && <ActivityDrawer onClose={() => setShowActivity(false)} />}
       {showHelp && <ShortcutHelp onClose={() => setShowHelp(false)} />}
+      <Tooltips />
       {composing && (
         <div className="fixed inset-0 z-[65] flex items-start justify-center bg-ink/20 p-6 pt-[10vh]">
           <div className="rise w-full max-w-[680px]">
