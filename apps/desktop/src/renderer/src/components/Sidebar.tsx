@@ -38,9 +38,9 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
                       {box.unseen}
                     </span>
                   )}
-                  <span className="ml-auto text-[10.5px] text-side-faint opacity-0 transition-opacity group-hover:opacity-100">
+                  <kbd className={`sidebar-key ml-auto ${selected ? 'is-selected' : ''}`} title={`Press ${i + 1}`}>
                     {i + 1}
-                  </span>
+                  </kbd>
                 </button>
               </li>
             )

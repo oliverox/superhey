@@ -227,6 +227,22 @@ kbd {
   border-bottom-width: 2px;
   border-radius: 5px;
 }
+/* Box numbers in the dark sidebar: always visible, quiet until selected. */
+kbd.sidebar-key {
+  min-width: 18px;
+  padding: 0 4px;
+  font-size: 10.5px;
+  line-height: 15px;
+  color: var(--side-faint);
+  background: transparent;
+  border-color: var(--side-rule);
+}
+kbd.sidebar-key.is-selected,
+button:hover > kbd.sidebar-key {
+  color: var(--side-soft);
+  border-color: var(--side-faint);
+}
+
 [data-theme='omarchy'] kbd {
   border-radius: 0;
 }
