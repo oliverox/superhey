@@ -8,7 +8,7 @@ import { Repo } from '../src/cache/repo'
 import { HeyClient } from '../src/cli/client'
 import { HeyRunner, type Exec } from '../src/cli/runner'
 import * as S from '../src/cli/schemas'
-import { PostingId } from '../src/ids'
+import { PostingId, TopicId } from '../src/ids'
 import { SyncEngine } from '../src/sync/engine'
 import { posting } from './fixtures'
 
@@ -343,5 +343,41 @@ describe('ActionRunner: to-dos', () => {
   it('refuses a to-do it doesn’t know', async () => {
     const { actions } = todoSetup()
     await expect(actions.run({ type: 'todo', todoId: 99, done: true })).rejects.toThrow(/not in the cache/)
+  })
+})
+
+describe('ActionRunner: handled', () => {
+  function handledSetup() {
+    const runner = new HeyRunner({ binary: 'hey', exec: async () => ({ stdout: '{"ok":true,"data":{}}', stderr: '', exitCode: 0 }) })
+    const client = new HeyClient(runner)
+    const repo = new Repo(openDb(':memory:'))
+    repo.replaceBoxes([{ id: 1, kind: 'imbox', name: 'Imbox' }])
+    repo.upsertPostings([S.Posting.parse(posting({ id: 100, topic_id: 900, name: 'Early check-in?' }))])
+    const analysis = { summary: 's', needsReply: true, replyReason: 'asks about check-in', expectsReply: false, category: 'booking', actionItems: [{ text: 'Answer', due: '2026-09-24' }], dates: [], amounts: [] }
+    repo.saveAnalysis(TopicId(900), '2026-09-20T10:00:00Z', 'claude', 'm', analysis, 2)
+    const engine = new SyncEngine(client, repo, runner, { attachmentsDir: mkdtempSync(join(tmpdir(), 'att-')) })
+    const changes: unknown[] = []
+    engine.on('change', (c) => changes.push(c))
+    return { actions: new ActionRunner(client, repo, engine), repo, changes }
+  }
+
+  it('marks a thread done, logged with Undo, and undo puts everything back', async () => {
+    const { actions, repo, changes } = handledSetup()
+    const r = await actions.run({ type: 'handled', topicId: 900 })
+    expect(r).toMatchObject({ type: 'handled', status: 'done', canUndo: true, summary: 'Done: “Early check-in?”' })
+    expect(repo.posting(PostingId(100))!.ai).toMatchObject({ needsReply: false })
+    expect(changes).toContainEqual({ kind: 'postings', boxId: 1 })
+    await actions.undo(r.id)
+    expect(repo.posting(PostingId(100))!.ai).toMatchObject({ needsReply: true, replyReason: 'asks about check-in' })
+    expect(repo.analysis(TopicId(900))).toMatchObject({ actionItems: [{ text: 'Answer', due: '2026-09-24' }] })
+    expect(actions.recent(5).map((a) => [a.summary, a.status])).toEqual([
+      ['Back on Today: “Early check-in?”', 'done'],
+      ['Done: “Early check-in?”', 'undone'],
+    ])
+  })
+
+  it('refuses a thread the AI hasn’t read', async () => {
+    const { actions } = handledSetup()
+    await expect(actions.run({ type: 'handled', topicId: 999 })).rejects.toThrow(/hasn't been read/)
   })
 })

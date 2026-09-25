@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { openDb, Repo, schemas as S, type Core } from '@myhey/core'
+import { ActionRunner, openDb, PostingId, Repo, schemas as S, TopicId, type Core } from '@myhey/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiStatus, ApiEvent } from '../shared/api'
 import { AppService, type SecretStore } from './service'
@@ -15,14 +15,18 @@ function fakeCore(): Core {
     getStatus: () => ({ initialSyncDone: true, watch: 'live', lastError: null }),
     backfillBox: async () => 0,
     screenerEntries: () => [{ id: 1 }, { id: 2 }],
+    notify: (change: unknown) => engine.emit('change', change),
   })
+  const repo = new Repo(openDb(':memory:'))
+  const client = { senders: async () => [{ id: 1, email: 'me@hey.example' }] }
   return {
     cli: { path: '/fake/hey', version: '1.6.0' },
     // No HEY to ask for your addresses: Today works without them.
-    client: { senders: async () => [{ id: 1, email: 'me@hey.example' }] },
-    repo: new Repo(openDb(':memory:')),
+    client,
+    repo,
     engine,
-    actions: new EventEmitter(),
+    // Real, for actions that need nothing from HEY ("handled"); anything else would fail loudly.
+    actions: new ActionRunner(client as never, repo, engine as never),
     outbox: new EventEmitter(),
   } as unknown as Core
 }
@@ -199,6 +203,22 @@ describe('Today in the service', () => {
   it('refuses bad "not now" keys', async () => {
     const { s } = await service()
     for (const [key, at] of [['todo:1', 'x'], ['thread:abc', 'x'], ['thread:1', 42]] as const) await expect(s.hideFromToday(key, at)).rejects.toThrow(/bad/)
+  })
+
+  it('marks a thread handled as an undoable action, and never takes a restore from the UI', async () => {
+    const { s } = await service()
+    const repo = (s as unknown as { core: Core }).core.repo
+    repo.replaceBoxes([{ id: 1, kind: 'imbox', name: 'Imbox' }])
+    repo.upsertPostings([S.Posting.parse({ id: 50, topic_id: 950, box_id: 1, name: 'Early check-in?', active_at: '2026-09-20T10:00:00Z' })])
+    repo.saveAnalysis(TopicId(950), '2026-09-20T10:00:00Z', 'claude', 'm', { summary: 's', needsReply: true, expectsReply: false, category: 'booking' }, 2)
+    const r = await s.markHandled(950)
+    expect(r).toMatchObject({ status: 'done', canUndo: true })
+    expect(repo.posting(PostingId(50))!.ai?.needsReply).toBe(false)
+    // A "restore" smuggled in from the UI is dropped: it's marked handled again, not rewritten.
+    await s.runAction({ type: 'handled', topicId: 950, restore: '{"needsReply":true,"summary":"forged"}' })
+    expect(repo.posting(PostingId(50))!.ai).toMatchObject({ needsReply: false, summary: 's' })
+    await s.undoAction(r.id)
+    expect(repo.posting(PostingId(50))!.ai?.needsReply).toBe(true)
   })
 
   it('accepts a to-do action and nothing looser', async () => {

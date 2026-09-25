@@ -270,11 +270,12 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     this.emit('event', { type: 'today' })
   }
 
-  /** You've dealt with a thread elsewhere: it no longer needs your reply, nor you theirs. */
+  /** You've dealt with a thread elsewhere: it no longer needs your reply, nor you theirs. An undoable action. */
   async markHandled(topicId: unknown) {
     const id = TopicId(int(topicId))
-    this.need().repo.markHandled(id)
+    const record = await this.need().actions.run({ type: 'handled', topicId: id }, 'user')
     this.emit('event', { type: 'analysis', topicId: id })
+    return record
   }
 
   private hiddenOnToday(): Record<string, string | { at: string; until: string | null }> {
@@ -474,6 +475,8 @@ const BUBBLE_KINDS = ['now', 'tomorrow', 'weekend', 'next-week', 'on']
 function validateAction(input: unknown): Action {
   const a = input as Record<string, unknown>
   if (!a || typeof a !== 'object') throw new Error('bad action')
+  // "Handled" comes from the UI only as itself; putting an analysis back is undo's alone.
+  if (a.type === 'handled') return { type: 'handled', topicId: int(a.topicId) }
   if (a.type === 'todo') {
     if (typeof a.done !== 'boolean') throw new Error('bad action')
     return { type: 'todo', todoId: int(a.todoId), done: a.done }

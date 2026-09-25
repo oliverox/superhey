@@ -134,7 +134,7 @@ export interface Api {
   /** "Not now": hides a thread from Today until tomorrow, or until it changes (`activeAt`: its activity now). */
   hideFromToday(key: string, activeAt: string): Promise<void>
   /** "Done" for a thread you dealt with elsewhere: no longer needs your reply, nor you theirs. */
-  markHandled(topicId: number): Promise<void>
+  markHandled(topicId: number): Promise<ActionRecord>
   /** What the AI made of a thread: summary, needs reply, action items, dates, amounts. */
   analysis(topicId: number): Promise<ThreadAnalysisView | null>
   aiStatus(): Promise<AiStatus>

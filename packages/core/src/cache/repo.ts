@@ -681,6 +681,22 @@ export class Repo {
     return Number(res.changes) > 0
   }
 
+  /** The stored analysis as it is (for undoing "handled"). */
+  analysisJson(topicId: TopicId): string | null {
+    return this.get<{ json: string }>('SELECT json FROM thread_analysis WHERE topic_id = ?', topicId)?.json ?? null
+  }
+
+  /** Puts an analysis back as it was (undoing "handled"). */
+  restoreAnalysis(topicId: TopicId, json: string) {
+    const a = JSON.parse(json) as { needsReply?: boolean; expectsReply?: boolean }
+    this.run('UPDATE thread_analysis SET json = ?, needs_reply = ?, expects_reply = ? WHERE topic_id = ?', json, b(a.needsReply), b(a.expectsReply), topicId)
+  }
+
+  /** The boxes a thread has postings in. */
+  boxesOf(topicId: TopicId): number[] {
+    return this.all<{ box_id: number }>('SELECT DISTINCT box_id FROM postings WHERE topic_id = ?', topicId).map((r) => r.box_id)
+  }
+
   /** The full analysis (action items, dates, amounts), for the details panel. */
   analysis(topicId: TopicId): (Record<string, unknown> & { analyzedAt: string; model: string }) | null {
     const r = this.get<{ json: string; analyzed_at: string; model: string }>('SELECT json, analyzed_at, model FROM thread_analysis WHERE topic_id = ?', topicId)
