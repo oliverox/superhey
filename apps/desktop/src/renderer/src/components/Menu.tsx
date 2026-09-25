@@ -11,13 +11,16 @@ export function Menu({
   children,
   align = 'right',
   shortcut,
+  button,
 }: {
   label: string
-  icon: ReactNode
+  icon?: ReactNode
   children: (close: () => void) => ReactNode
   align?: 'left' | 'right'
   /** Key that opens (or closes) the menu. */
   shortcut?: ShortcutId
+  /** Draws the opening button instead of the toolbar icon (a filter chip, say). */
+  button?: (open: boolean, toggle: () => void) => ReactNode
 }) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
@@ -47,9 +50,13 @@ export function Menu({
 
   return (
     <div ref={root} className="no-drag relative">
-      <ToolbarButton label={shortcut ? withShortcut(label, shortcut) : label} pressed={open} onClick={() => setOpen(!open)} aria-haspopup="menu">
-        {icon}
-      </ToolbarButton>
+      {button ? (
+        button(open, () => setOpen(!open))
+      ) : (
+        <ToolbarButton label={shortcut ? withShortcut(label, shortcut) : label} pressed={open} onClick={() => setOpen(!open)} aria-haspopup="menu">
+          {icon}
+        </ToolbarButton>
+      )}
       {open && (
         <div
           ref={menu}
@@ -113,7 +120,7 @@ export function MenuItem({
         </span>
       )}
       <span className="min-w-0 flex-1 truncate">{children}</span>
-      {hint && <span className="shrink-0 text-[11.5px] text-ink-faint">{hint}</span>}
+      {hint && <span className="shrink-0 text-[12px] text-ink-faint">{hint}</span>}
     </button>
   )
 }

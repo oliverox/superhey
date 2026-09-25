@@ -171,6 +171,22 @@ describe('AI settings in the service', () => {
   })
 })
 
+describe('Search in the service', () => {
+  it('searches the cache with a Gmail-style query, and checks what it’s given', async () => {
+    const { s } = await service()
+    expect(await s.search('')).toEqual({ rows: [], highlight: [], problems: [] })
+    expect(await s.search('invoice has:wings')).toMatchObject({ highlight: ['invoice'], problems: ['has:wings'] })
+    for (const bad of [null, 42, { text: 'x' }]) await expect(s.search(bad)).rejects.toThrow(/text/)
+    for (const bad of [0, 101, 'two']) await expect(s.searchHey('invoice', bad)).rejects.toThrow()
+    await expect(s.searchPeople(7)).rejects.toThrow(/text/)
+  })
+
+  it('doesn’t ask HEY what only the cache knows', async () => {
+    const { s } = await service()
+    expect(await s.searchHey('is:unread invoice', 1)).toMatchObject({ rows: [], unsupported: true })
+  })
+})
+
 describe('Today in the service', () => {
   it('assembles Today from the cache, with the Screener count', async () => {
     const { s } = await service()

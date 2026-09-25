@@ -75,7 +75,7 @@ function MoreFrom({ person, topicId, onOpen }: { person: Addr; topicId: number; 
           <li key={p.id}>
             <button onClick={() => onOpen(p)} className="flex w-full items-baseline gap-2 rounded-ui px-2 py-1.5 text-left hover:bg-pane-alt">
               <span className="min-w-0 flex-1 truncate text-ink">{p.subject || '(no subject)'}</span>
-              <span className="shrink-0 text-[11.5px] text-ink-faint">{shortDate(p.activeAt)}</span>
+              <span className="shrink-0 text-[12px] text-ink-faint">{shortDate(p.activeAt)}</span>
             </button>
           </li>
         ))}
@@ -106,11 +106,11 @@ function FileRow({ file }: { file: AttachmentRow }) {
       title={failed ? "Couldn't open" : `Open ${file.filename}`}
       className="flex w-full items-center gap-2.5 rounded-ui px-2 py-1.5 text-left hover:bg-pane-alt"
     >
-      <span className="flex h-6 w-8 shrink-0 items-center justify-center rounded-[3px] bg-pane-sunk text-[9px] font-semibold tracking-wide text-ink-soft uppercase">
+      <span className="flex h-6 min-w-9 shrink-0 items-center justify-center rounded-[3px] bg-pane-sunk px-1 text-[11px] font-semibold text-ink-soft uppercase">
         {extension(file.filename) || 'file'}
       </span>
       <span className="min-w-0 flex-1 truncate text-ink">{file.filename}</span>
-      <span className={`shrink-0 text-[11.5px] ${failed ? 'text-danger' : 'text-ink-faint'}`}>{failed ? 'Failed' : formatBytes(file.byteSize)}</span>
+      <span className={`shrink-0 text-[12px] ${failed ? 'text-danger' : 'text-ink-faint'}`}>{failed ? 'Failed' : formatBytes(file.byteSize)}</span>
     </button>
   )
 }
@@ -137,16 +137,16 @@ export function Understanding({ topicId }: { topicId: number }) {
       <div className="space-y-3 px-2">
         <p className="leading-snug text-ink">{a.summary}</p>
         {a.needsReply && (
-          <p className="flex items-baseline gap-1.5 text-[12.5px] font-medium text-accent">
+          <p className="flex items-baseline gap-1.5 text-[13px] font-medium text-accent">
             <ReplyGlyph />
             <span>Needs your reply{a.replyReason ? `: ${a.replyReason}` : ''}</span>
           </p>
         )}
-        {a.expectsReply && <p className="text-[12.5px] text-ink-soft">You asked; waiting on their answer.</p>}
+        {a.expectsReply && <p className="text-[13px] text-ink-soft">You asked; waiting on their answer.</p>}
         {a.actionItems.length > 0 && (
           <ul className="space-y-1.5" aria-label="Action items">
             {a.actionItems.map((item, i) => (
-              <li key={i} className="flex gap-2 text-[12.5px] leading-snug">
+              <li key={i} className="flex gap-2 text-[13px] leading-snug">
                 <span aria-hidden className="mt-[3px] size-[11px] shrink-0 rounded-[3px] border-[1.5px] border-rule-strong" />
                 <span className="min-w-0 flex-1 text-ink">
                   {item.text}
@@ -157,7 +157,7 @@ export function Understanding({ topicId }: { topicId: number }) {
           </ul>
         )}
         {(a.dates.length > 0 || a.amounts.length > 0) && (
-          <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-[12.5px]">
+          <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-[13px]">
             {a.dates.map((d, i) => (
               <Fact key={`d${i}`} label={d.label} value={`${dayName(d.date)}${d.time ? `, ${d.time}` : ''}`} />
             ))}

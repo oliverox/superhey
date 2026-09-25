@@ -100,8 +100,8 @@ export function TodayList({
       {/* The state first, then what's ahead. */}
       {today.toHandle === 0 && (
         <div className="px-5 pt-8 pb-4 text-center">
-          <p className="font-app text-[16px] font-medium text-ink">You’re caught up.</p>
-          <p className="mt-1 text-[12.5px] text-ink-faint">Nothing due, nothing waiting on your reply, nobody to chase.</p>
+          <p className="font-app text-[17px] font-medium text-ink">You’re caught up.</p>
+          <p className="mt-1 text-[13px] text-ink-faint">Nothing due, nothing waiting on your reply, nobody to chase.</p>
         </div>
       )}
       {comingUp.length > 0 && <ComingUp items={comingUp} selectedId={selectedId} onOpen={onOpen} />}
@@ -111,7 +111,7 @@ export function TodayList({
           <ul className="flex flex-wrap gap-1.5 px-5">
             {fresh.map((b) => (
               <li key={b.boxId}>
-                <button onClick={() => onGoToBox(b.boxId)} className="rounded-ui border border-rule px-2.5 py-1 text-[12.5px] text-ink-soft hover:border-rule-strong hover:text-ink">
+                <button onClick={() => onGoToBox(b.boxId)} className="rounded-ui border border-rule px-2.5 py-1 text-[13px] text-ink-soft hover:border-rule-strong hover:text-ink">
                   {b.name} <span className="font-semibold text-ink tabular-nums">{b.count}</span>
                 </button>
               </li>
@@ -157,7 +157,7 @@ function ThreadRow({ item, reason, selected, onOpen, onDone }: { item: ThreadIte
       <Avatar avatar={avatar} size={32} seed={other?.email ?? p.senderEmail ?? undefined} />
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium text-ink">{p.subject ? stripSubjectPrefixes(p.subject) : '(no subject)'}</div>
-        <div className="mt-0.5 truncate text-[12.5px] text-ink-faint">
+        <div className="mt-0.5 truncate text-[13px] text-ink-faint">
           <span className="text-ink-soft">{who}</span> · {reason}
         </div>
       </div>
@@ -182,7 +182,7 @@ function ActionRow({ item, selected, onOpen, onDone }: { item: ActionItem; selec
       <Avatar avatar={p.avatar} size={32} seed={p.senderEmail ?? undefined} />
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium text-ink">{item.text}</div>
-        <div className="mt-0.5 truncate text-[12.5px] text-ink-faint">
+        <div className="mt-0.5 truncate text-[13px] text-ink-faint">
           <span className={item.daysLate > 0 ? 'text-danger' : 'text-ink-soft'}>{why.action(item)}</span> · {p.subject ? stripSubjectPrefixes(p.subject) : p.senderName}
         </div>
       </div>
@@ -200,7 +200,7 @@ function RowActions({ onDone, onNotNow }: { onDone?: () => void; onNotNow?: () =
         run()
       }}
       title={title}
-      className={`shrink-0 rounded-ui px-2 py-1 text-[11.5px] font-medium opacity-0 group-hover:opacity-100 hover:bg-pane focus-visible:opacity-100 ${strong ? 'text-ink-soft hover:text-ok' : 'text-ink-faint hover:text-ink'}`}
+      className={`shrink-0 rounded-ui px-2 py-1 text-[12px] font-medium opacity-0 group-hover:opacity-100 hover:bg-pane focus-visible:opacity-100 ${strong ? 'text-ink-soft hover:text-ok' : 'text-ink-faint hover:text-ink'}`}
     >
       {label}
     </button>
@@ -272,7 +272,7 @@ function TodoRow({ item }: { item: TodoItem }) {
       </button>
       <div className="min-w-0 flex-1 pl-[7px]">
         <div className="truncate text-ink">{item.todo.title}</div>
-        <div className={`mt-0.5 text-[12.5px] ${item.daysLate > 0 ? 'text-danger' : 'text-ink-faint'}`}>{why.todo(item)} · To-do</div>
+        <div className={`mt-0.5 text-[13px] ${item.daysLate > 0 ? 'text-danger' : 'text-ink-faint'}`}>{why.todo(item)} · To-do</div>
       </div>
     </li>
   )
@@ -281,14 +281,16 @@ function TodoRow({ item }: { item: TodoItem }) {
 /** The date for Today's header: "Fri 25 Sep". */
 export const todayLabel = (d = new Date()) => new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).format(d)
 
-/** The reader on Today when there's no thread to open: nothing left to handle. */
-export function TodayDone({ toDos }: { toDos: number }) {
+/**
+ * The reader on Today when there's no thread to open. The list beside already says you're
+ * caught up (or what's left), so this doesn't repeat it: just where to go next.
+ */
+export function TodayDone() {
   return (
     <main className="pane flex flex-col bg-pane-alt">
       <div className="drag h-[52px] shrink-0" />
-      <div className="flex flex-1 flex-col items-center justify-center px-8 text-center text-ink-faint">
-        <p className="font-app text-[17px] font-medium text-ink-soft">{toDos ? `${plural(toDos, 'to-do')} left, and no threads.` : 'You’re caught up.'}</p>
-        <p className="mt-2 text-[12.5px]">
+      <div className="flex flex-1 flex-col items-center justify-center px-8 text-center text-[13px] text-ink-faint">
+        <p>
           <kbd>1</kbd>–<kbd>6</kbd> for boxes · <kbd>⌘K</kbd> for anything
         </p>
       </div>

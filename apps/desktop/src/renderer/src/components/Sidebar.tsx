@@ -2,7 +2,9 @@ import type { AppStatus, BoxRow, EventRow } from '@shared/api'
 import { api, useLive } from '../api'
 import { clock, startOfDay } from '../format'
 import { withShortcut } from '../shortcuts'
-import { THEMES, type Theme } from '../theme'
+import type { ReactNode } from 'react'
+import type { Scheme, Theme } from '../theme'
+import { OmarchyLogo } from './OmarchyLogo'
 
 interface Props {
   boxes: BoxRow[]
@@ -11,6 +13,9 @@ interface Props {
   status: AppStatus
   theme: Theme
   onTheme: (t: Theme) => void
+  /** Light, dark or the system's, for the Default theme. */
+  scheme: Scheme
+  onScheme: (s: Scheme) => void
   active: boolean
   onOpenActivity: () => void
   onOpenSettings: () => void
@@ -18,7 +23,7 @@ interface Props {
   today: { active: boolean; count: number | null; onSelect: () => void }
 }
 
-export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onTheme, active, onOpenActivity, onOpenSettings, today }: Props) {
+export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onTheme, scheme, onScheme, active, onOpenActivity, onOpenSettings, today }: Props) {
   return (
     <aside className="pane flex flex-col bg-side text-side-ink" data-pane="sidebar" data-active={active}>
       <div className="drag h-[52px] shrink-0" />
@@ -34,7 +39,7 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
               }`}
             >
               <span className="font-medium">Today</span>
-              {!!today.count && <span className="ml-2 text-[11.5px] text-side-faint tabular-nums">{today.count}</span>}
+              {!!today.count && <span className="ml-2 text-[12px] text-side-faint tabular-nums">{today.count}</span>}
               <kbd className={`sidebar-key ml-auto ${today.active ? 'is-selected' : ''}`} title="Press 0">
                 0
               </kbd>
@@ -53,7 +58,7 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
                 >
                   <span className="font-medium">{box.name}</span>
                   {box.kind === 'imbox' && box.unseen > 0 && (
-                    <span className="ml-2 rounded-full bg-new px-1.5 text-[10.5px] leading-[17px] font-semibold text-accent-ink tabular-nums">
+                    <span className="ml-2 rounded-full bg-new px-1.5 text-[11px] leading-[17px] font-semibold text-accent-ink tabular-nums">
                       {box.unseen}
                     </span>
                   )}
@@ -69,7 +74,7 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
 
       <Agenda />
 
-      <footer className="shrink-0 border-t border-side-rule px-4 py-3 text-[11.5px] text-side-faint">
+      <footer className="shrink-0 border-t border-side-rule px-4 py-3 text-[12px] text-side-faint">
         <div className="mb-2.5 flex items-center gap-1">
           <button onClick={onOpenActivity} className="flex items-center gap-2 rounded-ui px-1 py-1 text-left text-[12px] text-side-soft hover:text-side-ink">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden>
@@ -86,7 +91,7 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
             Settings
           </button>
         </div>
-        <ThemeSwitch theme={theme} onTheme={onTheme} />
+        <AppearanceSwitch theme={theme} scheme={scheme} onTheme={onTheme} onScheme={onScheme} />
         <SyncStatus status={status} />
       </footer>
     </aside>
@@ -109,11 +114,11 @@ function Agenda() {
         <section key={label} className="mb-5">
           <h2 className="eyebrow mb-2 !text-side-faint">{label}</h2>
           {items.length === 0 ? (
-            <p className="text-[12.5px] text-side-faint">Nothing scheduled</p>
+            <p className="text-[13px] text-side-faint">Nothing scheduled</p>
           ) : (
             <ul className="space-y-2">
               {items.map((e) => (
-                <li key={e.key} className="flex gap-2.5 text-[12.5px] leading-snug">
+                <li key={e.key} className="flex gap-2.5 text-[13px] leading-snug">
                   <span className="mt-[3px] h-3 w-[2px] shrink-0 bg-accent" />
                   <span className="min-w-0">
                     <span className="block truncate text-side-ink">{e.title}</span>
@@ -129,20 +134,65 @@ function Agenda() {
   )
 }
 
-function ThemeSwitch({ theme, onTheme }: { theme: Theme; onTheme: (t: Theme) => void }) {
+type Look = 'light' | 'dark' | 'auto' | 'omarchy'
+
+const LOOKS: Array<{ id: Look; label: string; icon: ReactNode }> = [
+  {
+    id: 'light',
+    label: 'Light',
+    icon: (
+      <>
+        <circle cx="8" cy="8" r="3" />
+        <path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1" />
+      </>
+    ),
+  },
+  { id: 'dark', label: 'Dark', icon: <path d="M13 9.5A5.5 5.5 0 0 1 6.5 3a5.5 5.5 0 1 0 6.5 6.5Z" strokeLinejoin="round" /> },
+  {
+    id: 'auto',
+    label: 'System (as macOS)',
+    icon: (
+      <>
+        <circle cx="8" cy="8" r="5.5" />
+        <path d="M8 2.5v11A5.5 5.5 0 0 0 8 2.5Z" fill="currentColor" stroke="none" />
+      </>
+    ),
+  },
+  { id: 'omarchy', label: 'Omarchy', icon: null },
+]
+
+/**
+ * How the app looks, in one switch: Default in light, dark or as the system is, or
+ * Omarchy. ⇧D flips light and dark; ⇧T switches Default and Omarchy.
+ */
+function AppearanceSwitch({ theme, scheme, onTheme, onScheme }: { theme: Theme; scheme: Scheme; onTheme: (t: Theme) => void; onScheme: (s: Scheme) => void }) {
+  const current: Look = theme === 'omarchy' ? 'omarchy' : scheme
+  const choose = (look: Look) => {
+    if (look === 'omarchy') return onTheme('omarchy')
+    onTheme('default')
+    onScheme(look)
+  }
   return (
-    <div role="radiogroup" aria-label="Theme" className="mb-3 flex rounded-ui bg-side-sel/60 p-0.5" title="Switch theme (⇧T)">
-      {THEMES.map((t) => (
+    <div role="radiogroup" aria-label="Appearance" className="mb-3 flex rounded-ui bg-side-sel/60 p-0.5">
+      {LOOKS.map((l) => (
         <button
-          key={t.id}
+          key={l.id}
           role="radio"
-          aria-checked={theme === t.id}
-          onClick={() => onTheme(t.id)}
-          className={`flex-1 rounded-ui py-1 text-[11.5px] font-medium transition-colors ${
-            theme === t.id ? 'bg-side-sel text-side-ink shadow-sm' : 'text-side-faint hover:text-side-soft'
+          aria-checked={current === l.id}
+          aria-label={l.label}
+          title={l.label}
+          onClick={() => choose(l.id)}
+          className={`flex h-[26px] flex-1 items-center justify-center rounded-ui transition-colors ${
+            current === l.id ? 'bg-side-sel text-side-ink shadow-sm' : 'text-side-faint hover:text-side-soft'
           }`}
         >
-          {t.label}
+          {l.id === 'omarchy' ? (
+            <OmarchyLogo className="size-[13px]" />
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
+              {l.icon}
+            </svg>
+          )}
         </button>
       ))}
     </div>

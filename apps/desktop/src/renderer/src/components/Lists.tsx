@@ -1,8 +1,8 @@
-import { Fragment, useEffect, useRef } from 'react'
-import type { PostingRow, SearchHit } from '@shared/api'
-import { api, useLive } from '../api'
+import { Fragment, useEffect, useRef, type ReactNode } from 'react'
+import type { PostingRow } from '@shared/api'
 import { shortDate } from '../format'
 import { stripSubjectPrefixes } from '../mail/forwarded'
+import { splitMatches } from '../mail/search'
 import { Avatar } from './Avatar'
 
 interface ListProps {
@@ -10,6 +10,8 @@ interface ListProps {
   loading: boolean
   selectedId: number | null
   onOpen: (p: PostingRow) => void
+  /** Search results: no Bubbled up / New / Previously seen groups, matches highlighted, and each row's box named. */
+  search?: { highlight: string[]; boxNames: Record<number, string>; empty: ReactNode; footer: ReactNode }
 }
 
 /** Groups rows the way HEY does: Bubbled up, New for you, Previously seen. */
@@ -18,7 +20,7 @@ function groupOf(p: PostingRow) {
   return p.seen ? 'Previously seen' : 'New for you'
 }
 
-export function PostingList({ postings, loading, selectedId, onOpen }: ListProps) {
+export function PostingList({ postings, loading, selectedId, onOpen, search }: ListProps) {
   const listRef = useRef<HTMLUListElement>(null)
 
   useEffect(() => {
@@ -26,13 +28,14 @@ export function PostingList({ postings, loading, selectedId, onOpen }: ListProps
   }, [selectedId])
 
   if (loading) return <Empty>Loading…</Empty>
-  if (!postings.length) return <Empty>Nothing here.</Empty>
+  if (!postings.length) return search ? <div className="scroll min-h-0 flex-1">{search.empty}</div> : <Empty>Nothing here.</Empty>
+  const mark = (text: string) => (search ? <Highlighted text={text} terms={search.highlight} /> : text)
 
   return (
     <ul ref={listRef} role="listbox" aria-label="Threads" className="scroll min-h-0 flex-1">
       {postings.map((p, i) => {
         const group = groupOf(p)
-        const showHeader = i === 0 || groupOf(postings[i - 1]!) !== group
+        const showHeader = !search && (i === 0 || groupOf(postings[i - 1]!) !== group)
         const selected = p.id === selectedId
         return (
           <Fragment key={p.id}>
@@ -51,27 +54,28 @@ export function PostingList({ postings, loading, selectedId, onOpen }: ListProps
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
                   <span className={`min-w-0 truncate ${p.seen ? 'text-ink-soft' : 'font-semibold text-ink'}`}>
-                    {p.subject ? stripSubjectPrefixes(p.isBundle ? p.subject.split(' • ')[0]! : p.subject) : '(no subject)'}
+                    {p.subject ? mark(stripSubjectPrefixes(p.isBundle ? p.subject.split(' • ')[0]! : p.subject)) : '(no subject)'}
                   </span>
                   {p.hasAttachments && <Paperclip />}
                   {(p.entryCount ?? 0) > 1 && <span className="shrink-0 text-[11px] text-ink-faint">{p.entryCount}</span>}
-                  <span className="ml-auto shrink-0 pl-1 text-[11.5px] text-ink-faint">{shortDate(p.activeAt)}</span>
+                  <span className="ml-auto shrink-0 pl-1 text-[12px] text-ink-faint">{shortDate(p.activeAt)}</span>
                 </div>
-                <div className="mt-0.5 flex min-w-0 items-baseline gap-1.5 text-[12.5px] text-ink-faint">
+                <div className="mt-0.5 flex min-w-0 items-baseline gap-1.5 text-[13px] text-ink-faint">
+                  {search?.boxNames[p.boxId] && <span className="shrink-0 text-[12px] font-medium text-ink-faint">{search.boxNames[p.boxId]}</span>}
                   {p.labels.map((label) => (
-                    <span key={label} className="shrink-0 rounded-[4px] border border-rule-strong px-1 text-[10.5px] leading-[15px] font-medium text-ink-soft">
+                    <span key={label} className="shrink-0 rounded-[4px] border border-rule-strong px-1 text-[11px] leading-[15px] font-medium text-ink-soft">
                       {label}
                     </span>
                   ))}
                   {p.ai?.needsReply && (
-                    <span className="shrink-0 text-[11.5px] font-semibold text-accent" title={p.ai.replyReason ? `Needs your reply: ${p.ai.replyReason}` : 'Needs your reply'}>
+                    <span className="shrink-0 text-[12px] font-semibold text-accent" title={p.ai.replyReason ? `Needs your reply: ${p.ai.replyReason}` : 'Needs your reply'}>
                       Reply
                     </span>
                   )}
                   <span className="min-w-0 truncate">
-                    <span className="font-medium text-ink-soft">{senderLabel(p)}</span>
+                    <span className="font-medium text-ink-soft">{mark(senderLabel(p))}</span>
                     {/* The AI's one-line summary when it has read the thread; HEY's opening words otherwise. */}
-                    {p.isBundle ? <> · {bundleNote(p)}</> : (p.ai?.summary ?? p.summary) && <> – {p.ai?.summary ?? p.summary}</>}
+                    {p.isBundle ? <> · {bundleNote(p)}</> : (p.ai?.summary ?? p.summary) && <> – {mark((p.ai?.summary ?? p.summary)!)}</>}
                   </span>
                 </div>
               </div>
@@ -79,58 +83,16 @@ export function PostingList({ postings, loading, selectedId, onOpen }: ListProps
           </Fragment>
         )
       })}
+      {search?.footer && <li>{search.footer}</li>}
     </ul>
   )
 }
 
-export function SearchResults({
-  query,
-  onOpen,
-  activeTopicId,
-}: {
-  query: string
-  onOpen: (hit: SearchHit) => void
-  activeTopicId: number | null
-}) {
-  const hits = useLive(() => api.search(query), [query])
-  const results = hits.data ?? []
-
-  return (
-    <div className="scroll min-h-0 flex-1">
-      <p className="px-5 pt-3 pb-2 text-[12px] text-ink-faint">
-        Searching threads you've opened. Full-mailbox search arrives with background caching.
-      </p>
-      {results.length === 0 && !hits.loading && <Empty>No matches.</Empty>}
-      <ul>
-        {results.map((h) => (
-          <li
-            key={h.entryId}
-            onClick={() => onOpen(h)}
-            className={`mx-2 rounded-ui px-3 py-2.5 ${h.topicId === activeTopicId ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
-          >
-            <div className="flex items-baseline gap-2">
-              <span className="truncate font-medium">{h.senderName ?? 'Unknown'}</span>
-              <span className="ml-auto shrink-0 text-[11.5px] text-ink-faint">{shortDate(h.createdAt)}</span>
-            </div>
-            <div className="truncate">{h.subject}</div>
-            <div className="mt-0.5 line-clamp-2 text-[12.5px] text-ink-faint">
-              <Snippet text={h.snippet} />
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-/** Renders FTS snippet markers [like this] as highlights, without any HTML injection. */
-function Snippet({ text }: { text: string }) {
-  const parts = text.split(/(\[[^\]]*\])/g)
+/** Text with the searched words marked, without any HTML injection. */
+export function Highlighted({ text, terms }: { text: string; terms: string[] }) {
   return (
     <>
-      {parts.map((part, i) =>
-        part.startsWith('[') && part.endsWith(']') ? <mark key={i}>{part.slice(1, -1)}</mark> : <Fragment key={i}>{part}</Fragment>,
-      )}
+      {splitMatches(text, terms).map((part, i) => (part.match ? <mark key={i}>{part.text}</mark> : <Fragment key={i}>{part.text}</Fragment>))}
     </>
   )
 }

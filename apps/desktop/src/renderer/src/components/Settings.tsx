@@ -46,7 +46,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
           ) : (
             <>
               <ModeLine status={s} />
-              {error && <p className="mt-3 rounded-ui bg-danger/10 px-3 py-2 text-[12.5px] text-danger">{error}</p>}
+              {error && <p className="mt-3 rounded-ui bg-danger/10 px-3 py-2 text-[13px] text-danger">{error}</p>}
 
               <Section title="AI providers" hint="Your own API keys; each company bills you for what it uses. Automatic tasks use the first provider that’s on.">
                 <Providers status={s} save={save} />
@@ -110,7 +110,7 @@ function Section({ title, hint, children }: { title: string; hint: string; child
   return (
     <section className="mt-7 border-t border-rule pt-5 first-of-type:mt-6">
       <h3 className="text-[14px] font-semibold">{title}</h3>
-      <p className="mt-0.5 mb-3.5 text-[12.5px] leading-snug text-ink-faint">{hint}</p>
+      <p className="mt-0.5 mb-3.5 text-[13px] leading-snug text-ink-faint">{hint}</p>
       {children}
     </section>
   )
@@ -172,10 +172,10 @@ function Providers({ status, save }: { status: AiStatus; save: (change: (s: AiSe
           {available.map((p) => (
             <button key={p.id} onClick={() => setAdding(p.id)} className="flex w-full items-baseline gap-3 rounded-ui px-3 py-2 text-left hover:bg-pane-alt">
               <span className="w-16 shrink-0 text-[13px] font-semibold text-ink">{p.name}</span>
-              <span className="text-[12.5px] text-ink-faint">{p.blurb}</span>
+              <span className="text-[13px] text-ink-faint">{p.blurb}</span>
             </button>
           ))}
-          <button onClick={() => setAdding(null)} className="mt-1 w-full rounded-ui px-3 py-1.5 text-left text-[12.5px] text-ink-faint hover:bg-pane-alt hover:text-ink">
+          <button onClick={() => setAdding(null)} className="mt-1 w-full rounded-ui px-3 py-1.5 text-left text-[13px] text-ink-faint hover:bg-pane-alt hover:text-ink">
             Cancel
           </button>
         </div>
@@ -237,7 +237,7 @@ function ProviderRow({
         <StatusMark on={p.enabled} />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
-            <span className={`text-[13.5px] font-semibold ${p.enabled ? 'text-ink' : 'text-ink-faint'}`}>{p.name}</span>
+            <span className={`text-[14px] font-semibold ${p.enabled ? 'text-ink' : 'text-ink-faint'}`}>{p.name}</span>
             <span className="font-mono text-[12px] text-ink-faint" aria-label={`Stored ${p.name} key`}>
               {p.hint}
             </span>
@@ -277,7 +277,7 @@ function ProviderRow({
 
       {test && test !== 'running' && (
         // Under the name: the row's own mark already says it works.
-        <p className={`mt-2 pl-[25px] text-[12.5px] ${test.ok ? 'text-ink-soft' : 'text-danger'}`}>
+        <p className={`mt-2 pl-[25px] text-[13px] ${test.ok ? 'text-ink-soft' : 'text-danger'}`}>
           {test.ok ? (
             <>
               {names.get(test.model) ?? test.model} answered in {(test.ms / 1000).toFixed(1)} s · {money(test.costUsd)}
@@ -287,10 +287,10 @@ function ProviderRow({
           )}
         </p>
       )}
-      {error && <p className="mt-2 pl-[25px] text-[12.5px] text-danger">{error}</p>}
+      {error && <p className="mt-2 pl-[25px] text-[13px] text-danger">{error}</p>}
 
       {panel === 'models' && (
-        <div className="mt-3 flex pl-[25px] flex-wrap items-center gap-x-4 gap-y-2 text-[12.5px] text-ink-soft">
+        <div className="mt-3 flex pl-[25px] flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-ink-soft">
           {(['cheap', 'quality'] as const).map((tier) => (
             <label key={tier} className="flex items-center gap-2">
               {tier === 'cheap' ? 'Quick tasks' : 'The rest'}
@@ -298,7 +298,7 @@ function ProviderRow({
                 value={p.models[tier]}
                 onChange={(e) => setProvider({ models: { ...status.settings.providers[p.id]?.models, [tier]: e.target.value } })}
                 aria-label={`${p.name}: model for ${tier === 'cheap' ? 'quick tasks' : 'the rest'}`}
-                className="field py-1 text-[12.5px]"
+                className="field py-1 text-[13px]"
               >
                 {models.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -372,7 +372,7 @@ function KeyForm({ provider: p, canStoreKey, onDone }: { provider: Provider; can
           Cancel
         </button>
       </div>
-      {error && <p className="text-[12.5px] text-danger">{error}</p>}
+      {error && <p className="text-[13px] text-danger">{error}</p>}
       <p className="text-[12px] leading-snug text-ink-faint">
         {canStoreKey ? (
           <>
@@ -440,7 +440,7 @@ function LocalSetup({ status, save }: { status: AiStatus; save: (change: (s: AiS
               onKeyDown={(e) => e.key === 'Enter' && setBaseUrl(url)}
               aria-label="Local server address"
               spellCheck={false}
-              className="field min-w-[260px] flex-1 font-mono text-[12.5px]"
+              className="field min-w-[260px] flex-1 font-mono text-[13px]"
             />
             {PRESETS.map((p) => (
               <button key={p.name} onClick={() => (setUrl(p.url), setBaseUrl(p.url))} className={`btn ${local.baseUrl === p.url ? 'text-ink' : ''}`} aria-pressed={local.baseUrl === p.url}>
@@ -468,8 +468,8 @@ function LocalSetup({ status, save }: { status: AiStatus; save: (change: (s: AiS
               {finding ? 'Looking…' : 'Refresh'}
             </button>
           </div>
-          {error && <p className="text-[12.5px] text-danger">{error}</p>}
-          {models && models.length === 0 && !error && <p className="text-[12.5px] text-ink-faint">The server is running but has no models. With Ollama, try `ollama pull llama3.2`.</p>}
+          {error && <p className="text-[13px] text-danger">{error}</p>}
+          {models && models.length === 0 && !error && <p className="text-[13px] text-ink-faint">The server is running but has no models. With Ollama, try `ollama pull llama3.2`.</p>}
           {local.model && <ConnectionTest engine="local" />}
         </>
       )}
@@ -492,7 +492,7 @@ function ConnectionTest({ engine, disabled }: { engine: ProviderId | 'local'; di
     }
   }
   return (
-    <div className="flex flex-wrap items-center gap-3 text-[12.5px]">
+    <div className="flex flex-wrap items-center gap-3 text-[13px]">
       <button onClick={() => void run()} disabled={busy || disabled} className="btn">
         {busy ? 'Testing…' : 'Test connection'}
       </button>
@@ -537,7 +537,7 @@ function Tasks({ status, save }: { status: AiStatus; save: (change: (s: AiSettin
                   <div className="text-[12px] text-ink-faint">{runsOn(t.runsOn, names)}</div>
                 </td>
                 <td className="py-2.5 pr-2 text-right whitespace-nowrap">
-                  <select value={engine} onChange={(e) => set(t.id, { engine: e.target.value as 'auto' | ProviderId | 'local' })} aria-label={`${t.label}: engine`} disabled={!enabled} className="field py-1 text-[12.5px]">
+                  <select value={engine} onChange={(e) => set(t.id, { engine: e.target.value as 'auto' | ProviderId | 'local' })} aria-label={`${t.label}: engine`} disabled={!enabled} className="field py-1 text-[13px]">
                     <option value="auto">Automatic</option>
                     {/* Connected providers, and whichever this task is pinned to even if it isn't. */}
                     {status.providers
@@ -550,7 +550,7 @@ function Tasks({ status, save }: { status: AiStatus; save: (change: (s: AiSettin
                     <option value="local">Local model</option>
                   </select>{' '}
                   {models.length > 0 && (
-                    <select value={model} onChange={(e) => set(t.id, { model: e.target.value || undefined })} aria-label={`${t.label}: model`} disabled={!enabled} className="field py-1 text-[12.5px]">
+                    <select value={model} onChange={(e) => set(t.id, { model: e.target.value || undefined })} aria-label={`${t.label}: model`} disabled={!enabled} className="field py-1 text-[13px]">
                       <option value="">{`${names.get(status.providers.find((p) => p.id === cloud)?.models[t.tier] ?? '') ?? ''} (default)`}</option>
                       {models.map((m) => (
                         <option key={m.id} value={m.id}>
@@ -638,13 +638,13 @@ function Budget({ status, save }: { status: AiStatus; save: (change: (s: AiSetti
             <div className={`h-full rounded-full ${share >= 1 ? 'bg-danger' : share >= 0.8 ? 'bg-new' : 'bg-accent'}`} style={{ width: `${Math.max(share * 100, month.spentUsd > 0 ? 1.5 : 0)}%` }} />
           </div>
         )}
-        {share >= 1 && <p className="mt-2 text-[12.5px] text-danger">The budget is used up: cloud calls are stopped until next month, or until you raise it.</p>}
+        {share >= 1 && <p className="mt-2 text-[13px] text-danger">The budget is used up: cloud calls are stopped until next month, or until you raise it.</p>}
       </div>
 
       {month.byTask.length > 0 && (
-        <table className="w-full text-[12.5px]">
+        <table className="w-full text-[13px]">
           <thead>
-            <tr className="text-left text-[11.5px] text-ink-faint">
+            <tr className="text-left text-[12px] text-ink-faint">
               <th className="pb-1.5 font-medium">Task</th>
               <th className="pb-1.5 font-medium">Model</th>
               <th className="pb-1.5 text-right font-medium">Calls</th>

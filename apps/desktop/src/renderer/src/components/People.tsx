@@ -155,7 +155,7 @@ export function AddressRow({ person }: { person: Addr }) {
             {person.isMe && <span className="ml-1.5 text-[11px] font-normal text-ink-faint">you</span>}
           </div>
         )}
-        <div className="truncate text-[12.5px] text-ink-soft">{person.email}</div>
+        <div className="truncate text-[13px] text-ink-soft">{person.email}</div>
       </div>
       <CopyButton
         text={person.email}

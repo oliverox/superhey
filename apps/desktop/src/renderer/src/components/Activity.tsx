@@ -68,7 +68,7 @@ function Toast({ record: r, onClose }: { record: ActionRecord; onClose: () => vo
     >
       <span className="min-w-0 flex-1 truncate">{undoError ?? text}</span>
       {r.verified === null && r.status === 'done' && (
-        <span className="shrink-0 text-[11.5px] opacity-70" title="HEY accepted it, but the app couldn't confirm it in the box yet">
+        <span className="shrink-0 text-[12px] opacity-70" title="HEY accepted it, but the app couldn't confirm it in the box yet">
           unconfirmed
         </span>
       )}
@@ -141,14 +141,14 @@ function ActivityRow({ record: a }: { record: ActionRecord }) {
       <span className={`mt-[7px] size-1.5 shrink-0 rounded-full ${s.dot}`} aria-hidden />
       <div className="min-w-0 flex-1">
         <p className={`text-[13px] leading-snug ${a.status === 'undone' ? 'text-ink-faint line-through' : 'text-ink'}`}>{a.summary}</p>
-        <p className="mt-0.5 text-[11.5px] text-ink-faint">
+        <p className="mt-0.5 text-[12px] text-ink-faint">
           {s.label}
           {a.source === 'undo' && ' · undo'}
           {a.verified === null && a.status === 'done' && ' · unconfirmed'}
           {' · '}
           {day}, {time}
         </p>
-        {(a.error || error) && <p className="mt-0.5 text-[11.5px] text-danger">{error ?? a.error}</p>}
+        {(a.error || error) && <p className="mt-0.5 text-[12px] text-danger">{error ?? a.error}</p>}
       </div>
       {a.canUndo && (
         <button

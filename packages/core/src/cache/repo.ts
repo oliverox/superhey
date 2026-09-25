@@ -3,6 +3,7 @@ import { PostingId, TopicId } from '../ids'
 import type * as S from '../cli/schemas'
 import { normalizeUtc } from '../cli/schemas'
 import { transaction, type Db } from './db'
+import type { AttachmentKind, SearchQuery } from '../search/query'
 
 // Rows handed to the UI. Plain JSON so they cross Electron IPC unchanged.
 
@@ -314,6 +315,74 @@ export class Repo {
       ...words.map((w) => `%${w.replace(/[\\%_]/g, (c) => '\\' + c)}%`),
       limit,
     ).map(toPostingRow))
+  }
+
+  /** A thread's latest posting as a list row, when the cache has it. */
+  threadRow(topicId: TopicId): PostingRow | null {
+    return this.threadRows('p.topic_id = ?', 'p.active_at DESC', topicId)[0] ?? null
+  }
+
+  /**
+   * Threads matching a search, newest first: words, phrases and exclusions against the
+   * subject, sender, HEY's preview, the AI summary and (for threads read) the messages;
+   * operators against what the cache knows. `bounds` are the query's dates as instants.
+   */
+  searchThreads(q: SearchQuery, bounds: { after: string | null; before: string | null }, limit = 60): PostingRow[] {
+    if (q.box === 'trash') return [] // never cached
+    const where: string[] = []
+    const params: SQLInputValue[] = []
+    const like = (s: string) => `%${s.toLowerCase().replace(/[\\%_]/g, (c) => '\\' + c)}%`
+    const hay = `lower(coalesce(p.subject,'') || ' ' || coalesce(p.sender_name,'') || ' ' || coalesce(p.sender_email,'') || ' ' ||
+      coalesce(p.summary,'') || ' ' || coalesce(a.summary,'') || ' ' ||
+      coalesce((SELECT group_concat(e.body_md, ' ') FROM entries e WHERE e.topic_id = p.topic_id), ''))`
+    for (const w of [...q.words, ...q.phrases]) where.push(`${hay} LIKE ? ESCAPE '\\'`), params.push(like(w))
+    for (const w of q.excluded) where.push(`${hay} NOT LIKE ? ESCAPE '\\'`), params.push(like(w))
+    for (const group of q.anyOf) {
+      where.push(`(${group.map(() => `${hay} LIKE ? ESCAPE '\\'`).join(' OR ')})`)
+      params.push(...group.map(like))
+    }
+    if (q.from) where.push(`${words(`coalesce(p.sender_name,'') || ' ' || coalesce(p.sender_email,'')`)} LIKE ? ESCAPE '\\'`), params.push(wordStart(q.from))
+    if (q.to) {
+      // Anyone on the thread other than the sender.
+      where.push(`EXISTS (SELECT 1 FROM json_each(p.raw_json, '$.contacts') c
+        WHERE lower(coalesce(json_extract(c.value, '$.email_address'), '')) != coalesce(p.sender_email, '')
+          AND ${words(`coalesce(json_extract(c.value, '$.name'), '') || ' ' || coalesce(json_extract(c.value, '$.email_address'), '')`)} LIKE ? ESCAPE '\\')`)
+      params.push(wordStart(q.to))
+    }
+    for (const w of q.subject?.split(/\s+/).filter(Boolean) ?? []) where.push(`lower(coalesce(p.subject,'')) LIKE ? ESCAPE '\\'`), params.push(like(w))
+    if (q.box) where.push('p.box_id IN (SELECT id FROM boxes WHERE kind = ?)'), params.push(q.box)
+    if (q.label) where.push(`EXISTS (SELECT 1 FROM json_each(p.raw_json, '$.folders') f WHERE lower(json_extract(f.value, '$.name')) = ?)`), params.push(q.label.toLowerCase())
+    if (q.attachment === 'any') where.push('p.has_attachments = 1')
+    else if (q.attachment) {
+      // Specific kinds are known only for threads whose files the cache has listed.
+      const kinds = ATTACHMENT_MATCH[q.attachment]
+      where.push(`EXISTS (SELECT 1 FROM attachments f WHERE f.topic_id = p.topic_id AND (${kinds.map(() => `lower(coalesce(f.content_type,'') || ' ' || f.filename) LIKE ?`).join(' OR ')}))`)
+      params.push(...kinds)
+    }
+    if (q.read != null) where.push('p.seen = ?'), params.push(q.read ? 1 : 0)
+    if (bounds.after) where.push('p.active_at >= ?'), params.push(bounds.after)
+    if (bounds.before) where.push('p.active_at < ?'), params.push(bounds.before)
+    if (!where.length) return []
+    return this.withAnalysis(this.all<Record<string, unknown>>(
+      `SELECT p.* FROM postings p LEFT JOIN thread_analysis a ON a.topic_id = p.topic_id
+       WHERE p.is_bundle = 0 AND p.topic_id IS NOT NULL AND ${where.join(' AND ')}
+         AND p.id = (SELECT q.id FROM postings q WHERE q.topic_id = p.topic_id AND q.is_bundle = 0 ORDER BY q.active_at DESC, q.id DESC LIMIT 1)
+       ORDER BY p.active_at DESC LIMIT ?`,
+      ...params,
+      limit,
+    ).map(toPostingRow))
+  }
+
+  /** People you've had mail from whose name or address contains `text`, most mail first (for from: suggestions). */
+  correspondents(text: string, limit = 6): Array<{ name: string | null; email: string; count: number }> {
+    return this.all<{ name: string | null; email: string; n: number }>(
+      `SELECT max(sender_name) AS name, sender_email AS email, count(*) AS n FROM postings
+       WHERE sender_email IS NOT NULL AND is_bundle = 0
+         AND ${words(`coalesce(sender_name,'') || ' ' || sender_email`)} LIKE ? ESCAPE '\\'
+       GROUP BY sender_email ORDER BY n DESC LIMIT ?`,
+      wordStart(text),
+      limit,
+    ).map((r) => ({ name: r.name, email: r.email, count: Number(r.n) }))
   }
 
   /** A sender's threads in one box, newest first (the latest posting of each thread). */
@@ -905,6 +974,29 @@ function toAttachmentRow(r: Record<string, unknown>): AttachmentRow {
     byteSize: r.byte_size as number | null,
     embedded: /:e-/.test(r.id as string),
   }
+}
+
+/**
+ * A name or address as words, for matching at the start of one (as Gmail does): "wi" finds
+ * "Wise" and "noreply@wise.com" but not "tailwindcss.com". Lowercased, with the separators
+ * of addresses and names turned into spaces, and a leading space.
+ */
+const words = (sql: string) =>
+  `(' ' || replace(replace(replace(replace(replace(lower(${sql}), '@', ' '), '.', ' '), '-', ' '), '_', ' '), '"', ' '))`
+/** The LIKE pattern for `text` at the start of a word in `words(…)`, spelled the same way. */
+const wordStart = (text: string) =>
+  `% ${text.toLowerCase().replace(/[@.\-_"]/g, ' ').trim().replace(/[\\%_]/g, (c) => '\\' + c)}%`
+
+/** What a file's type or name looks like, per HEY attachment kind (for the cache's side of has:). */
+const ATTACHMENT_MATCH: Record<Exclude<AttachmentKind, 'any'>, string[]> = {
+  images: ['image/%', '%.png', '%.jpg', '%.jpeg', '%.gif', '%.heic', '%.webp'],
+  pdfs: ['%pdf%'],
+  calendar_invites: ['%calendar%', '%.ics'],
+  documents: ['%msword%', '%wordprocessing%', '%opendocument.text%', '%.doc', '%.docx', '%.pages', '%.odt', '%.rtf'],
+  spreadsheets: ['%spreadsheet%', '%excel%', '%csv%', '%.xls', '%.xlsx', '%.numbers', '%.ods', '%.csv'],
+  presentations: ['%presentation%', '%powerpoint%', '%.ppt', '%.pptx', '%.key', '%.odp'],
+  media: ['audio/%', 'video/%'],
+  zip_files: ['%zip%', '%.rar', '%.7z', '%.tar%', '%.gz'],
 }
 
 function toPostingRow(r: Record<string, unknown>): PostingRow {

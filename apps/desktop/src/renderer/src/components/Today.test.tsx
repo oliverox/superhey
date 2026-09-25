@@ -187,11 +187,10 @@ describe('What’s new, and nothing left', () => {
     expect(text()).toContain('New todayImbox 2')
   })
 
-  it('fills the reader when there’s no thread to open', () => {
-    act(() => root.render(createElement(Today.TodayDone, { toDos: 0 })))
-    expect(text()).toContain('You’re caught up.')
-    act(() => root.render(createElement(Today.TodayDone, { toDos: 2 })))
-    expect(text()).toContain('2 to-dos left, and no threads.')
+  it('doesn’t repeat “caught up” in the reader: the list says it', () => {
+    act(() => root.render(createElement(Today.TodayDone)))
+    expect(text()).not.toContain('caught up')
+    expect(text()).toContain('for boxes')
   })
 })
 

@@ -83,7 +83,7 @@ export function HtmlBody({ entryHtml }: { entryHtml: string }) {
         className={`block w-full border-0 bg-white transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}`}
       />
       {blockedImages > 0 && (
-        <p className="mt-2 text-[11.5px] text-ink-faint">
+        <p className="mt-2 text-[12px] text-ink-faint">
           {blockedImages} remote {blockedImages === 1 ? 'image was' : 'images were'} blocked because {blockedImages === 1 ? 'it' : 'they'} didn't come through HEY's privacy proxy.
         </p>
       )}

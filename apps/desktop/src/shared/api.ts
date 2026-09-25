@@ -13,6 +13,7 @@ import type {
   EventRow,
   PostingRow,
   SearchHit,
+  HeySearchPage,
   SyncStatus,
   ThreadView,
   AiSettings,
@@ -25,7 +26,7 @@ import type {
   ComingUpItem,
 } from '@myhey/core'
 
-export type { OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId, TodayView, ThreadItem, TodoItem, ActionItem, ComingUpItem }
+export type { OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, HeySearchPage, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId, TodayView, ThreadItem, TodoItem, ActionItem, ComingUpItem }
 
 /** Everything Settings shows about AI. API keys themselves never leave the main process. */
 export interface AiStatus {
@@ -99,7 +100,12 @@ export interface Api {
   thread(topicId: number, entryCount: number | null): Promise<ThreadView | null>
   /** Original HTML of each message in a thread, by entry ID (fetched on first use). */
   threadHtml(topicId: number): Promise<Record<number, string>>
-  search(query: string): Promise<SearchHit[]>
+  /** Search the cache (Gmail-style query): at once. */
+  search(text: string): Promise<{ rows: PostingRow[]; highlight: string[]; problems: string[] }>
+  /** Search the whole mailbox through HEY: one page of 10. */
+  searchHey(text: string, page: number): Promise<HeySearchPage>
+  /** People to suggest for from: and to:. */
+  searchPeople(text: string): Promise<Array<{ name: string | null; email: string; count: number }>>
   /** Emails whose subject or sender contains every word of the query (for jumping to one). */
   findPostings(query: string, limit?: number): Promise<PostingRow[]>
   events(from: string, to: string): Promise<EventRow[]>
@@ -148,7 +154,7 @@ export interface Api {
   testAi(engine: ProviderId | 'local'): Promise<AiTestResult>
 }
 
-export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'analysis', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
+export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'searchHey', 'searchPeople', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'analysis', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
 export type ApiMethod = (typeof API_METHODS)[number]
 
 export type ApiEvent =

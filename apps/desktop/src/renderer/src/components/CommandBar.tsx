@@ -144,7 +144,7 @@ export function CommandBar({
           })}
         </div>
 
-        <footer className="flex items-center gap-3 border-t border-rule px-4 py-2 text-[11.5px] text-ink-faint">
+        <footer className="flex items-center gap-3 border-t border-rule px-4 py-2 text-[12px] text-ink-faint">
           <span>
             <kbd>↑</kbd> <kbd>↓</kbd> to move
           </span>
@@ -171,11 +171,11 @@ function Row({ result, id, selected, onHover, onRun }: { result: Ranked; id: str
       onMouseMove={selected ? undefined : onHover}
       onMouseDown={(e) => e.preventDefault()} // keep the focus in the input
       onClick={onRun}
-      className={`mx-1.5 flex cursor-default items-center gap-3 rounded-ui px-2.5 py-[7px] text-[13.5px] ${selected ? 'bg-selection text-ink' : 'text-ink-soft'}`}
+      className={`mx-1.5 flex cursor-default items-center gap-3 rounded-ui px-2.5 py-[7px] text-[14px] ${selected ? 'bg-selection text-ink' : 'text-ink-soft'}`}
     >
       <span className="min-w-0 flex-1 truncate">
         <Highlighted text={command.title} indices={indices} />
-        {command.detail && <span className="ml-2 text-[12.5px] text-ink-faint">{command.detail}</span>}
+        {command.detail && <span className="ml-2 text-[13px] text-ink-faint">{command.detail}</span>}
       </span>
       {command.keys?.length ? (
         <span className="flex shrink-0 gap-1">

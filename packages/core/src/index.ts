@@ -43,3 +43,5 @@ export async function createCore(opts: { dbPath: string; cliPath?: string; accou
 }
 
 export type Core = Awaited<ReturnType<typeof createCore>>
+export { ATTACHMENT_KINDS, OPERATORS, highlightTerms, isEmptyQuery, operatorValue, parseQuery, withOperator, type AttachmentKind, type Operator, type SearchQuery } from './search/query'
+export { HEY_PAGE_SIZE, heyArgs, localBounds, searchHey, type HeySearchPage } from './search/search'

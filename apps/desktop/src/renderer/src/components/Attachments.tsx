@@ -70,7 +70,7 @@ function AttachmentCard({ attachment: a }: { attachment: AttachmentRow }) {
         style={{ width: THUMB_W, height: THUMB_H }}
       >
         <Preview attachment={a} ext={ext} />
-        <span className="absolute bottom-1.5 left-1.5 rounded-[3px] bg-ink/75 px-1.5 py-px text-[9.5px] font-semibold tracking-wide text-pane uppercase">
+        <span className="absolute bottom-1.5 left-1.5 rounded-[3px] bg-ink/75 px-1.5 py-px text-[11px] font-semibold tracking-wide text-pane uppercase">
           {ext || 'file'}
         </span>
         {opening && <span className="absolute inset-0 flex items-center justify-center bg-pane/70 text-[11px] text-ink-soft">Opening…</span>}
@@ -195,7 +195,7 @@ function Placeholder({ ext, loading = false }: { ext: string; loading?: boolean 
       {[88, 100, 72, 94, 60, 84].map((w, i) => (
         <span key={i} className="h-1.5 rounded-full bg-rule" style={{ width: `${w}%` }} />
       ))}
-      <span className="mt-auto self-end text-[18px] font-semibold text-rule-strong uppercase">{ext}</span>
+      <span className="mt-auto self-end text-[17px] font-semibold text-rule-strong uppercase">{ext}</span>
     </div>
   )
 }

@@ -38,7 +38,7 @@ export function RecipientField({
       {value.map((addr, i) => (
         <span
           key={addr}
-          className={`inline-flex items-center gap-1 rounded-ui py-0.5 pr-1 pl-2 text-[12.5px] ${
+          className={`inline-flex items-center gap-1 rounded-ui py-0.5 pr-1 pl-2 text-[13px] ${
             isEmail(addr) ? 'bg-pane-sunk text-ink' : 'bg-danger/15 text-danger'
           }`}
           title={isEmail(addr) ? addr : `Not an email address: ${addr}`}
