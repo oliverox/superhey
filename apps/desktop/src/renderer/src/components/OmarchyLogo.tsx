@@ -1,15 +1,12 @@
-// The Omarchy wordmark, from the Omarchy repository (github.com/basecamp/omarchy, logo.svg, MIT).
-// Drawn in the current text colour.
+// Omarchy's square mark: glyph U+E900 of its icon font (github.com/basecamp/omarchy,
+// default/fonts/omarchy/omarchy.ttf, MIT), as a path. Drawn in the current text colour.
 export function OmarchyLogo({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 1215 285" fill="currentColor" aria-hidden className={className}>
-      <path clipRule="evenodd" d="m720 120h-15v15h-14.998v14.999l-60.002.001v15.002l90-.002v.002h.002l-.002 89.998h-15v15h-13v15h-17v-89.998h-45v90l-45-.002v-89.998h-14.998v-30h14.998v-15.002h-14.998v-30.001h14.998v-75h15v-14.997h15v-15.002h105.002zm-90-.001h45v-74.997h-45z" fillRule="evenodd"/>
-      <path clipRule="evenodd" d="m105 30.002h15v14.997h15v180.001h-15v15h-15v15.002h-75v-15.002h-15v-15h-15v-180.001h15v-14.997h15v-15.002h75zm-60 194.998h45v-179.998h-45z" fillRule="evenodd"/>
-      <path d="m300 15h60v15h15v14.999h15v180.001h-15v15h-15v15h-15l-.004-209.998h-44.994v-.002h-.002v210.002h-45v-210h-44.998v179.997h-.002v30.003h-15v-15.002h-15v-15h-14.998v-180.001h14.998v-14.999h15v-15h60v-15h45z"/>
-      <path clipRule="evenodd" d="m555 225h-15v15h-15v15h-15v-105.001l-44.998.001v105.002h-45.002v-105.002h-15v-30.001h15v-75h15.002v-14.997h15v-15.002h105zm-89.998-105.001h44.998v-74.997h-44.998z" fillRule="evenodd"/>
-      <path d="m885 75h-15v15h-15v15h-15v-59.998h-45v179.998h45v-59.998h15v14.997h15v15.001h15v30h-15v15h-15v15.002l-105-.002v-210.001h14.998v-14.997h15.002v-15.002h105z"/>
-      <path d="m960 119.999h45v-104.999h15v15h15v14.999h15v75.001h15v15h-15v90h-15v15h-15v15h-15v-105h-45v105.002l-45-.002v-105h-30v-15h15v-15.001h15v-75h15v-14.997h15v-15.002h15z"/>
-      <path d="m1125 119.999h45v-104.999h15v15h15v15h15v180h-15v15h-15v15.002l-75-.002v-15h-15v-15h-15v-45.001h15v-14.997-.002h30v60h45v-75h-90v-105.001h15v-14.997h15v-15.002h15z"/>
+    <svg viewBox="0 -1024 1024 1024" fill="currentColor" aria-hidden className={className}>
+      <path
+        transform="scale(1,-1)"
+        d="M70 70H549V0H0V1024H1024V0H626V70H954V954H70ZM884 140H140V884H551V814H210V210H814V814H736V884H884ZM471 140H549V70H471ZM473 954H551V884H473ZM0 551H210V473H0Z"
+      />
     </svg>
   )
 }

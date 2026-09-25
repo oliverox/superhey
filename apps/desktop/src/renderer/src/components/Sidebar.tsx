@@ -150,7 +150,7 @@ function ThemeSwitch({ theme, onTheme }: { theme: Theme; onTheme: (t: Theme) => 
             theme === t.id ? 'bg-side-sel text-side-ink shadow-sm' : 'text-side-faint hover:text-side-soft'
           }`}
         >
-          {t.id === 'omarchy' ? <OmarchyLogo className="mx-auto h-[10px] w-auto" /> : t.label}
+          {t.id === 'omarchy' ? <OmarchyLogo className="mx-auto size-[13px]" /> : t.label}
         </button>
       ))}
     </div>
