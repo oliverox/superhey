@@ -34,7 +34,16 @@ export function splitForwarded(markdown: string): ForwardedSplit | null {
   let last: string | null = null
   for (; i < lines.length; i++) {
     const line = lines[i]!
-    if (!line.trim()) break
+    if (!line.trim()) {
+      // Some mailers put a blank line between the fields ("From: …", blank, "Date: …").
+      let next = i + 1
+      while (next < lines.length && !lines[next]!.trim()) next++
+      if (fields > 0 && next < lines.length && FIELD.test(lines[next]!)) {
+        i = next - 1
+        continue
+      }
+      break
+    }
     const m = FIELD.exec(line)
     if (m) {
       last = m[1]!.toLowerCase()
@@ -77,6 +86,8 @@ const EMAIL = /[^\s<>(),;"']+@[^\s<>(),;"']+\.[^\s<>(),;"']+/
 
 /** "Name <a@b.c>, c@d.e" → addresses. Commas inside quotes or brackets don't split. */
 export function parseAddresses(value: string): Addr[] {
+  // Gmail joins the last two with a word ("A <a>, B <b> and C <c>"; "et" in French).
+  value = value.replace(/>\s+(?:and|et|und|y|e)\s+/gi, '>, ')
   const parts: string[] = []
   let depth = 0
   let quoted = false
@@ -137,4 +148,25 @@ export function parseForwardedDate(value: string | null): Date | null {
     .trim()
   const t = Date.parse(cleaned)
   return Number.isNaN(t) ? null : new Date(t)
+}
+
+/**
+ * Undoes the hard line breaks of mail written at a fixed width: a line that doesn't end a
+ * sentence, followed by one that carries on (starts lowercase), was one line. Only the
+ * Markdown hard break (two trailing spaces, or a backslash) is removed, so the text flows;
+ * breaks that mean something ("Dear friends,", "Allah'u'abha.") stay. Works inside quotes.
+ */
+export function unwrapHardBreaks(markdown: string): string {
+  const lines = markdown.split('\n')
+  for (let i = 0; i < lines.length - 1; i++) {
+    const line = lines[i]!
+    const next = lines[i + 1]!
+    const quote = /^((?:[ \t]*>)*[ \t]?)/.exec(line)![1]!
+    if (!/(?: {2,}|\\)$/.test(line) || !next.startsWith(quote.trimEnd())) continue
+    const text = line.slice(quote.length).replace(/(?: {2,}|\\)$/, '')
+    const carriesOn = next.slice(quote.trimEnd().length).trimStart()
+    if (/[.!?:;…]["'”’)]*$/.test(text.trim()) || !/^\p{Ll}/u.test(carriesOn)) continue
+    lines[i] = quote + text
+  }
+  return lines.join('\n')
 }

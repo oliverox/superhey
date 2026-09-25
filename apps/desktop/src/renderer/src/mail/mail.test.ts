@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseAddresses, parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes } from './forwarded'
+import { parseAddresses, parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes, unwrapHardBreaks } from './forwarded'
 import { displayName, formatAddressList, replyRecipients, shortName, summarizeRecipients, type Addr } from './people'
 
 // Shaped like HEY's Markdown for a Gmail forward (escaped dashes and brackets, bold name).
@@ -147,5 +147,49 @@ describe('replyRecipients', () => {
   it('drops duplicates across To and Cc', () => {
     const msg = { from: ana, to: [ana, bo], cc: [bo, cy] }
     expect(replyRecipients(msg, 'reply-all')).toEqual({ to: ['ana@x.com', 'bo@x.com'], cc: ['cy@x.com'] })
+  })
+})
+
+describe('forwards with blank lines between the header fields', () => {
+  it('reads the header and the forwarded message after your note', () => {
+    const body =
+      'Dear friends,  \nI am forwarding this report.  \nWarm regards,  \nSam  \n\n\\---------- Forwarded message ---------\n\nFrom: office@example.org\n\nDate: Tue, Sep 8, 2026 at 3:28 PM\n\nSubject: Planning for the round-table\n\nTo: The Secretariat \\<sec@example.org\\> and Sam Lee \\<sam@example.com\\>\n\n> Chers amis,  \n> Je partage un document.'
+    const f = splitForwarded(body)!
+    expect(f).not.toBeNull()
+    expect(f.before).toBe('Dear friends,  \nI am forwarding this report.  \nWarm regards,  \nSam')
+    expect(f.header).toMatchObject({ from: { email: 'office@example.org' }, date: 'Tue, Sep 8, 2026 at 3:28 PM', subject: 'Planning for the round-table' })
+    expect(f.after.startsWith('> Chers amis,')).toBe(true)
+  })
+
+  it('still needs real fields: a marker followed by prose isn’t a forward', () => {
+    expect(splitForwarded('---------- Forwarded message ---------\n\nJust some text.\n\nMore text.')).toBeNull()
+  })
+})
+
+describe('unwrapHardBreaks', () => {
+  it('joins lines broken mid-sentence, keeping breaks that mean something (quoted too)', () => {
+    const md = '> Chers amis,  \n> Allah’u’abha.  \n> Je partage un document qui présente le cheminement de la  \n> réflexion autour de la paix, jusqu’à la table ronde et  \n> la proposition de collaboration.  \n> Merci.'
+    expect(unwrapHardBreaks(md)).toBe(
+      '> Chers amis,  \n> Allah’u’abha.  \n> Je partage un document qui présente le cheminement de la\n> réflexion autour de la paix, jusqu’à la table ronde et\n> la proposition de collaboration.  \n> Merci.',
+    )
+  })
+
+  it('leaves greetings, sign-offs and new sentences alone', () => {
+    const md = 'Dear friends,  \nI am forwarding this.  \nWith loving regards,  \nOliver'
+    expect(unwrapHardBreaks(md)).toBe(md)
+  })
+
+  it('doesn’t join across a quote level, or text without hard breaks', () => {
+    expect(unwrapHardBreaks('Thanks for this  \n> and the quote')).toBe('Thanks for this  \n> and the quote')
+    expect(unwrapHardBreaks('one line\nand another')).toBe('one line\nand another')
+  })
+})
+
+describe('parseAddresses with Gmail’s “and”', () => {
+  it('splits “A <a> and B <b>”, in English or French', () => {
+    expect(parseAddresses('The Secretariat <sec@example.org> and Sam Lee <sam@example.com>').map((a) => a.email)).toEqual(['sec@example.org', 'sam@example.com'])
+    expect(parseAddresses('A <a@x.org>, B <b@x.org> et C <c@x.org>').map((a) => a.email)).toEqual(['a@x.org', 'b@x.org', 'c@x.org'])
+    // A name with "and" in it isn't split.
+    expect(parseAddresses('Salt and Pepper Ltd <hello@example.com>')).toEqual([{ name: 'Salt and Pepper Ltd', email: 'hello@example.com' }])
   })
 })
