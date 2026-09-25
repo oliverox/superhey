@@ -365,6 +365,7 @@ describe('formatting', () => {
   it('writes money with enough digits to see small amounts', () => {
     expect(money(0)).toBe('$0.00')
     expect(money(0.0031)).toBe('$0.0031')
+    expect(money(0.00004)).toBe('<$0.0001') // a connection test: never shown as $0.0000
     expect(money(1.5)).toBe('$1.50')
   })
   it('writes token counts compactly', () => {

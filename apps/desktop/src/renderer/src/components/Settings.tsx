@@ -87,9 +87,22 @@ function ModeLine({ status }: { status: AiStatus }) {
           : 'AI is off until you add a provider or choose a local model.'
   return (
     <p className="mt-5 flex items-center gap-2 text-[13px] text-ink-soft">
-      <span aria-hidden className={`size-2 rounded-full ${cloud || hasLocal ? 'bg-accent' : 'bg-rule-strong'}`} />
+      <StatusMark on={!!(cloud || hasLocal)} />
       {text}
     </p>
+  )
+}
+
+/** A green check when on (connected, or AI set up); a grey ring when off. */
+function StatusMark({ on }: { on: boolean }) {
+  return on ? <Check label="On" /> : <span role="img" aria-label="Off" className="inline-block size-[13px] shrink-0 rounded-full border-[1.5px] border-rule-strong" />
+}
+
+function Check({ label }: { label?: string }) {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true} className="inline-block shrink-0 align-[-2px] text-ok">
+      <path d="m2.75 8.5 3.5 3.5 7-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   )
 }
 
@@ -221,7 +234,7 @@ function ProviderRow({
   return (
     <li className="px-4 py-3" aria-label={p.name}>
       <div className="flex items-center gap-3">
-        <span aria-hidden className={`size-2 shrink-0 rounded-full ${p.enabled ? 'bg-accent' : 'bg-rule-strong'}`} />
+        <StatusMark on={p.enabled} />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             <span className={`text-[13.5px] font-semibold ${p.enabled ? 'text-ink' : 'text-ink-faint'}`}>{p.name}</span>
@@ -266,7 +279,7 @@ function ProviderRow({
         <p className={`mt-2 text-[12.5px] ${test.ok ? 'text-ink-soft' : 'text-danger'}`}>
           {test.ok ? (
             <>
-              <span className="text-accent">✓</span> {names.get(test.model) ?? test.model} answered in {(test.ms / 1000).toFixed(1)} s · {money(test.costUsd)}
+              <Check /> {names.get(test.model) ?? test.model} answered in {(test.ms / 1000).toFixed(1)} s · {money(test.costUsd)}
             </>
           ) : (
             test.message
@@ -484,7 +497,7 @@ function ConnectionTest({ engine, disabled }: { engine: ProviderId | 'local'; di
       </button>
       {result?.ok && (
         <span className="text-ink-soft">
-          <span className="text-accent">✓</span> {result.model} answered in {(result.ms / 1000).toFixed(1)} s{result.engine !== 'local' ? ` · ${money(result.costUsd)}` : ''}
+          <Check /> {result.model} answered in {(result.ms / 1000).toFixed(1)} s{result.engine !== 'local' ? ` · ${money(result.costUsd)}` : ''}
         </span>
       )}
       {result && !result.ok && <span className="text-danger">{result.message}</span>}
@@ -678,6 +691,7 @@ function Switch({ label, checked, onChange, hideLabel }: { label: string; checke
 /** "$0.42"; small amounts keep enough digits to be seen ("$0.0031"). */
 export function money(usd: number): string {
   if (usd === 0) return '$0.00'
+  if (usd < 0.0001) return '<$0.0001'
   return usd < 0.01 ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`
 }
 

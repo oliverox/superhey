@@ -32,6 +32,8 @@
   --accent-wash: #edf0ff;
   --new: #3355ff;
   --danger: #d4343a;
+  /* Working and on: a connected provider, a passed test. */
+  --ok: #1a9d55;
   --selection: #edf0ff;
   /* Your own messages: a faint cobalt wash with an edge to match. */
   --mine: #f0f3ff;
@@ -74,6 +76,7 @@
     --accent-wash: #1c2240;
     --new: #7b91ff;
     --danger: #ff6b6b;
+    --ok: #4cc47f;
     --selection: #1c2240;
     --mine: #171b2c;
     --mine-rule: #28304d;
@@ -107,6 +110,7 @@
   --accent-wash: #283457;
   --new: #ff9e64;
   --danger: #f7768e;
+  --ok: #9ece6a;
   --selection: #283457;
   --mine: #1f2335;
   --mine-rule: #3b4261;
@@ -154,6 +158,7 @@
   --color-accent-wash: var(--accent-wash);
   --color-new: var(--new);
   --color-danger: var(--danger);
+  --color-ok: var(--ok);
   --color-selection: var(--selection);
   --color-mine: var(--mine);
   --color-mine-rule: var(--mine-rule);
