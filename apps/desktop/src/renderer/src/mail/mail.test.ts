@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { parseAddresses, parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes, unwrapHardBreaks } from './forwarded'
-import { displayName, formatAddressList, replyRecipients, shortName, summarizeRecipients, type Addr } from './people'
+import { listTags, parseAddresses, parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes, tagMatchesLabel, unwrapHardBreaks } from './forwarded'
+import { displayName, formatAddressList, recipientSummaries, replyRecipients, shortName, summarizeRecipients, type Addr } from './people'
 
 // Shaped like HEY's Markdown for a Gmail forward (escaped dashes and brackets, bold name).
 const gmailForward = [
@@ -95,6 +95,11 @@ describe('names', () => {
     expect(summarizeRecipients([a, b, c, d], [me])).toBe('to you, Barender and 3 others')
     expect(summarizeRecipients([a, b, c], [a])).toBe('to Barender, José and Shehan')
     expect(summarizeRecipients([], [])).toBe('')
+    // Shorter forms for tight space, longest first.
+    expect(recipientSummaries([a, b, c, d], [me])).toEqual(['to you, Barender and 3 others', 'to you and 4 others', 'to you +4'])
+    expect(recipientSummaries([a, b], [])).toEqual(['to Barender and José', 'to Barender and 1 other', 'to Barender +1'])
+    expect(recipientSummaries([me], [])).toEqual(['to you'])
+    expect(recipientSummaries([], [])).toEqual([])
   })
 })
 
@@ -191,5 +196,32 @@ describe('parseAddresses with Gmail’s “and”', () => {
     expect(parseAddresses('A <a@x.org>, B <b@x.org> et C <c@x.org>').map((a) => a.email)).toEqual(['a@x.org', 'b@x.org', 'c@x.org'])
     // A name with "and" in it isn't split.
     expect(parseAddresses('Salt and Pepper Ltd <hello@example.com>')).toEqual([{ name: 'Salt and Pepper Ltd', email: 'hello@example.com' }])
+  })
+})
+
+describe('mailing-list tags', () => {
+  it('takes list tags off the front, wherever the reply prefixes are', () => {
+    expect(listTags("[garden-notes] Weekly digest 183")).toEqual({ tags: ['garden-notes'], rest: "Weekly digest 183" })
+    expect(listTags('Re: [tokyo-dev] Re: Meetup on Friday')).toEqual({ tags: ['tokyo-dev'], rest: 'Meetup on Friday' })
+    expect(listTags('[EXTERNAL] [ops] Disk full')).toEqual({ tags: ['EXTERNAL', 'ops'], rest: 'Disk full' })
+    expect(stripSubjectPrefixes('Fwd: [team] Plans')).toBe('Plans')
+  })
+
+  it('leaves ticket numbers, brackets later on, and a subject that is only a tag', () => {
+    expect(listTags('[#4521] Printer is on fire')).toEqual({ tags: [], rest: '[#4521] Printer is on fire' })
+    expect(listTags('[1234] Order shipped').tags).toEqual([])
+    expect(listTags('Minutes [draft]')).toEqual({ tags: [], rest: 'Minutes [draft]' })
+    expect(listTags('Re: [announce]')).toEqual({ tags: [], rest: '[announce]' })
+    expect(listTags('[x] Too short to be a list').tags).toEqual([])
+  })
+
+  it('knows when a HEY label already says it', () => {
+    expect(tagMatchesLabel('garden-notes', ['Garden Notes'])).toBe(true)
+    expect(tagMatchesLabel('tokyo-dev', ['Tokyo Dev', 'Other'])).toBe(true)
+    expect(tagMatchesLabel('ops', ['Operations'])).toBe(false)
+  })
+
+  it('compares forwarded subjects without their tags', () => {
+    expect(sameSubject('[team] Plans', 'Re: Plans')).toBe(true)
   })
 })

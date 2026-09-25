@@ -117,16 +117,47 @@ export function parseAddresses(value: string): Addr[] {
 // Re:, Fwd:, Fw:, and the German/French/Scandinavian forms, possibly stacked ("Re: Fwd: …").
 const PREFIXES = /^\s*((re|fwd?|fw|aw|wg|tr|sv|vs)\s*(\[\d+\])?\s*:\s*)+/i
 
-/** The subject without reply/forward prefixes, for titles. */
+// A mailing list's tag at the front: "[garden-notes] …". Not a ticket number ("[#4521]",
+// "[1234]"): that's part of the subject.
+const LIST_TAG = /^\s*\[([^\[\]]{2,40})\]\s*/
+const isTicket = (tag: string) => /^#?\s*[\d\s-]+$/.test(tag)
+
+/**
+ * The subject's mailing-list tags and what's left: "Re: [tokyo-dev] Re: Meetup" is
+ * { tags: ['tokyo-dev'], rest: 'Meetup' }. Reply/forward prefixes are dropped wherever they are.
+ */
+export function listTags(subject: string): { tags: string[]; rest: string } {
+  const tags: string[] = []
+  let rest = subject
+  for (;;) {
+    const before = rest
+    rest = rest.replace(PREFIXES, '')
+    const m = LIST_TAG.exec(rest)
+    if (m && !isTicket(m[1]!)) {
+      if (!tags.some((t) => t.toLowerCase() === m[1]!.toLowerCase())) tags.push(m[1]!.trim())
+      rest = rest.slice(m[0].length)
+    }
+    if (rest === before) break
+  }
+  rest = rest.trim()
+  return rest ? { tags, rest } : { tags: [], rest: subject.replace(PREFIXES, '').trim() || subject }
+}
+
+/** Whether a HEY label already says what a list tag does ("Garden Notes" ~ "garden-notes"). */
+export function tagMatchesLabel(tag: string, labels: string[]): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
+  return labels.some((l) => norm(l) === norm(tag))
+}
+
+/** The subject without reply/forward prefixes or mailing-list tags, for titles. */
 export function stripSubjectPrefixes(subject: string): string {
-  return subject.replace(PREFIXES, '').trim() || subject
+  return listTags(subject).rest
 }
 
 /** Whether a forwarded subject just repeats the thread's subject. */
 export function sameSubject(a: string | null, b: string | null) {
   const norm = (s: string | null) =>
-    (s ?? '')
-      .replace(PREFIXES, '')
+    listTags(s ?? '').rest
       .replace(/["'“”‘’]/g, '')
       .replace(/\s+/g, ' ')
       .trim()

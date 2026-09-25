@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, ty
 import { DUR, motionOff } from '../motion'
 import type { PostingRow } from '@shared/api'
 import { shortDate } from '../format'
-import { stripSubjectPrefixes } from '../mail/forwarded'
+import { listTags, stripSubjectPrefixes, tagMatchesLabel } from '../mail/forwarded'
 import { splitMatches } from '../mail/search'
 import { Avatar } from './Avatar'
 
@@ -131,6 +131,12 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
                 </div>
                 <div className="mt-0.5 flex min-w-0 items-baseline gap-1.5 text-[13px] text-ink-faint">
                   {search?.boxNames[p.boxId] && <span className="shrink-0 text-[12px] font-medium text-ink-faint">{search.boxNames[p.boxId]}</span>}
+                  {!p.isBundle &&
+                    listTags(p.subject).tags.filter((t) => !tagMatchesLabel(t, p.labels)).map((tag) => (
+                      <span key={`tag:${tag}`} title="Mailing list" className="shrink-0 rounded-[4px] border border-dashed border-rule-strong px-1 text-[11px] leading-[15px] font-medium text-ink-faint">
+                        {tag}
+                      </span>
+                    ))}
                   {p.labels.map((label) => (
                     <span key={label} className="shrink-0 rounded-[4px] border border-rule-strong px-1 text-[11px] leading-[15px] font-medium text-ink-soft">
                       {label}

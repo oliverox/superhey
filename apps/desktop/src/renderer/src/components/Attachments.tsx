@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AttachmentRow } from '@shared/api'
 import { api, fileUrl } from '../api'
+import { canPreview, isImage, isPdf, QuickLook } from './QuickLook'
 
 const THUMB_W = 132
 const THUMB_H = 170
@@ -32,19 +33,25 @@ export function stripAttachmentLines(markdown: string, list: AttachmentRow[]) {
 }
 
 export function AttachmentStrip({ attachments }: { attachments: AttachmentRow[] }) {
+  // PDFs and images preview in place (Quick Look); ← and → move between them.
+  const previewable = attachments.filter(canPreview)
+  const [preview, setPreview] = useState<number | null>(null)
   if (!attachments.length) return null
   return (
-    <ul className="mt-4 mb-2 flex flex-wrap gap-3" aria-label="Attachments">
-      {attachments.map((a) => (
-        <li key={a.id}>
-          <AttachmentCard attachment={a} />
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="mt-4 mb-2 flex flex-wrap gap-3" aria-label="Attachments">
+        {attachments.map((a) => (
+          <li key={a.id}>
+            <AttachmentCard attachment={a} onPreview={canPreview(a) ? () => setPreview(previewable.indexOf(a)) : undefined} />
+          </li>
+        ))}
+      </ul>
+      {preview != null && previewable[preview] && <QuickLook files={previewable} index={preview} onIndex={setPreview} onClose={() => setPreview(null)} />}
+    </>
   )
 }
 
-function AttachmentCard({ attachment: a }: { attachment: AttachmentRow }) {
+function AttachmentCard({ attachment: a, onPreview }: { attachment: AttachmentRow; onPreview?: () => void }) {
   const [opening, setOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const ext = extension(a.filename)
@@ -52,6 +59,7 @@ function AttachmentCard({ attachment: a }: { attachment: AttachmentRow }) {
   return (
     <button
       onClick={async () => {
+        if (onPreview) return onPreview()
         setOpening(true)
         setError(null)
         try {
@@ -62,7 +70,7 @@ function AttachmentCard({ attachment: a }: { attachment: AttachmentRow }) {
           setOpening(false)
         }
       }}
-      title={error ?? `Open ${a.filename}`}
+      title={error ?? (onPreview ? `Preview ${a.filename}` : `Open ${a.filename}`)}
       className="group block w-[132px] text-left"
     >
       <div
@@ -213,8 +221,7 @@ function useVisible(ref: React.RefObject<HTMLElement | null>) {
   return visible
 }
 
-const isPdf = (a: AttachmentRow) => a.contentType === 'application/pdf' || /\.pdf$/i.test(a.filename)
-const isImage = (a: AttachmentRow) => /^image\/(png|jpe?g|gif|webp|avif|bmp)$/.test(a.contentType ?? '')
+
 export const extension = (name: string) => (/\.([a-z0-9]{1,5})$/i.exec(name)?.[1] ?? '').toLowerCase()
 
 export function formatBytes(n: number | null) {
