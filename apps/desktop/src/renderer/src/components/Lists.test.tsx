@@ -27,7 +27,7 @@ afterEach(() => {
 })
 
 const row = (id: number, subject: string, seen: boolean): PostingRow =>
-  ({ id, topicId: id * 10, boxId: 1, subject, seen, bubbledUp: false, senderName: 'Sam', senderEmail: 's@example.com', summary: null, activeAt: '2026-09-20T10:00:00Z', labels: [], avatar: { url: null, color: null, initials: 'S' }, ai: null }) as PostingRow
+  ({ id, topicId: id * 10, boxId: 1, subject, seen, bubbledUp: false, senderName: 'Sam', senderEmail: 's@example.com', summary: null, activeAt: '2026-09-20T10:00:00Z', labels: [], avatar: { url: null, color: null, initials: 'S' }, ai: null }) as unknown as PostingRow
 
 const rows = [row(1, 'Lunch Friday?', false), row(2, 'Invoice', true), row(3, 'Old news', true)]
 

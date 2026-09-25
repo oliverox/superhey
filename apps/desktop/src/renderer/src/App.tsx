@@ -9,6 +9,7 @@ import { ActivityDrawer, Toasts } from './components/Activity'
 import { Reader, type ReaderTarget } from './components/Reader'
 import { SetupScreen, StartingScreen } from './components/Setup'
 import { useTheme } from './theme'
+import { markSeenOnOpen } from './prefs'
 import { useShortcut } from './shortcuts'
 import { ShortcutHelp } from './components/ShortcutHelp'
 import { Tooltips } from './components/Tooltips'
@@ -104,7 +105,8 @@ function Workspace({ status }: { status: AppStatus }) {
   /** `markSeen: false` shows a thread without reading it (Today putting its first item up). */
   const open = useCallback((p: PostingRow, markSeen = true) => {
     // Opening a thread marks it seen, as in HEY. Kept out of the activity log.
-    if (markSeen && !p.seen && !p.isBundle) api.runAction({ type: 'seen', postingId: p.id, seen: true }, 'auto').catch(() => {})
+    // Unless Settings says seen is yours to mark (u).
+    if (markSeen && markSeenOnOpen() && !p.seen && !p.isBundle) api.runAction({ type: 'seen', postingId: p.id, seen: true }, 'auto').catch(() => {})
     setTarget({
       postingId: p.id,
       topicId: p.topicId,

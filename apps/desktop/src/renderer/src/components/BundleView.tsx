@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { markSeenOnOpen } from '../prefs'
 import type { PostingRow, ThreadView } from '@shared/api'
 import { api, useLive } from '../api'
 import { stripSubjectPrefixes } from '../mail/forwarded'
@@ -176,6 +177,8 @@ function BundleEmail({ posting: p, focused }: { posting: PostingRow; focused: bo
     [p.topicId, thread.data?.fetchedAt],
   )
 
+  useSeenWhenShown(p, !!thread.data)
+
   if (thread.error) return <p className="mt-3 text-danger">Couldn't load this email: {thread.error}</p>
   if (!thread.data)
     return (
@@ -191,6 +194,20 @@ function BundleEmail({ posting: p, focused }: { posting: PostingRow; focused: bo
       <ReplyArea thread={thread.data} keys={focused} />
     </>
   )
+}
+
+/**
+ * A bundled email counts as opened once it's expanded and showing: marked seen then, as a
+ * single email is when opened (unless Settings leaves seen to you). Once per email shown, so
+ * marking it unseen again (U) sticks while it stays open.
+ */
+export function useSeenWhenShown(p: PostingRow, shown: boolean) {
+  const done = useRef<number | null>(null)
+  useEffect(() => {
+    if (!shown || done.current === p.id) return
+    done.current = p.id
+    if (!p.seen && markSeenOnOpen()) api.runAction({ type: 'seen', postingId: p.id, seen: true }, 'auto').catch(() => {})
+  }, [shown, p.id, p.seen])
 }
 
 /** The summary without a leading copy of the subject (compared ignoring spacing, which HEY varies). */
