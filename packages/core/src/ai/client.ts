@@ -139,7 +139,7 @@ function explain(e: unknown, r: Resolved): AiError {
   const status = APICallError.isInstance(inner) ? inner.statusCode : undefined
   const text = inner instanceof Error ? inner.message : String(inner)
   if (r.engine === 'claude') {
-    if (status === 401 || status === 403) return new AiError('auth', 'Claude didn’t accept the API key. Check it in Settings.')
+    if (status === 401 || status === 403) return new AiError('auth', 'Claude didn’t accept the API key.')
     if (status === 429) return new AiError('rate-limited', 'Claude is rate-limiting this key. Try again in a minute.')
     if (status === 404) return new AiError('failed', `Claude doesn’t offer the model “${r.model}” to this key.`)
   } else if (/ECONNREFUSED|fetch failed|ENOTFOUND|Cannot connect/i.test(text) || (APICallError.isInstance(inner) && status == null)) {

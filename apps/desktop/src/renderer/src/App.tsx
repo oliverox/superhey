@@ -12,6 +12,7 @@ import { useShortcut } from './shortcuts'
 import { ShortcutHelp } from './components/ShortcutHelp'
 import { Tooltips } from './components/Tooltips'
 import { CommandBar } from './components/CommandBar'
+import { Settings } from './components/Settings'
 import type { Command } from './commands/model'
 import { boxCommands, emailCommand, labelCommands } from './commands/sources'
 import { Composer, type ComposeRequest } from './components/Composer'
@@ -67,6 +68,8 @@ function Workspace({ status }: { status: AppStatus }) {
   const [showHelp, setShowHelp] = useState(false)
   const [showCommands, setShowCommands] = useState(false)
   useShortcut('palette', () => setShowCommands((v) => !v))
+  const [showSettings, setShowSettings] = useState(false)
+  useShortcut('settings', () => setShowSettings((v) => !v))
   const [composing, setComposing] = useState<ComposeRequest | null>(null)
   useShortcut('compose', () => setComposing({ kind: 'new', message: { to: [], subject: '', body: '' } }), !composing)
   // An undone or failed send comes back here for editing (see the toasts).
@@ -150,6 +153,7 @@ function Workspace({ status }: { status: AppStatus }) {
         onTheme={setTheme}
         active={activePane === 'sidebar'}
         onOpenActivity={() => setShowActivity(true)}
+        onOpenSettings={() => setShowSettings(true)}
       />
 
       <section className="pane flex flex-col bg-pane" data-pane="list" data-active={activePane === 'list'}>
@@ -241,6 +245,7 @@ function Workspace({ status }: { status: AppStatus }) {
       <Toasts />
       {showActivity && <ActivityDrawer onClose={() => setShowActivity(false)} />}
       {showHelp && <ShortcutHelp onClose={() => setShowHelp(false)} />}
+      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
       {showCommands && (
         <CommandBarHost
           boxes={ordered}

@@ -29,6 +29,7 @@ const KEYWORDS: Partial<Record<ShortcutId, string[]>> = {
   details: ['sidebar', 'info', 'context'],
   theme: ['dark', 'light', 'omarchy', 'appearance'],
   help: ['keys', 'keyboard', 'shortcuts'],
+  settings: ['preferences', 'ai', 'claude', 'api key', 'budget', 'model'],
   screener: ['first-time', 'senders', 'approve'],
 }
 

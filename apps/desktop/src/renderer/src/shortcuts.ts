@@ -49,6 +49,7 @@ export const SHORTCUTS = {
   screenSpam: { keys: ['!'], label: 'Spam', group: 'Screener' },
 
   palette: { keys: ['mod+k'], label: 'Command bar', group: 'App', whileTyping: true },
+  settings: { keys: ['mod+,'], label: 'Settings', group: 'App', whileTyping: true },
   help: { keys: ['?'], label: 'Keyboard shortcuts', group: 'App' },
   theme: { keys: ['T'], label: 'Switch theme', group: 'App' },
 } as const satisfies Record<string, ShortcutDef>
