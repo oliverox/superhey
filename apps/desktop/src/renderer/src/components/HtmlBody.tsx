@@ -37,7 +37,12 @@ export function HtmlBody({ entryHtml }: { entryHtml: string }) {
         doc.body.style.zoom = natural > available + 1 ? String(available / natural) : '1'
       }
       const zoom = Number(doc.body.style.zoom) || 1
-      const h = Math.ceil(doc.body.scrollHeight * zoom)
+      // The body's own margins (emails set them) sit outside its scrollHeight; left out, the
+      // last few pixels would be cut off. (Not the root's scrollHeight: that is never less
+      // than the frame, so it could only grow.)
+      const style = doc.defaultView?.getComputedStyle(doc.body)
+      const margins = style ? (parseFloat(style.marginTop) || 0) + (parseFloat(style.marginBottom) || 0) : 0
+      const h = Math.ceil((doc.body.scrollHeight + margins) * zoom)
       setHeight((prev) => (Math.abs(prev - h) > 1 ? h : prev))
     }
     const fit = () => {
@@ -48,6 +53,9 @@ export function HtmlBody({ entryHtml }: { entryHtml: string }) {
       setLoaded(true)
       const doc = frame.contentDocument
       if (!doc) return
+      // Also inline, above anything the email's own styles say.
+      doc.documentElement.style.setProperty('overflow', 'hidden', 'important')
+      doc.body?.style.setProperty('overflow', 'hidden', 'important')
       observer = new ResizeObserver(fit)
       observer.observe(doc.body)
       // Images arriving change the height.
@@ -68,7 +76,7 @@ export function HtmlBody({ entryHtml }: { entryHtml: string }) {
     <>
       <iframe
         ref={ref}
-        title="Email content"
+        aria-label="Email content"
         sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         srcDoc={srcDoc}
         style={{ height }}

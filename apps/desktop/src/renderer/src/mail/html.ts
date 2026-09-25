@@ -154,6 +154,8 @@ export function frameDocument(body: string): string {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${IMAGE_PROXY} data:; style-src 'unsafe-inline'; font-src data:">
 <style>
 html,body{margin:0;padding:0;background:#fff}
+/* The frame is sized to its content; it never scrolls itself, so the wheel always moves the reader. */
+html,body{overflow:hidden!important}
 body{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;color:#222;overflow-wrap:anywhere;-webkit-font-smoothing:antialiased}
 img{max-width:100%;height:auto}
 a{color:#1a5cff}
