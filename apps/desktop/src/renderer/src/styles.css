@@ -23,8 +23,9 @@
   --pane-sunk: #eef0f3;
   --ink: #101217;
   --ink-soft: #4a505c;
-  --ink-faint: #8a909c;
-  --rule: #e6e8ec;
+  /* The faintest text still reads: 4.5:1 or better on every light surface. */
+  --ink-faint: #676d79;
+  --rule: #dfe2e7;
   --rule-strong: #d3d6dc;
   --accent: #3355ff;
   --accent-ink: #ffffff;
@@ -32,7 +33,9 @@
   --new: #3355ff;
   --danger: #d4343a;
   --selection: #edf0ff;
-  --mine: #f5f7ff;
+  /* Your own messages: a faint cobalt wash with an edge to match. */
+  --mine: #f0f3ff;
+  --mine-rule: #d9e0ff;
   /* Tooltips: the sidebar's graphite. */
   --tip-bg: #17191e;
   --tip-ink: #f1f2f5;
@@ -63,7 +66,7 @@
     --pane-sunk: #1d2026;
     --ink: #eceef2;
     --ink-soft: #a7adb8;
-    --ink-faint: #6f7582;
+    --ink-faint: #818794;
     --rule: #23262d;
     --rule-strong: #2f333b;
     --accent: #7b91ff;
@@ -73,6 +76,7 @@
     --danger: #ff6b6b;
     --selection: #1c2240;
     --mine: #171b2c;
+    --mine-rule: #28304d;
     --tip-bg: #262a31;
     --tip-ink: #eceef2;
     --tip-rule: #33373f;
@@ -94,7 +98,8 @@
   --pane-sunk: #1f2335;
   --ink: #c0caf5;
   --ink-soft: #a9b1d6;
-  --ink-faint: #565f89;
+  /* Tokyo Night's comment colour, lifted to 4.5:1 so faint text still reads. */
+  --ink-faint: #8089b3;
   --rule: #292e42;
   --rule-strong: #414868;
   --accent: #7aa2f7;
@@ -104,6 +109,7 @@
   --danger: #f7768e;
   --selection: #283457;
   --mine: #1f2335;
+  --mine-rule: #3b4261;
   --tip-bg: #24283b;
   --tip-ink: #c0caf5;
   --tip-rule: #414868;
@@ -150,6 +156,7 @@
   --color-danger: var(--danger);
   --color-selection: var(--selection);
   --color-mine: var(--mine);
+  --color-mine-rule: var(--mine-rule);
 }
 
 html,

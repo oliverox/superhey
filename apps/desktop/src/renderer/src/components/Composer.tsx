@@ -144,14 +144,14 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
       }}
       aria-label={TITLES[request.kind]}
       className={`overflow-hidden rounded-ui-lg border bg-pane ${
-        variant === 'dialog' ? 'border-rule-strong shadow-[0_24px_64px_-24px_rgba(0,0,0,0.45)]' : 'border-accent/40 shadow-[0_8px_24px_-16px_rgba(0,0,0,0.3)]'
+        variant === 'dialog' ? 'border-rule-strong shadow-[0_24px_64px_-24px_rgba(0,0,0,0.45)]' : 'border-rule-strong shadow-[0_8px_24px_-16px_rgba(0,0,0,0.3)]'
       }`}
     >
-      <header className="flex items-center gap-2 border-b border-rule bg-pane-alt px-4 py-2 text-[12.5px]">
+      <header className="flex items-center gap-2 border-b border-rule bg-pane px-4 py-2 text-[12.5px]">
         <span className="font-semibold text-ink">{TITLES[request.kind]}</span>
         {request.context && <span className="min-w-0 truncate text-ink-faint">{request.context}</span>}
         {!showCopies && (
-          <button type="button" onClick={() => setShowCopies(true)} className="ml-auto text-ink-faint hover:text-ink">
+          <button type="button" onClick={() => setShowCopies(true)} className="ml-auto text-ink-soft hover:text-ink">
             Cc / Bcc
           </button>
         )}
@@ -199,8 +199,9 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
         onChange={(e) => setBody(e.target.value)}
         placeholder={request.kind === 'forward' ? 'Add a note (optional)' : 'Write your message… Markdown works.'}
         aria-label="Message"
-        rows={variant === 'dialog' ? 12 : 7}
-        className="block w-full resize-y bg-transparent px-4 py-3 font-body text-[14.5px] leading-relaxed text-ink outline-none placeholder:text-ink-faint"
+        // Grows with the text (up to most of the window) instead of a resize grip; starts at
+        // about 7 lines inline, 12 in the dialog.
+        className={`block max-h-[60vh] w-full resize-none [field-sizing:content] bg-transparent ${variant === 'dialog' ? 'min-h-[19.5em]' : 'min-h-[11.5em]'} px-4 py-3 font-body text-[14.5px] leading-relaxed text-ink outline-none placeholder:text-ink-faint`}
       />
 
       {attach.length > 0 && (
@@ -240,7 +241,7 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
           </button>
         )}
         <span className={`min-w-0 flex-1 truncate text-[12px] ${error ? 'text-danger' : 'text-ink-faint'}`}>{error ?? (problem && to.length ? problem : '')}</span>
-        <button type="button" onClick={discard} className="rounded-ui px-2.5 py-1.5 text-[13px] text-ink-faint hover:bg-pane-sunk hover:text-danger">
+        <button type="button" onClick={discard} className="rounded-ui px-2.5 py-1.5 text-[13px] text-ink-soft hover:bg-pane-sunk hover:text-danger">
           Discard
         </button>
       </footer>
