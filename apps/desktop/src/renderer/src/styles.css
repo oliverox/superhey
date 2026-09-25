@@ -45,6 +45,9 @@
   --danger: #d4343a;
   /* Working and on: a connected provider, a passed test. */
   --ok: #1a9d55;
+  /* Attention: what the sender flags as needing you ("Action required"). */
+  --attn: #8a5300;
+  --attn-wash: #fff1d6;
   --selection: #edf0ff;
   /* Tooltips: the sidebar's graphite. */
   --tip-bg: #17191e;
@@ -86,6 +89,8 @@
     --new: #7b91ff;
     --danger: #ff6b6b;
     --ok: #4cc47f;
+    --attn: #f2b857;
+    --attn-wash: #33260f;
     --selection: #1c2240;
     --tip-bg: #262a31;
     --tip-ink: #eceef2;
@@ -112,6 +117,8 @@
   --new: #7b91ff;
   --danger: #ff6b6b;
   --ok: #4cc47f;
+  --attn: #f2b857;
+  --attn-wash: #33260f;
   --selection: #1c2240;
   --tip-bg: #262a31;
   --tip-ink: #eceef2;
@@ -143,6 +150,8 @@
   --new: #ff9e64;
   --danger: #f7768e;
   --ok: #9ece6a;
+  --attn: #e0af68;
+  --attn-wash: #2f2716;
   --selection: #283457;
   --tip-bg: #24283b;
   --tip-ink: #c0caf5;
@@ -189,6 +198,8 @@
   --color-new: var(--new);
   --color-danger: var(--danger);
   --color-ok: var(--ok);
+  --color-attn: var(--attn);
+  --color-attn-wash: var(--attn-wash);
   --color-selection: var(--selection);
 }
 

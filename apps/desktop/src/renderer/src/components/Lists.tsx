@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, ty
 import { DUR, motionOff } from '../motion'
 import type { PostingRow } from '@shared/api'
 import { shortDate } from '../format'
-import { listTags, stripSubjectPrefixes, tagMatchesLabel } from '../mail/forwarded'
+import { listTags, stripSubjectPrefixes, tagKind, tagMatchesLabel } from '../mail/forwarded'
 import { splitMatches } from '../mail/search'
 import { Avatar } from './Avatar'
 
@@ -131,12 +131,7 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
                 </div>
                 <div className="mt-0.5 flex min-w-0 items-baseline gap-1.5 text-[13px] text-ink-faint">
                   {search?.boxNames[p.boxId] && <span className="shrink-0 text-[12px] font-medium text-ink-faint">{search.boxNames[p.boxId]}</span>}
-                  {!p.isBundle &&
-                    listTags(p.subject).tags.filter((t) => !tagMatchesLabel(t, p.labels)).map((tag) => (
-                      <span key={`tag:${tag}`} title="Mailing list" className="shrink-0 rounded-[4px] border border-dashed border-rule-strong px-1 text-[11px] leading-[15px] font-medium text-ink-faint">
-                        {tag}
-                      </span>
-                    ))}
+                  {!p.isBundle && <SubjectTags subject={p.subject} sender={senderLabel(p)} labels={p.labels} />}
                   {p.labels.map((label) => (
                     <span key={label} className="shrink-0 rounded-[4px] border border-rule-strong px-1 text-[11px] leading-[15px] font-medium text-ink-soft">
                       {label}
@@ -210,6 +205,31 @@ export function useLeavingRows(rows: PostingRow[], enabled: boolean) {
     place(r.id)
   }
   return { rows: out, leaving }
+}
+
+/**
+ * The tags a subject carried: what the sender flags as needing you ("Action required") in
+ * amber, ahead of everything else on the line; a mailing list's name quietly outlined. Tags
+ * that only repeat the sender, or a HEY label, aren't shown.
+ */
+export function SubjectTags({ subject, sender, labels }: { subject: string; sender: string | null; labels: string[] }) {
+  const tags = listTags(subject).tags.filter((t) => !tagMatchesLabel(t, labels))
+  const action = tags.filter((t) => tagKind(t, sender) === 'action')
+  const lists = tags.filter((t) => tagKind(t, sender) === 'list')
+  return (
+    <>
+      {action.map((tag) => (
+        <span key={`a:${tag}`} className="shrink-0 rounded-[4px] bg-attn-wash px-1.5 text-[11px] leading-[16px] font-semibold text-attn">
+          {tag}
+        </span>
+      ))}
+      {lists.map((tag) => (
+        <span key={`l:${tag}`} title="Mailing list" className="shrink-0 rounded-[4px] border border-dashed border-rule-strong px-1 text-[11px] leading-[15px] font-medium text-ink-faint">
+          {tag}
+        </span>
+      ))}
+    </>
+  )
 }
 
 /** Text with the searched words marked, without any HTML injection. */

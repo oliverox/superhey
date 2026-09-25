@@ -3,7 +3,7 @@ import Markdown, { type Components } from 'react-markdown'
 import type { EntryRow, PostingRow, ThreadView } from '@shared/api'
 import { api, useLive } from '../api'
 import { dayAndTime, longDate } from '../format'
-import { listTags, parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes, type ForwardedHeader, unwrapHardBreaks } from '../mail/forwarded'
+import { listTags, parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes, tagKind, type ForwardedHeader, unwrapHardBreaks } from '../mail/forwarded'
 import { displayName } from '../mail/people'
 import { isDesigned } from '../mail/html'
 import { splitQuoted, type QuotedSplit } from '../mail/quoted'
@@ -123,13 +123,21 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
         <div className="scroll min-h-0 min-w-0 flex-1 [container-type:inline-size]">
           <article className="reading-column mx-auto px-10 pt-9 pb-24">
             {/* A bundle draws its own heading (the sender, with their avatar). */}
-          {!target.isBundle && listTags(subject).tags.length > 0 && (
-            <div className="rise mb-2 flex flex-wrap gap-1.5" aria-label="Mailing list">
-              {listTags(subject).tags.map((tag) => (
-                <span key={tag} className="rounded-[4px] border border-dashed border-rule-strong px-1.5 text-[12px] leading-[18px] font-medium text-ink-faint">
-                  {tag}
-                </span>
-              ))}
+          {!target.isBundle && listTags(subject).tags.some((t) => tagKind(t, target.sender ?? null) !== 'sender') && (
+            <div className="rise mb-2 flex flex-wrap gap-1.5" aria-label="Subject tags">
+              {listTags(subject)
+                .tags.filter((t) => tagKind(t, target.sender ?? null) !== 'sender')
+                .map((tag) =>
+                  tagKind(tag, target.sender ?? null) === 'action' ? (
+                    <span key={tag} className="rounded-[4px] bg-attn-wash px-1.5 text-[12px] leading-[20px] font-semibold text-attn">
+                      {tag}
+                    </span>
+                  ) : (
+                    <span key={tag} title="Mailing list" className="rounded-[4px] border border-dashed border-rule-strong px-1.5 text-[12px] leading-[18px] font-medium text-ink-faint">
+                      {tag}
+                    </span>
+                  ),
+                )}
             </div>
           )}
           {!target.isBundle && <h1 className="rise font-app text-[26px] leading-[1.2] font-semibold tracking-[-0.02em] text-balance">{title}</h1>}

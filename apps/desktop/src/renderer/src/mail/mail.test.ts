@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { listTags, parseAddresses, parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes, tagMatchesLabel, unwrapHardBreaks } from './forwarded'
+import { listTags, parseAddresses, parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes, tagKind, tagMatchesLabel, unwrapHardBreaks } from './forwarded'
 import { displayName, formatAddressList, recipientSummaries, replyRecipients, shortName, summarizeRecipients, type Addr } from './people'
 
 // Shaped like HEY's Markdown for a Gmail forward (escaped dashes and brackets, bold name).
@@ -223,5 +223,18 @@ describe('mailing-list tags', () => {
 
   it('compares forwarded subjects without their tags', () => {
     expect(sameSubject('[team] Plans', 'Re: Plans')).toBe(true)
+  })
+})
+
+describe('kinds of subject tag', () => {
+  it('tells what needs you from a list name, and hides a tag that repeats the sender', () => {
+    expect(tagKind('Action required', 'Stripe')).toBe('action')
+    expect(tagKind('URGENT', 'Bank')).toBe('action')
+    expect(tagKind('Reminder', null)).toBe('action')
+    expect(tagKind('Payment failed', 'Netflix')).toBe('action')
+    expect(tagKind('Due', 'Due')).toBe('sender')
+    expect(tagKind('Contoso', 'Contoso Support')).toBe('sender')
+    expect(tagKind('garden-notes', 'Notes from the Garden Club')).toBe('list')
+    expect(tagKind('Dues', 'Club')).toBe('list')
   })
 })

@@ -143,6 +143,21 @@ export function listTags(subject: string): { tags: string[]; rest: string } {
   return rest ? { tags, rest } : { tags: [], rest: subject.replace(PREFIXES, '').trim() || subject }
 }
 
+// Tags a sender uses to say something needs you: shown loud, not as a list name.
+const ACTION_TAG =
+  /^(action (required|needed)|(response|reply|signature|approval) (required|needed|requested)|urgent|important|reminder|overdue|past due|final (notice|reminder)|payment (due|failed|required)|expir(ing|es|ed)|time[- ]sensitive|deadline|attention|security alert|action)\b/i
+
+/**
+ * What a subject tag is: `action` (the sender flags something for you), `sender` (it only
+ * repeats who sent it: "[Due]" from Due) or `list` (a mailing list's name).
+ */
+export function tagKind(tag: string, sender: string | null): 'action' | 'sender' | 'list' {
+  if (ACTION_TAG.test(tag.trim())) return 'action'
+  const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
+  if (sender && norm(tag) && (norm(sender) === norm(tag) || norm(sender).startsWith(norm(tag)))) return 'sender'
+  return 'list'
+}
+
 /** Whether a HEY label already says what a list tag does ("Garden Notes" ~ "garden-notes"). */
 export function tagMatchesLabel(tag: string, labels: string[]): boolean {
   const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
