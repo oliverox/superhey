@@ -17,7 +17,7 @@ function setup() {
   return { repo, put }
 }
 
-const input = (over: Partial<TodayInput> = {}): TodayInput => ({ now: NOW, myEmails: ['me@hey.example'], since: null, hidden: {}, ...over })
+const input = (over: Partial<TodayInput> = {}): TodayInput => ({ now: NOW, myEmails: ['me@hey.example'], since: null, hidden: {}, waitingOnOthers: true, ...over })
 const ids = (items: Array<{ posting: { id: number } }>) => items.map((i) => i.posting.id)
 
 describe('Today', () => {
@@ -58,6 +58,9 @@ describe('Today', () => {
     expect(t.waiting[1]!.people![0]).toMatchObject({ name: 'Alice Example', avatar: { initials: 'AE' } })
     // Without your addresses there's nothing to go on.
     expect(buildToday(repo, input({ myEmails: [] })).waiting).toEqual([])
+    // Off unless asked for: until the AI can judge whether a reply is expected (#44).
+    expect(buildToday(repo, input({ waitingOnOthers: undefined })).waiting).toEqual([])
+    expect(buildToday(repo, input({ waitingOnOthers: undefined })).toHandle).toBe(0)
   })
 
   it('shows each thread once, in the first section that claims it', () => {

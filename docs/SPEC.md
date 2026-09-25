@@ -203,8 +203,10 @@ It opens on launch (key `0`, above the Imbox in the sidebar). Every action goes 
 **Phase 1 (no AI needed):**
 - **Due:** HEY to-dos overdue or due today (complete in one key), threads bubbled up now.
 - **Reply Later:** what you parked to answer, oldest first, with its age.
-- **Waiting on others:** threads where you sent the latest message 3–30 days ago to
-  someone else (HEY's posting `creator` is the latest sender), and no reply since.
+- **Waiting on others:** off until phase 2. "You sent the latest message 3–30 days ago"
+  (HEY's posting `creator` is the latest sender) mostly found files sent and thanks said;
+  it needs the per-thread AI to judge whether your message expects a reply. When it
+  returns, rows get actions: remind me (Bubble Up), no reply needed, nudge.
 - **Today:** the day's calendar events.
 - **New since you last looked:** unread counts per box, and the Screener.
 - Sections show a few items with "show all"; caught-up state when empty.

@@ -49,6 +49,11 @@ export interface TodayInput {
   since: string | null
   /** Items put off with "not now": key → the thread's activity then. They return when it changes. */
   hidden: Record<string, string>
+  /**
+   * List waiting on others. Off until the AI can tell whether your last message expects a
+   * reply (#44): "you wrote last" alone mostly finds files sent and thanks said.
+   */
+  waitingOnOthers?: boolean
 }
 
 const DAY = 86_400_000
@@ -72,7 +77,7 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
   const seen = new Set<number>()
   const bubbled = items(repo.bubbledUp(), seen)
   const replyLater = items(repo.replyLater(), seen)
-  const waiting = items(
+  const waiting = !input.waitingOnOthers ? [] : items(
     repo.waitingOnOthers(input.myEmails, new Date(now.getTime() - WAITING_UNTIL_DAYS * DAY).toISOString(), new Date(now.getTime() - WAITING_AFTER_DAYS * DAY).toISOString()),
     seen,
   ).map((i) => ({ ...i, people: repo.otherPeople(i.posting.id, input.myEmails) }))
