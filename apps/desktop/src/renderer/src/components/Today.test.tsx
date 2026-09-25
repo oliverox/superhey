@@ -129,6 +129,45 @@ describe('what the AI found', () => {
   })
 })
 
+describe('Done', () => {
+  const withEverything = () =>
+    data({
+      due: { todos: [], actions: [{ key: 'action:5:0', posting: posting(5, 'Form'), text: 'Send the form', due: '2026-09-24', daysLate: 1 }], bubbled: [thread(2, 'Newsletter', 40)] },
+      needsReply: [{ ...thread(6, 'Early check-in?', 1), reason: 'asks about check-in' }],
+      replyLater: [thread(3, 'Parked', 9)],
+      waiting: [thread(4, 'Quote', 5)],
+    })
+
+  it('means what it should for where the thread is listed', async () => {
+    const t = withEverything()
+    for (const id of [5, 6, 4]) {
+      calls.length = 0
+      await Today.doneFor(t, id)!()
+      expect(calls).toEqual([['markHandled', [id * 10]]]) // handled: you dealt with it, maybe outside HEY
+    }
+    calls.length = 0
+    await Today.doneFor(t, 2)!()
+    expect(calls).toEqual([['runAction', [{ type: 'unbubble', postingId: 2 }]]])
+    calls.length = 0
+    await Today.doneFor(t, 3)!()
+    expect(calls).toEqual([['runAction', [{ type: 'move', postingId: 3, to: 'imbox' }]]])
+    expect(Today.doneFor(t, 99)).toBeNull()
+  })
+
+  it('is on every thread row, beside Not now, and doesn’t open the thread', async () => {
+    const onOpen = vi.fn()
+    act(() => root.render(createElement(Today.TodayList, { today: withEverything(), selectedId: null, onOpen, onGoToBox: vi.fn() })))
+    const rowOf = (s: string) => [...host.querySelectorAll('[role=option]')].find((r) => r.textContent?.includes(s))!
+    const buttons = (r: Element) => [...r.querySelectorAll('button')].map((b) => b.textContent)
+    expect(buttons(rowOf('Early check-in?'))).toEqual(['Done', 'Not now'])
+    expect(buttons(rowOf('Send the form'))).toEqual(['Done'])
+    calls.length = 0
+    await click([...rowOf('Early check-in?').querySelectorAll('button')][0]!)
+    expect(calls).toEqual([['markHandled', [60]]])
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+})
+
 describe('What’s new, and nothing left', () => {
   it('lists new mail per box at the end, each a click from its box', async () => {
     const onGoToBox = vi.fn()

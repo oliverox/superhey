@@ -185,9 +185,13 @@ describe('Today in the service', () => {
     await s.hideFromToday('thread:40', '2026-09-20T10:00:00Z')
     expect(events).toContainEqual({ type: 'today' })
     expect((await s.today(null)).replyLater).toEqual([])
+    // Snoozed until tomorrow (local midnight).
+    const until = JSON.parse(repo.getState('today:hidden')!)['thread:40'].until as string
+    const d = new Date()
+    expect(until).toBe(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).toISOString())
     // A thread that's gone is dropped the next time something is hidden.
     await s.hideFromToday('thread:999', 'x')
-    expect(JSON.parse(repo.getState('today:hidden')!)).toEqual({ 'thread:40': '2026-09-20T10:00:00Z', 'thread:999': 'x' })
+    expect(Object.keys(JSON.parse(repo.getState('today:hidden')!))).toEqual(['thread:40', 'thread:999'])
     await s.hideFromToday('thread:40', '2026-09-20T10:00:00Z')
     expect(Object.keys(JSON.parse(repo.getState('today:hidden')!))).toEqual(['thread:40'])
   })

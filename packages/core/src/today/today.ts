@@ -79,8 +79,11 @@ export interface TodayInput {
   myEmails: string[]
   /** When you last looked at Today; null the first time (then "new" means new today). */
   since: string | null
-  /** Items put off with "not now": key → the thread's activity then. They return when it changes. */
-  hidden: Record<string, string>
+  /**
+   * Items put off with "not now": key → the thread's activity then, and until when. They
+   * return when the thread changes, or when the time comes. (A bare string: activity only.)
+   */
+  hidden: Record<string, string | { at: string; until: string | null }>
 }
 
 /** How far back Today looks in analysed mail. */
@@ -97,8 +100,10 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
   const daysSince = (iso: string | null) => (iso ? Math.max(0, Math.floor((now.getTime() - Date.parse(iso)) / DAY)) : 0)
 
   const shown = (p: PostingRow) => {
-    const at = input.hidden[`thread:${p.id}`]
-    return at === undefined || at !== (p.activeAt ?? '')
+    const entry = input.hidden[`thread:${p.id}`]
+    if (entry === undefined) return true
+    const { at, until } = typeof entry === 'string' ? { at: entry, until: null } : entry
+    return at !== (p.activeAt ?? '') || (until != null && now.getTime() >= Date.parse(until))
   }
   const items = (rows: PostingRow[], seen: Set<number>) =>
     rows

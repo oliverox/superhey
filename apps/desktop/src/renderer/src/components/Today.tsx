@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ActionItem, ComingUpItem, PostingRow, ThreadItem, TodayView, TodoItem } from '@shared/api'
 import { api } from '../api'
 import { stripSubjectPrefixes } from '../mail/forwarded'
+import { withShortcut } from '../shortcuts'
 import { Avatar } from './Avatar'
 
 export type TodayData = TodayView & { screener: number }
@@ -21,6 +22,22 @@ export const why = {
 }
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+/**
+ * "Done" for a thread on Today, meaning what it should for where the thread is listed:
+ * bubbled up → the bubble is cancelled in HEY; Reply Later → back to the Imbox in HEY;
+ * needs your reply, waiting on others, a deadline from mail → handled (you dealt with it,
+ * perhaps outside HEY). Null when the thread isn't on Today.
+ */
+export function doneFor(t: TodayData | null, postingId: number): (() => Promise<unknown>) | null {
+  if (!t) return null
+  const on = (items: Array<{ posting: PostingRow }>) => items.find((i) => i.posting.id === postingId)?.posting
+  const handled = on(t.due.actions) ?? on(t.needsReply) ?? on(t.waiting)
+  if (handled?.topicId != null) return () => api.markHandled(handled.topicId!)
+  if (on(t.due.bubbled)) return () => api.runAction({ type: 'unbubble', postingId })
+  if (on(t.replyLater)) return () => api.runAction({ type: 'move', postingId, to: 'imbox' })
+  return null
+}
 
 /** The threads on Today, in the order they're listed (for j / k), each once. */
 export function todayThreads(t: TodayData | null): PostingRow[] {
@@ -54,7 +71,11 @@ export function TodayList({
   const { due, needsReply, replyLater, waiting, comingUp } = today
   const fresh = today.newSince.boxes
 
-  const row = (i: ThreadItem, reason: string) => <ThreadRow key={i.key} item={i} reason={reason} selected={i.posting.id === selectedId} onOpen={() => onOpen(i.posting)} />
+  const done = (p: PostingRow) => {
+    const run = doneFor(today, p.id)
+    return run ? () => void run() : undefined
+  }
+  const row = (i: ThreadItem, reason: string) => <ThreadRow key={i.key} item={i} reason={reason} selected={i.posting.id === selectedId} onOpen={() => onOpen(i.posting)} onDone={done(i.posting)} />
   return (
     <div ref={listRef} className="scroll min-h-0 flex-1 pb-6">
       {due.todos.length + due.actions.length + due.bubbled.length > 0 && (
@@ -65,7 +86,7 @@ export function TodayList({
                 <TodoRow key={t.key} item={t} />
               ))}
               {due.actions.slice(0, Math.max(0, limit - due.todos.length)).map((a) => (
-                <ActionRow key={a.key} item={a} selected={a.posting.id === selectedId} onOpen={() => onOpen(a.posting)} />
+                <ActionRow key={a.key} item={a} selected={a.posting.id === selectedId} onOpen={() => onOpen(a.posting)} onDone={() => void api.markHandled(a.posting.topicId!)} />
               ))}
               {due.bubbled.slice(0, Math.max(0, limit - due.todos.length - due.actions.length)).map((i) => row(i, why.bubbled()))}
             </>
@@ -118,7 +139,7 @@ function Section({ title, count, children }: { title: string; count: number; chi
   )
 }
 
-function ThreadRow({ item, reason, selected, onOpen }: { item: ThreadItem; reason: string; selected: boolean; onOpen: () => void }) {
+function ThreadRow({ item, reason, selected, onOpen, onDone }: { item: ThreadItem; reason: string; selected: boolean; onOpen: () => void; onDone?: () => void }) {
   const p = item.posting
   // Waiting on others: the thread is about who you wrote to, not you (you sent the last message).
   const other = item.people?.[0]
@@ -138,29 +159,23 @@ function ThreadRow({ item, reason, selected, onOpen }: { item: ThreadItem; reaso
           <span className="text-ink-soft">{who}</span> · {reason}
         </div>
       </div>
-      <button
-        onClick={(e) => {
-          e.stopPropagation()
-          void api.hideFromToday(item.key, p.activeAt ?? '')
-        }}
-        title="Not now: off Today until something new arrives"
-        className="shrink-0 rounded-ui px-2 py-1 text-[11.5px] font-medium text-ink-faint opacity-0 group-hover:opacity-100 hover:bg-pane hover:text-ink focus-visible:opacity-100"
-      >
-        Not now
-      </button>
+      <RowActions
+        onDone={onDone}
+        onNotNow={() => void api.hideFromToday(item.key, p.activeAt ?? '')}
+      />
     </li>
   )
 }
 
 /** A deadline found in mail: what to do, from which thread, and how late. */
-function ActionRow({ item, selected, onOpen }: { item: ActionItem; selected: boolean; onOpen: () => void }) {
+function ActionRow({ item, selected, onOpen, onDone }: { item: ActionItem; selected: boolean; onOpen: () => void; onDone: () => void }) {
   const p = item.posting
   return (
     <li
       role="option"
       aria-selected={selected}
       onClick={onOpen}
-      className={`mx-2 flex cursor-default items-center gap-3 rounded-ui py-2.5 pr-3 pl-4 ${selected ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
+      className={`group mx-2 flex cursor-default items-center gap-3 rounded-ui py-2.5 pr-3 pl-4 ${selected ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
     >
       <Avatar avatar={p.avatar} size={32} seed={p.senderEmail ?? undefined} />
       <div className="min-w-0 flex-1">
@@ -169,7 +184,30 @@ function ActionRow({ item, selected, onOpen }: { item: ActionItem; selected: boo
           <span className={item.daysLate > 0 ? 'text-danger' : 'text-ink-soft'}>{why.action(item)}</span> · {p.subject ? stripSubjectPrefixes(p.subject) : p.senderName}
         </div>
       </div>
+      <RowActions onDone={onDone} />
     </li>
+  )
+}
+
+/** Done and Not now, shown on hover (or keyboard focus), without opening the row. */
+function RowActions({ onDone, onNotNow }: { onDone?: () => void; onNotNow?: () => void }) {
+  const button = (label: string, title: string, run: () => void, strong = false) => (
+    <button
+      onClick={(e) => {
+        e.stopPropagation()
+        run()
+      }}
+      title={title}
+      className={`shrink-0 rounded-ui px-2 py-1 text-[11.5px] font-medium opacity-0 group-hover:opacity-100 hover:bg-pane focus-visible:opacity-100 ${strong ? 'text-ink-soft hover:text-ok' : 'text-ink-faint hover:text-ink'}`}
+    >
+      {label}
+    </button>
+  )
+  return (
+    <span className="flex shrink-0">
+      {onDone && button('Done', withShortcut('Done: you’ve dealt with it', 'done'), onDone, true)}
+      {onNotNow && button('Not now', 'Not now: off Today until tomorrow, or until something new arrives', onNotNow)}
+    </span>
   )
 }
 

@@ -13,7 +13,7 @@ import { ShortcutHelp } from './components/ShortcutHelp'
 import { Tooltips } from './components/Tooltips'
 import { CommandBar } from './components/CommandBar'
 import { Settings } from './components/Settings'
-import { TodayDone, TodayList, todayLabel, todayThreads, type TodayData } from './components/Today'
+import { doneFor, TodayDone, TodayList, todayLabel, todayThreads, type TodayData } from './components/Today'
 import type { Command } from './commands/model'
 import { boxCommands, emailCommand, labelCommands } from './commands/sources'
 import { Composer, type ComposeRequest } from './components/Composer'
@@ -138,6 +138,9 @@ function Workspace({ status }: { status: AppStatus }) {
     setTarget(null)
   }
   useShortcut('today', goToToday)
+  // e on Today: done with the open item; Today then puts up the next.
+  const doneWithOpen = onToday && target?.postingId != null ? doneFor(todayData, target.postingId) : null
+  useShortcut('done', () => void doneWithOpen?.().then(() => setTarget(null)), !!doneWithOpen)
   useShortcut('box1', () => goToBox(0))
   useShortcut('box2', () => goToBox(1))
   useShortcut('box3', () => goToBox(2))

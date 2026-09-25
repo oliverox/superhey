@@ -665,6 +665,22 @@ export class Repo {
     )
   }
 
+  /**
+   * You've dealt with the thread (replied elsewhere, done what it asked): it no longer
+   * needs your reply, you're not waiting on it, and its action items are done. Kept until
+   * the thread has something new, which is read afresh. Answers whether it was analysed.
+   */
+  markHandled(topicId: TopicId): boolean {
+    const res = this.db
+      .prepare(
+        `UPDATE thread_analysis SET needs_reply = 0, expects_reply = 0,
+           json = json_set(json, '$.needsReply', json('false'), '$.expectsReply', json('false'), '$.replyReason', NULL, '$.actionItems', json('[]'), '$.handled', json('true'))
+         WHERE topic_id = ?`,
+      )
+      .run(topicId)
+    return Number(res.changes) > 0
+  }
+
   /** The full analysis (action items, dates, amounts), for the details panel. */
   analysis(topicId: TopicId): (Record<string, unknown> & { analyzedAt: string; model: string }) | null {
     const r = this.get<{ json: string; analyzed_at: string; model: string }>('SELECT json, analyzed_at, model FROM thread_analysis WHERE topic_id = ?', topicId)

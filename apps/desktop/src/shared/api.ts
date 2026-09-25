@@ -131,8 +131,10 @@ export interface Api {
   openAttachment(id: string): Promise<void>
   /** What needs you today; `since`: when you last looked (for "new since"). */
   today(since: string | null): Promise<TodayView & { screener: number }>
-  /** "Not now": hides a thread from Today until it changes (`activeAt`: its activity now). */
+  /** "Not now": hides a thread from Today until tomorrow, or until it changes (`activeAt`: its activity now). */
   hideFromToday(key: string, activeAt: string): Promise<void>
+  /** "Done" for a thread you dealt with elsewhere: no longer needs your reply, nor you theirs. */
+  markHandled(topicId: number): Promise<void>
   /** What the AI made of a thread: summary, needs reply, action items, dates, amounts. */
   analysis(topicId: number): Promise<ThreadAnalysisView | null>
   aiStatus(): Promise<AiStatus>
@@ -146,7 +148,7 @@ export interface Api {
   testAi(engine: ProviderId | 'local'): Promise<AiTestResult>
 }
 
-export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'analysis', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
+export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'analysis', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
 export type ApiMethod = (typeof API_METHODS)[number]
 
 export type ApiEvent =

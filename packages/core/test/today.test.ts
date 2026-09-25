@@ -4,7 +4,7 @@ import { Repo } from '../src/cache/repo'
 import * as S from '../src/cli/schemas'
 import { buildToday, type TodayInput } from '../src/today/today'
 import { alice, me, posting } from './fixtures'
-import { TopicId } from '../src/ids'
+import { PostingId, TopicId } from '../src/ids'
 
 /** Records what the AI made of a thread, as of its latest activity. */
 function analyse(repo: Repo, topicId: number, activeAt: string, a: Record<string, unknown> = {}) {
@@ -186,6 +186,28 @@ describe('Today', () => {
     // A new message in the thread brings it back.
     put('laterbox', { id: 40, topic_id: 940, active_at: daysAgo(0, 1), seen: true })
     expect(ids(buildToday(repo, input({ hidden })).replyLater)).toEqual([40])
+  })
+
+  it('snoozes with "not now" until the time comes, or the thread changes', () => {
+    const { repo, put } = setup()
+    put('laterbox', { id: 41, topic_id: 941, active_at: daysAgo(4), seen: true })
+    const hidden = { 'thread:41': { at: daysAgo(4), until: new Date(2026, 8, 26).toISOString() } }
+    expect(buildToday(repo, input({ hidden })).replyLater).toEqual([])
+    expect(ids(buildToday(repo, input({ hidden, now: new Date(2026, 8, 26, 8) })).replyLater)).toEqual([41])
+  })
+
+  it('drops a thread you marked handled from needs-reply, waiting and due, until it has something new', () => {
+    const { repo, put } = setup()
+    put('imbox', { id: 80, topic_id: 980, active_at: daysAgo(1) })
+    analyse(repo, 980, daysAgo(1), { needsReply: true, replyReason: 'asks about check-in', actionItems: [{ text: 'Answer', due: '2026-09-24' }], dates: [{ label: 'Check-in', date: '2026-09-27', time: null }] })
+    expect(buildToday(repo, input()).due.actions).toHaveLength(1)
+    expect(repo.markHandled(TopicId(980))).toBe(true)
+    const t = buildToday(repo, input())
+    expect(t.needsReply).toEqual([])
+    expect(t.due.actions).toEqual([])
+    expect(t.comingUp.map((c) => c.label)).toEqual(['Check-in']) // dates still stand
+    expect(repo.posting(PostingId(80))!.ai).toMatchObject({ needsReply: false, replyReason: null })
+    expect(repo.markHandled(TopicId(999))).toBe(false) // never analysed
   })
 
   it('counts what’s yours to handle', () => {

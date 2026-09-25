@@ -37,6 +37,7 @@ export const SHORTCUTS = {
   labelsMenu: { keys: ['l'], label: 'Labels…', group: 'Act' },
   toggleSeen: { keys: ['u'], label: 'Mark seen / unseen', group: 'Act' },
   trash: { keys: ['#'], label: 'Move to Trash', group: 'Act' },
+  done: { keys: ['e'], label: 'Done (on Today)', group: 'Act' },
   undo: { keys: ['z', 'mod+z'], label: 'Undo last action', group: 'Act' },
 
   reply: { keys: ['R'], label: 'Reply', group: 'Act' },

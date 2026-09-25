@@ -255,20 +255,32 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     return { ...view, screener: core.engine.screenerEntries().length }
   }
 
+  /** "Not now": off Today until tomorrow, or until the thread has something new. */
   async hideFromToday(key: unknown, activeAt: unknown) {
     if (typeof key !== 'string' || !/^thread:\d{1,20}$/.test(key)) throw new Error('bad key')
     if (typeof activeAt !== 'string' || activeAt.length > 40) throw new Error('bad activeAt')
     const repo = this.need().repo
-    // Keep only threads still in the cache, so the list doesn't grow forever.
-    const kept = Object.fromEntries(Object.entries(this.hiddenOnToday()).filter(([k]) => repo.posting(PostingId(Number(k.slice(7))))))
-    repo.setState('today:hidden', JSON.stringify({ ...kept, [key]: activeAt }))
+    const now = new Date()
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString()
+    // Keep only threads still in the cache and snoozes still running, so the list doesn't grow forever.
+    const kept = Object.fromEntries(
+      Object.entries(this.hiddenOnToday()).filter(([k, v]) => repo.posting(PostingId(Number(k.slice(7)))) && (typeof v === 'string' || v.until == null || Date.parse(v.until) > now.getTime())),
+    )
+    repo.setState('today:hidden', JSON.stringify({ ...kept, [key]: { at: activeAt, until: tomorrow } }))
     this.emit('event', { type: 'today' })
   }
 
-  private hiddenOnToday(): Record<string, string> {
+  /** You've dealt with a thread elsewhere: it no longer needs your reply, nor you theirs. */
+  async markHandled(topicId: unknown) {
+    const id = TopicId(int(topicId))
+    this.need().repo.markHandled(id)
+    this.emit('event', { type: 'analysis', topicId: id })
+  }
+
+  private hiddenOnToday(): Record<string, string | { at: string; until: string | null }> {
     try {
       const v = JSON.parse(this.need().repo.getState('today:hidden') ?? '{}') as unknown
-      return v && typeof v === 'object' ? (v as Record<string, string>) : {}
+      return v && typeof v === 'object' ? (v as Record<string, string | { at: string; until: string | null }>) : {}
     } catch {
       return {}
     }
