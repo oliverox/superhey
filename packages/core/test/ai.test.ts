@@ -74,6 +74,11 @@ describe('AI settings', () => {
     })
   })
 
+  it('folds the old “extract” task into understanding threads, keeping the rest', () => {
+    expect(readAiSettings({ monthlyBudgetUsd: 7, tasks: { extract: { enabled: false }, draft: { engine: 'local' } } })).toMatchObject({ monthlyBudgetUsd: 7, tasks: { draft: { engine: 'local' } } })
+    expect(readAiSettings({ tasks: { extract: {} } }).tasks).toEqual({})
+  })
+
   it('falls back to the defaults for settings that do not parse', () => {
     expect(readAiSettings({ monthlyBudgetUsd: -3 }).monthlyBudgetUsd).toBe(5)
     expect(readAiSettings({ local: { baseUrl: 'file:///etc/passwd' } }).local.baseUrl).toBe('http://localhost:11434/v1')
@@ -122,14 +127,14 @@ describe('routing', () => {
   it('honours a task pinned to an engine or model, or turned off', () => {
     const s = settings({
       ...withLocal,
-      tasks: { summary: { engine: 'claude', model: 'claude-opus-5-5' }, extract: { engine: 'grok', model: 'grok-4.7' }, draft: { engine: 'local' }, insights: { enabled: false } },
+      tasks: { summary: { engine: 'claude', model: 'claude-opus-5-5' }, classify: { engine: 'grok', model: 'grok-4.7' }, draft: { engine: 'local' }, insights: { enabled: false } },
     })
     expect(route(s, 'summary', ALL)).toEqual({ engine: 'claude', model: 'claude-opus-5-5' })
-    expect(route(s, 'extract', ALL)).toEqual({ engine: 'grok', model: 'grok-4.7' })
+    expect(route(s, 'classify', ALL)).toEqual({ engine: 'grok', model: 'grok-4.7' })
     expect(route(s, 'draft', ALL)).toMatchObject({ engine: 'local' })
     expect(route(s, 'insights', ALL)).toMatchObject({ engine: null, reason: expect.stringMatching(/turned off/) })
     // A task pinned to a provider that isn't set up says so rather than quietly switching.
-    expect(route(s, 'extract', CLAUDE)).toMatchObject({ engine: null, reason: 'This task uses Grok, which isn’t set up.' })
+    expect(route(s, 'classify', CLAUDE)).toMatchObject({ engine: null, reason: 'This task uses Grok, which isn’t set up.' })
   })
 
   it('uses a task’s model only on its own provider', () => {
@@ -250,14 +255,14 @@ describe('AiClient', () => {
   })
 
   it('gives each provider only its own key', async () => {
-    const { ai, used } = client({ key: 'sk-ant-A', openaiKey: 'sk-proj-B', grokKey: 'xai-C', settings: settings({ tasks: { extract: { engine: 'openai' }, classify: { engine: 'grok' } } }) })
+    const { ai, used } = client({ key: 'sk-ant-A', openaiKey: 'sk-proj-B', grokKey: 'xai-C', settings: settings({ tasks: { classify: { engine: 'openai' }, draft: { engine: 'grok' } } }) })
     await ai.run({ task: 'summary', system: 's', prompt: 'p' })
-    await ai.run({ task: 'extract', system: 's', prompt: 'p' })
     await ai.run({ task: 'classify', system: 's', prompt: 'p' })
+    await ai.run({ task: 'draft', system: 's', prompt: 'p' })
     expect(used).toEqual([
       { engine: 'claude', model: 'claude-haiku-4-5', key: 'sk-ant-A' },
       { engine: 'openai', model: 'gpt-6-luna', key: 'sk-proj-B' },
-      { engine: 'grok', model: 'grok-4.3', key: 'xai-C' },
+      { engine: 'grok', model: 'grok-4.7', key: 'xai-C' },
     ])
   })
 

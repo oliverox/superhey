@@ -29,6 +29,17 @@ export interface PostingRow {
   blockedTrackers: boolean
   /** For a bundle row: how many unread threads it holds (from the cache). */
   bundleCount: number | null
+  /** What the AI made of the thread (when it has looked at it). */
+  ai: PostingAnalysis | null
+}
+
+/** The part of a thread's analysis the list shows. */
+export interface PostingAnalysis {
+  summary: string
+  needsReply: boolean
+  replyReason: string | null
+  expectsReply: boolean
+  category: string
 }
 
 export interface AttachmentRow {
@@ -252,7 +263,7 @@ export class Repo {
    * against that small set; checking every row against the whole box took seconds.
    */
   postings(boxId: number, limit = 100, offset = 0): PostingRow[] {
-    return this.all<Record<string, unknown>>(
+    return this.withAnalysis(this.all<Record<string, unknown>>(
       `WITH bundled AS (
          SELECT id, sender_email FROM postings WHERE box_id = ?1 AND is_bundle = 1
        )
@@ -269,12 +280,12 @@ export class Repo {
       boxId,
       limit,
       offset,
-    ).map(toPostingRow)
+    ).map(toPostingRow))
   }
 
   /** Most recent threads from one sender, across every box, one row per thread. */
   postingsFromSender(email: string, excludeTopicId: TopicId | null, limit = 5): PostingRow[] {
-    return this.all<Record<string, unknown>>(
+    return this.withAnalysis(this.all<Record<string, unknown>>(
       `SELECT * FROM postings p
        WHERE p.sender_email = ? AND p.topic_id IS NOT NULL AND p.topic_id IS NOT ?
          AND p.id = (SELECT q.id FROM postings q WHERE q.topic_id = p.topic_id ORDER BY q.active_at DESC LIMIT 1)
@@ -282,7 +293,7 @@ export class Repo {
       email.toLowerCase(),
       excludeTopicId,
       limit,
-    ).map(toPostingRow)
+    ).map(toPostingRow))
   }
 
   /**
@@ -295,19 +306,19 @@ export class Repo {
     if (!words.length) return []
     // LIKE with the pattern characters escaped, so "100%" means a percent sign.
     const like = words.map(() => `lower(coalesce(p.subject,'') || ' ' || coalesce(p.sender_name,'') || ' ' || coalesce(p.sender_email,'')) LIKE ? ESCAPE '\\'`)
-    return this.all<Record<string, unknown>>(
+    return this.withAnalysis(this.all<Record<string, unknown>>(
       `SELECT * FROM postings p
        WHERE p.is_bundle = 0 AND p.topic_id IS NOT NULL AND ${like.join(' AND ')}
          AND p.id = (SELECT q.id FROM postings q WHERE q.topic_id = p.topic_id AND q.is_bundle = 0 ORDER BY q.active_at DESC, q.id DESC LIMIT 1)
        ORDER BY p.active_at DESC LIMIT ?`,
       ...words.map((w) => `%${w.replace(/[\\%_]/g, (c) => '\\' + c)}%`),
       limit,
-    ).map(toPostingRow)
+    ).map(toPostingRow))
   }
 
   /** A sender's threads in one box, newest first (the latest posting of each thread). */
   senderThreadsInBox(boxId: number, email: string, limit = 25): PostingRow[] {
-    return this.all<Record<string, unknown>>(
+    return this.withAnalysis(this.all<Record<string, unknown>>(
       `SELECT * FROM postings p
        WHERE p.box_id = ? AND p.sender_email = ? AND p.is_bundle = 0 AND p.topic_id IS NOT NULL
          -- A bundle row can carry the thread ID of one of its emails; it never stands for it.
@@ -316,12 +327,12 @@ export class Repo {
       boxId,
       email.toLowerCase(),
       limit,
-    ).map(toPostingRow)
+    ).map(toPostingRow))
   }
 
   posting(id: PostingId): PostingRow | null {
     const row = this.get<Record<string, unknown>>('SELECT * FROM postings WHERE id = ?', id)
-    return row ? toPostingRow(row) : null
+    return row ? this.withAnalysis([toPostingRow(row)])[0]! : null
   }
 
   postingCount(boxId?: number): number {
@@ -603,17 +614,90 @@ export class Repo {
 
   // Sync state
 
+  // Thread analysis
+
+  /** Fills in each row's analysis, in one query. */
+  withAnalysis(rows: PostingRow[]): PostingRow[] {
+    const topics = [...new Set(rows.flatMap((r) => (r.topicId == null ? [] : [r.topicId])))]
+    if (!topics.length) return rows
+    const found = new Map(
+      this.all<Record<string, unknown>>(
+        `SELECT topic_id, summary, needs_reply, expects_reply, category, json FROM thread_analysis WHERE topic_id IN (${topics.map(() => '?').join(', ')})`,
+        ...topics,
+      ).map((r) => [Number(r.topic_id), toAnalysis(r)]),
+    )
+    return rows.map((r) => (r.topicId != null && found.has(r.topicId) ? { ...r, ai: found.get(r.topicId)! } : r))
+  }
+
+  /** The thread's latest activity across its postings (what an analysis is measured against). */
+  latestActivity(topicId: TopicId): string | null {
+    return this.get<{ a: string | null }>('SELECT max(active_at) AS a FROM postings WHERE topic_id = ?', topicId)?.a ?? null
+  }
+
+  entryCount(topicId: TopicId): number | null {
+    return this.get<{ n: number | null }>('SELECT max(entry_count) AS n FROM postings WHERE topic_id = ?', topicId)?.n ?? null
+  }
+
+  analysisIsCurrent(topicId: TopicId, activeAt: string): boolean {
+    const row = this.get<{ active_at: string }>('SELECT active_at FROM thread_analysis WHERE topic_id = ?', topicId)
+    return row != null && row.active_at >= activeAt
+  }
+
+  saveAnalysis(topicId: TopicId, activeAt: string, engine: string, model: string, a: { summary: string; needsReply: boolean; expectsReply: boolean; category: string }) {
+    this.run(
+      `INSERT INTO thread_analysis (topic_id, active_at, analyzed_at, engine, model, summary, needs_reply, expects_reply, category, json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (topic_id) DO UPDATE SET active_at = excluded.active_at, analyzed_at = excluded.analyzed_at, engine = excluded.engine,
+         model = excluded.model, summary = excluded.summary, needs_reply = excluded.needs_reply, expects_reply = excluded.expects_reply,
+         category = excluded.category, json = excluded.json`,
+      topicId,
+      activeAt,
+      new Date().toISOString(),
+      engine,
+      model,
+      a.summary,
+      b(a.needsReply),
+      b(a.expectsReply),
+      a.category,
+      JSON.stringify(a),
+    )
+  }
+
+  /** The full analysis (action items, dates, amounts), for the details panel. */
+  analysis(topicId: TopicId): (Record<string, unknown> & { analyzedAt: string; model: string }) | null {
+    const r = this.get<{ json: string; analyzed_at: string; model: string }>('SELECT json, analyzed_at, model FROM thread_analysis WHERE topic_id = ?', topicId)
+    if (!r) return null
+    try {
+      return { ...(JSON.parse(r.json) as Record<string, unknown>), analyzedAt: r.analyzed_at, model: r.model }
+    } catch {
+      return null
+    }
+  }
+
+  /** Unread threads in a box since `sinceIso` that haven't been analysed as they are now: the first run's backlog. */
+  unanalysedUnread(boxKind: string, sinceIso: string, limit: number): TopicId[] {
+    return this.all<{ topic_id: number }>(
+      `SELECT p.topic_id FROM postings p
+       WHERE p.box_id IN (SELECT id FROM boxes WHERE kind = ?) AND p.seen = 0 AND p.is_bundle = 0 AND p.topic_id IS NOT NULL AND p.active_at >= ?
+         AND NOT EXISTS (SELECT 1 FROM thread_analysis a WHERE a.topic_id = p.topic_id AND a.active_at >= p.active_at)
+       ORDER BY p.active_at DESC LIMIT ?`,
+      boxKind,
+      sinceIso,
+      limit,
+    ).map((r) => TopicId(r.topic_id))
+  }
+
   // Today
 
   /** The latest posting of each thread matching `where` (bundles never count), as list rows. */
   private threadRows(where: string, order: string, ...params: SQLInputValue[]): PostingRow[] {
-    return this.all<Record<string, unknown>>(
+    return this.withAnalysis(this.all<Record<string, unknown>>(
       `SELECT p.* FROM postings p
        WHERE p.is_bundle = 0 AND p.topic_id IS NOT NULL AND (${where})
          AND p.id = (SELECT q.id FROM postings q WHERE q.topic_id = p.topic_id AND q.is_bundle = 0 ORDER BY q.active_at DESC, q.id DESC LIMIT 1)
        ORDER BY ${order}`,
       ...params,
-    ).map(toPostingRow)
+    ).map(toPostingRow))
   }
 
   /** Threads HEY has bubbled up now, oldest first. */
@@ -782,6 +866,7 @@ function toPostingRow(r: Record<string, unknown>): PostingRow {
     appUrl: r.app_url as string | null,
     ...fromRaw(r.raw_json as string, (r.sender_name as string | null) ?? (r.sender_email as string | null)),
     bundleCount: r.is_bundle === 1 ? ((r.bundle_count as number | null) ?? null) : null,
+    ai: null,
   }
 }
 
@@ -854,4 +939,14 @@ export interface Contact {
   name: string | null
   email: string
   avatar: PostingRow['avatar']
+}
+
+function toAnalysis(r: Record<string, unknown>): PostingAnalysis {
+  let reason: string | null = null
+  try {
+    reason = (JSON.parse(r.json as string) as { replyReason?: string | null }).replyReason ?? null
+  } catch {
+    // keep null
+  }
+  return { summary: r.summary as string, needsReply: r.needs_reply === 1, replyReason: reason, expectsReply: r.expects_reply === 1, category: r.category as string }
 }

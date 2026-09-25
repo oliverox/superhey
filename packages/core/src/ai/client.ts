@@ -70,6 +70,12 @@ export class AiClient extends EventEmitter<{ usage: [] }> {
     return new Date(d.getFullYear(), d.getMonth(), 1).toISOString()
   }
 
+  /** Whether a task has somewhere to run (a provider or local model set up for it). */
+  canRun(task: AiTask | TestTask): boolean {
+    const has = Object.fromEntries(PROVIDER_IDS.map((p) => [p, !!this.opts.apiKey(p)])) as Record<ProviderId, boolean>
+    return route(this.opts.settings(), task, has).engine != null
+  }
+
   spentThisMonth(): number {
     return this.opts.repo.aiSpentSince(this.monthStart())
   }

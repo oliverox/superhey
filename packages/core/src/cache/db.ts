@@ -168,6 +168,21 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX ai_usage_at ON ai_usage (at);
   `,
+  `
+  -- What the AI made of each thread, as of its latest activity (redone when that changes).
+  CREATE TABLE thread_analysis (
+    topic_id      INTEGER PRIMARY KEY,
+    active_at     TEXT NOT NULL,
+    analyzed_at   TEXT NOT NULL,
+    engine        TEXT NOT NULL,
+    model         TEXT NOT NULL,
+    summary       TEXT NOT NULL,
+    needs_reply   INTEGER NOT NULL,
+    expects_reply INTEGER NOT NULL,
+    category      TEXT NOT NULL,
+    json          TEXT NOT NULL
+  );
+  `,
 ]
 
 export type Db = DatabaseSync
