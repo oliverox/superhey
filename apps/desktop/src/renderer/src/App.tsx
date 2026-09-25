@@ -3,6 +3,7 @@ import type { AppStatus, BoxRow, PostingRow } from '@shared/api'
 import { api, useLive } from './api'
 import { useAppStatus } from './hooks'
 import { Sidebar } from './components/Sidebar'
+import { ListResizer, useListWidth } from './components/ListResizer'
 import { groupOf, PostingList, useCollapsedGroups } from './components/Lists'
 import { SearchField, SearchFilters, SearchResults } from './components/Search'
 import { ActivityDrawer, Toasts } from './components/Activity'
@@ -105,6 +106,8 @@ function Workspace({ status }: { status: AppStatus }) {
   const boxRows = useMemo(() => (postings.data ?? []).filter((p) => !groups.collapsed.has(groupOf(p))), [postings.data, groups.collapsed])
   // Today with nothing open has nothing for a reader to show: it takes the whole width until you open something.
   const todayAlone = onToday && !screening && !query && !target
+  const gridRef = useRef<HTMLDivElement>(null)
+  const listWidth = useListWidth()
   const list = searching ? searchRows : onToday ? todayThreads(todayData) : boxRows
   const selectedIndex = target?.postingId != null ? list.findIndex((p) => p.id === target.postingId) : -1
 
@@ -188,7 +191,9 @@ function Workspace({ status }: { status: AppStatus }) {
 
   return (
     <div
-      className={`tiles grid h-full ${todayAlone ? 'grid-cols-[232px_1fr]' : 'grid-cols-[232px_minmax(340px,440px)_1fr]'}`}
+      ref={gridRef}
+      style={{ '--list-w': `${listWidth.width}px` } as React.CSSProperties}
+      className={`tiles grid h-full ${todayAlone ? 'grid-cols-[232px_1fr]' : 'grid-cols-[232px_var(--list-w)_1fr]'}`}
       onMouseDown={(e) => {
         const pane = (e.target as HTMLElement).closest<HTMLElement>('[data-pane]')?.dataset.pane as PaneId | undefined
         if (pane) setActivePane(pane)
@@ -209,7 +214,8 @@ function Workspace({ status }: { status: AppStatus }) {
         onOpenSettings={() => setShowSettings(true)}
       />
 
-      <section className="pane flex flex-col bg-pane" data-pane="list" data-active={activePane === 'list'}>
+      <section className="pane relative flex min-w-0 flex-col bg-pane" data-pane="list" data-active={activePane === 'list'}>
+        {!todayAlone && <ListResizer gridRef={gridRef} width={listWidth.width} onResize={listWidth.save} />}
         <header className="drag flex h-[52px] shrink-0 items-center border-b border-rule px-4">
           {/* The title makes way while the search box is in use. */}
           <h1

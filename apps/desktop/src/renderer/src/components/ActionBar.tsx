@@ -167,7 +167,7 @@ export function ActionBar({
           <div
             role="alertdialog"
             aria-label="Confirm trash"
-            className="absolute top-full right-0 z-50 mt-1.5 w-[248px] rounded-ui-lg border border-rule-strong bg-pane p-3 text-[13px] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.28)]"
+            className="pop-in absolute top-full right-0 z-50 mt-1.5 w-[248px] rounded-ui-lg border border-rule-strong bg-pane p-3 text-[13px] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.28)]"
           >
             <p className="text-ink">Move this thread to Trash?</p>
             <p className="mt-1 text-ink-faint">You can restore it from Trash in HEY, but not from here.</p>

@@ -11,6 +11,7 @@ import { AttachmentStrip, stripAttachmentLines, visibleAttachments } from './Att
 import { ActionBar } from './ActionBar'
 import { BundleView } from './BundleView'
 import { ContextPanel } from './ContextPanel'
+import { usePresence } from '../motion'
 import { useShortcut, withShortcut } from '../shortcuts'
 import { HtmlBody } from './HtmlBody'
 import { PersonChip, RecipientsButton } from './People'
@@ -148,9 +149,20 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
             )}
           </article>
         </div>
-        {showPanel && <ContextPanel thread={thread.data!} onOpenThread={onOpenThread} />}
+        <PanelSlot show={showPanel}>{thread.data && <ContextPanel thread={thread.data} onOpenThread={onOpenThread} />}</PanelSlot>
       </div>
     </main>
+  )
+}
+
+/** The details panel's place: it opens to the panel's width and closes to nothing. */
+function PanelSlot({ show, children }: { show: boolean; children: React.ReactNode }) {
+  const { mounted, shown } = usePresence(show)
+  if (!mounted) return null
+  return (
+    <div className="panel-slot flex shrink-0 justify-end" style={{ width: shown ? 296 : 0 }}>
+      {children}
+    </div>
   )
 }
 
@@ -472,7 +484,7 @@ function QuotedHistory({ quote }: { quote: QuotedSplit }) {
         </svg>
       </button>
       {open && (
-        <div className="mt-3 border-l-2 border-rule-strong pl-4 text-ink-soft">
+        <div className="fade-in mt-3 border-l-2 border-rule-strong pl-4 text-ink-soft">
           <Markdown components={mdComponents}>{quote.quoted}</Markdown>
         </div>
       )}
