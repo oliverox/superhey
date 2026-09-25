@@ -275,14 +275,15 @@ function Message({
   index: number
 }) {
   const { designed, showOriginal, toggle } = useDesignedView(entryHtml)
-  const surface = entry.from?.isMe ? 'bg-mine' : 'bg-pane'
+  // Everyone's messages sit on the same paper; the header says who wrote it.
+  const surface = 'bg-pane'
   const time = <Time iso={entry.createdAt} />
 
   if (!expanded) {
     // Two lines: who and when, then what they wrote (without the history they quoted).
     const preview = snippet(splitQuoted(entry.bodyMd, index > 0)?.fresh ?? entry.bodyMd)
     return (
-      <li className={`rise overflow-hidden rounded-ui-lg border ${edge(surface)} ${surface}`} style={{ animationDelay: `${Math.min(index, 6) * 30}ms` }}>
+      <li className={`rise overflow-hidden rounded-ui-lg border border-rule ${surface}`} style={{ animationDelay: `${Math.min(index, 6) * 30}ms` }}>
         <button onClick={onExpand} className="block w-full px-6 py-3 text-left hover:bg-pane-sunk/50">
           <span className="flex items-center gap-3">
             <span className="min-w-0 flex-1 truncate font-semibold">
@@ -378,7 +379,7 @@ export function MessageCard({
   return showOriginal ? (
       // Designed mail assumes a white page, so it gets one in every theme. It's built for
       // ~600–700px, so its card may grow past the text measure (centred, within the pane).
-      <div className={`email-wide overflow-hidden rounded-ui-lg border ${edge(surface)} ${surface}`}>
+      <div className={`email-wide overflow-hidden rounded-ui-lg border border-rule ${surface}`}>
         <div className="bg-white p-3">
           <HtmlBody entryHtml={entryHtml!} />
         </div>
@@ -389,7 +390,7 @@ export function MessageCard({
         )}
       </div>
     ) : (
-      <div className={`rounded-ui-lg border ${edge(surface)} px-7 pt-6 pb-4 ${surface}`}>
+      <div className={`rounded-ui-lg border border-rule px-7 pt-6 pb-4 ${surface}`}>
         <div className="prose-mail">
           {forwarded ? (
             <>
@@ -405,9 +406,6 @@ export function MessageCard({
       </div>
     )
 }
-
-/** A card's edge: your own messages get one in their tint. */
-const edge = (surface: string) => (surface === 'bg-mine' ? 'border-mine-rule' : 'border-rule')
 
 /** Whether a message is designed, and which view to show (Original / Simplified). */
 export function useDesignedView(entryHtml: string | undefined) {

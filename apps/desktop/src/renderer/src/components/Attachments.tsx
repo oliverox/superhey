@@ -13,11 +13,22 @@ export function visibleAttachments(list: AttachmentRow[]) {
   return list.filter((a) => !a.embedded || !isImage(a))
 }
 
-/** Removes the "📎 filename" placeholder lines HEY puts in the body for attachments. */
+/**
+ * Removes the placeholder lines HEY puts in the body for files: "📎 report.pdf" for an
+ * attachment, and an inline image, which comes as a Markdown image pointing into HEY
+ * (`![logo.png](/rails/…)`, shown as "[image: logo.png]") or as that text itself. The files show below the message
+ * (or, for logos and signatures, not at all), so the lines only repeat them. A placeholder
+ * for a file the message doesn't have stays: it's the only sign there was one.
+ */
 export function stripAttachmentLines(markdown: string, list: AttachmentRow[]) {
   if (!list.length) return markdown
   const names = new Set(list.map((a) => a.filename))
-  return markdown.replace(/^📎️?[ \t]*(.+)\n?/gmu, (line, name: string) => (names.has(name.trim()) ? '' : line))
+  return markdown
+    .replace(/^📎️?[ \t]*(.+)\n?/gmu, (line, name: string) => (names.has(name.trim()) ? '' : line))
+    .replace(/^[ \t]*!\[([^\]\n]*)\]\([^)\n]*\)[ \t]*\n?/gm, (line, name: string) => (names.has(name.trim()) ? '' : line))
+    .replace(/^[ \t]*\[image: ([^\]\n]+)\][ \t]*\n?/gm, (line, name: string) => (names.has(name.trim()) ? '' : line))
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 export function AttachmentStrip({ attachments }: { attachments: AttachmentRow[] }) {
@@ -77,8 +88,7 @@ function Preview({ attachment: a, ext }: { attachment: AttachmentRow; ext: strin
   const visible = useVisible(ref)
 
   let content: React.ReactNode = <Placeholder ext={ext} />
-  if (visible && isImage(a))
-    content = <img src={fileUrl(a.id)} alt="" className="size-full object-cover object-top" draggable={false} />
+  if (visible && isImage(a)) content = <ImageThumb id={a.id} />
   else if (visible && isPdf(a)) content = <PdfThumb id={a.id} ext={ext} />
 
   return (
@@ -86,6 +96,45 @@ function Preview({ attachment: a, ext }: { attachment: AttachmentRow; ext: strin
       {content}
     </div>
   )
+}
+
+/**
+ * The whole image, never cropped (logos lose their edges), over a checkerboard, the usual
+ * sign of transparency. A light image (a white logo) gets a dark checkerboard, so it shows.
+ */
+function ImageThumb({ id }: { id: string }) {
+  const [light, setLight] = useState(false)
+  return (
+    <div className={`checker flex size-full items-center justify-center p-3 pb-7 ${light ? 'checker-dark' : ''}`}>
+      {/* Anonymous CORS, so the canvas in isLight may read it (the file scheme allows it). */}
+      <img src={fileUrl(id)} alt="" crossOrigin="anonymous" className="max-h-full max-w-full object-contain" draggable={false} onLoad={(e) => setLight(isLight(e.currentTarget))} />
+    </div>
+  )
+}
+
+/** Whether an image's visible pixels are mostly very light (sampled small, ignoring transparent ones). */
+export function isLight(img: HTMLImageElement): boolean {
+  try {
+    const size = 24
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = size
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    if (!ctx) return false
+    ctx.drawImage(img, 0, 0, size, size)
+    const px = ctx.getImageData(0, 0, size, size).data
+    let sum = 0
+    let weight = 0
+    for (let i = 0; i < px.length; i += 4) {
+      const a = px[i + 3]! / 255
+      if (a < 0.1) continue
+      sum += a * (0.2126 * px[i]! + 0.7152 * px[i + 1]! + 0.0722 * px[i + 2]!)
+      weight += a
+    }
+    // Mostly transparent with little ink, or ink that's nearly white.
+    return weight > 0 && sum / weight / 255 > 0.85
+  } catch {
+    return false // an image the canvas can't read: keep the light background
+  }
 }
 
 function PdfThumb({ id, ext }: { id: string; ext: string }) {

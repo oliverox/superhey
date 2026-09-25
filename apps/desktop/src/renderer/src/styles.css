@@ -35,9 +35,6 @@
   /* Working and on: a connected provider, a passed test. */
   --ok: #1a9d55;
   --selection: #edf0ff;
-  /* Your own messages: a faint cobalt wash with an edge to match. */
-  --mine: #f0f3ff;
-  --mine-rule: #d9e0ff;
   /* Tooltips: the sidebar's graphite. */
   --tip-bg: #17191e;
   --tip-ink: #f1f2f5;
@@ -78,8 +75,6 @@
     --danger: #ff6b6b;
     --ok: #4cc47f;
     --selection: #1c2240;
-    --mine: #171b2c;
-    --mine-rule: #28304d;
     --tip-bg: #262a31;
     --tip-ink: #eceef2;
     --tip-rule: #33373f;
@@ -112,8 +107,6 @@
   --danger: #f7768e;
   --ok: #9ece6a;
   --selection: #283457;
-  --mine: #1f2335;
-  --mine-rule: #3b4261;
   --tip-bg: #24283b;
   --tip-ink: #c0caf5;
   --tip-rule: #414868;
@@ -160,8 +153,6 @@
   --color-danger: var(--danger);
   --color-ok: var(--ok);
   --color-selection: var(--selection);
-  --color-mine: var(--mine);
-  --color-mine-rule: var(--mine-rule);
 }
 
 html,
@@ -323,6 +314,19 @@ kbd.sidebar-key.is-selected,
 button:hover > kbd.sidebar-key {
   color: var(--side-soft);
   border-color: var(--side-faint);
+}
+
+/* Behind image thumbnails: the usual sign of transparency, faint enough to stay quiet, so
+   a white (or black) logo still shows. */
+.checker {
+  --check-a: var(--pane);
+  --check-b: color-mix(in srgb, var(--ink) 6%, var(--pane));
+  background: repeating-conic-gradient(var(--check-b) 0 25%, var(--check-a) 0 50%) 0 0 / 12px 12px;
+}
+/* For a light image (a white logo): the same pattern, dark. */
+.checker-dark {
+  --check-a: #2a2d33;
+  --check-b: #33363d;
 }
 
 /* Settings: a sheet over the app. */
