@@ -20,6 +20,9 @@ export interface EmailDocument {
  * included, so this looks at the layout itself: designed mail is built from tables, images
  * and heavy inline styling; replies from Gmail, Outlook or Yahoo are styled text.
  * Calibrated on real mail: newsletters have 5–56 tables and 3–14 images; replies have none.
+ * Some senders (Northwind, Contoso) lay out with styled divs instead of tables: a centred
+ * max-width container plus at least two of images, backgrounds, rounded corners and a
+ * hidden preheader.
  */
 export function isDesigned(entryHtml: string): boolean {
   if (!/(&quot;|")contentType\1:\1text\/html\1/.test(entryHtml)) return false
@@ -29,7 +32,10 @@ export function isDesigned(entryHtml: string): boolean {
   const images = count(/content-type=(\\?"|&quot;|\\&quot;)image|<img|&lt;img/gi)
   const styles = count(/style=/gi)
   const backgrounds = count(/background(-color)?\s*:/gi)
-  return tables >= 3 || (images >= 2 && tables >= 1) || (styles >= 50 && backgrounds >= 2)
+  if (tables >= 3 || (images >= 2 && tables >= 1) || (styles >= 50 && backgrounds >= 2)) return true
+  const container = count(/max-width\s*:/gi) >= 1 && styles >= 12
+  const signs = [images >= 2, backgrounds >= 2, count(/border-radius\s*:/gi) >= 1, count(/display\s*:\s*none/gi) >= 1].filter(Boolean).length
+  return container && signs >= 2
 }
 
 /** The original HTML HEY keeps in a message's Trix HTML attachments, concatenated. */
