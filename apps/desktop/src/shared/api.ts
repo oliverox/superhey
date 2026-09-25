@@ -89,6 +89,8 @@ export interface AppStatus {
   sync: SyncStatus | null
   problem: SetupProblem | null
   backfill: { running: boolean; postings: number }
+  /** A test instance (MYHEY_TEST_* switches): nothing automatic, no sending, no Screener decisions. */
+  testInstance: boolean
 }
 
 export interface Api {

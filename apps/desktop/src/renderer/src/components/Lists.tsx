@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { PostingRow } from '@shared/api'
 import { shortDate } from '../format'
 import { stripSubjectPrefixes } from '../mail/forwarded'
@@ -12,15 +12,54 @@ interface ListProps {
   onOpen: (p: PostingRow) => void
   /** Search results: no Bubbled up / New / Previously seen groups, matches highlighted, and each row's box named. */
   search?: { highlight: string[]; boxNames: Record<number, string>; empty: ReactNode; footer: ReactNode }
+  /** Groups folded away (see useCollapsedGroups); their heading stays, with a count. */
+  collapsed?: ReadonlySet<string>
+  onToggleGroup?: (group: string) => void
 }
 
 /** Groups rows the way HEY does: Bubbled up, New for you, Previously seen. */
-function groupOf(p: PostingRow) {
+export function groupOf(p: PostingRow) {
   if (p.bubbledUp) return 'Bubbled up'
   return p.seen ? 'Previously seen' : 'New for you'
 }
 
-export function PostingList({ postings, loading, selectedId, onOpen, search }: ListProps) {
+/**
+ * Which of a box's groups are folded away, remembered per box on this device. A
+ * convenience: without storage every group simply starts open.
+ */
+export function useCollapsedGroups(boxId: number | null | undefined) {
+  const key = `list:collapsed:${boxId ?? 'none'}`
+  const read = () => {
+    try {
+      const v = JSON.parse(localStorage.getItem(key) ?? '[]') as unknown
+      return new Set(Array.isArray(v) ? v.filter((g): g is string => typeof g === 'string') : [])
+    } catch {
+      return new Set<string>()
+    }
+  }
+  const [state, setState] = useState(() => ({ key, collapsed: read() }))
+  // Another box: its own groups.
+  const collapsed = state.key === key ? state.collapsed : read()
+  if (state.key !== key) setState({ key, collapsed })
+  const toggle = useCallback(
+    (group: string) =>
+      setState((s) => {
+        const next = new Set(s.key === key ? s.collapsed : [])
+        if (next.has(group)) next.delete(group)
+        else next.add(group)
+        try {
+          localStorage.setItem(key, JSON.stringify([...next]))
+        } catch {
+          // keep working without persistence
+        }
+        return { key, collapsed: next }
+      }),
+    [key],
+  )
+  return { collapsed, toggle }
+}
+
+export function PostingList({ postings, loading, selectedId, onOpen, search, collapsed, onToggleGroup }: ListProps) {
   const listRef = useRef<HTMLUListElement>(null)
 
   useEffect(() => {
@@ -30,6 +69,8 @@ export function PostingList({ postings, loading, selectedId, onOpen, search }: L
   if (loading) return <Empty>Loading…</Empty>
   if (!postings.length) return search ? <div className="scroll min-h-0 flex-1">{search.empty}</div> : <Empty>Nothing here.</Empty>
   const mark = (text: string) => (search ? <Highlighted text={text} terms={search.highlight} /> : text)
+  const counts = new Map<string, number>()
+  if (!search) for (const p of postings) counts.set(groupOf(p), (counts.get(groupOf(p)) ?? 0) + 1)
 
   return (
     <ul ref={listRef} role="listbox" aria-label="Threads" className="scroll min-h-0 flex-1">
@@ -37,10 +78,31 @@ export function PostingList({ postings, loading, selectedId, onOpen, search }: L
         const group = groupOf(p)
         const showHeader = !search && (i === 0 || groupOf(postings[i - 1]!) !== group)
         const selected = p.id === selectedId
+        const folded = !search && !!collapsed?.has(group)
         return (
           <Fragment key={p.id}>
-            {showHeader && <li className="eyebrow sticky top-0 z-10 bg-pane/95 px-5 pt-4 pb-1.5 backdrop-blur">{group}</li>}
-            <li
+            {showHeader && (
+              <li className="sticky top-0 z-10 bg-pane/95 backdrop-blur">
+                {onToggleGroup ? (
+                  <button
+                    type="button"
+                    aria-expanded={!folded}
+                    onClick={() => onToggleGroup(group)}
+                    title={folded ? `Show ${group.toLowerCase()}` : `Hide ${group.toLowerCase()}`}
+                    className="eyebrow group flex w-full items-center gap-1.5 px-5 pt-4 pb-1.5 text-left hover:text-ink-soft"
+                  >
+                    <svg width="9" height="9" viewBox="0 0 16 16" fill="none" aria-hidden className={`shrink-0 transition-transform duration-150 ${folded ? '-rotate-90' : ''}`}>
+                      <path d="m4 6 4 4 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    {group}
+                    {folded && <span className="font-normal tabular-nums">· {counts.get(group)}</span>}
+                  </button>
+                ) : (
+                  <div className="eyebrow px-5 pt-4 pb-1.5">{group}</div>
+                )}
+              </li>
+            )}
+            {!folded && <li
               role="option"
               aria-selected={selected}
               onClick={() => onOpen(p)}
@@ -79,7 +141,7 @@ export function PostingList({ postings, loading, selectedId, onOpen, search }: L
                   </span>
                 </div>
               </div>
-            </li>
+            </li>}
           </Fragment>
         )
       })}

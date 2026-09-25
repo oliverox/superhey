@@ -205,6 +205,11 @@ function SyncStatus({ status }: { status: AppStatus }) {
   const dot = watch === 'live' ? 'bg-accent' : 'bg-new pulse'
   return (
     <>
+      {status.testInstance && (
+        <div className="mb-2 rounded-ui border border-danger/50 px-2 py-1 text-[12px] font-medium text-danger" title="Opened by Claude to check changes: emails are never marked seen, nothing is sent, the Screener is untouched. Use your own SuperHey window.">
+          Test instance (read-only)
+        </div>
+      )}
       <div className="flex items-center gap-2">
         <span className={`size-1.5 rounded-full ${dot}`} />
         <span>{label}</span>

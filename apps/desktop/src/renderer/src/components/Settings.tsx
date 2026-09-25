@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { AiSettings, AiStatus, AiTask, AiTestResult, ProviderId } from '@shared/api'
+import { setMarkSeenOnOpen, useMarkSeenOnOpen } from '../prefs'
 import { api, useLive } from '../api'
 import { Menu, MenuItem, MenuSeparator } from './Menu'
 
@@ -33,22 +34,25 @@ export function Settings({ onClose }: { onClose: () => void }) {
       <div role="dialog" aria-label="Settings" className="settings rise flex max-h-[88vh] w-full max-w-[760px] flex-col overflow-hidden rounded-ui-lg border border-rule-strong bg-pane">
         <header className="flex items-baseline gap-3 border-b border-rule px-7 pt-5 pb-4">
           <h2 className="text-[17px] font-semibold tracking-[-0.01em]">Settings</h2>
-          <span className="text-[13px] text-ink-faint">AI</span>
           <button onClick={onClose} className="ml-auto rounded-ui px-2 py-0.5 text-[12px] text-ink-faint hover:bg-pane-sunk hover:text-ink" title="Close (Esc)">
             Done
           </button>
         </header>
 
         <div className="scroll min-h-0 flex-1 px-7 pb-8">
+          <Section title="Reading" hint="How SuperHey treats email as you go through it.">
+            <Reading />
+          </Section>
           {status.error && <p className="mt-6 text-danger">Couldn't load the settings: {status.error}</p>}
           {!s ? (
             !status.error && <p className="mt-6 text-ink-faint">Loading…</p>
           ) : (
             <>
-              <ModeLine status={s} />
-              {error && <p className="mt-3 rounded-ui bg-danger/10 px-3 py-2 text-[13px] text-danger">{error}</p>}
-
               <Section title="AI providers" hint="Your own API keys; each company bills you for what it uses. Automatic tasks use the first provider that’s on.">
+                <div className="-mt-1 mb-4">
+                  <ModeLine status={s} />
+                </div>
+                {error && <p className="mb-3 rounded-ui bg-danger/10 px-3 py-2 text-[13px] text-danger">{error}</p>}
                 <Providers status={s} save={save} />
               </Section>
 
@@ -106,9 +110,24 @@ function Check({ label }: { label?: string }) {
   )
 }
 
+function Reading() {
+  const markSeen = useMarkSeenOnOpen()
+  return (
+    <div className="flex items-start gap-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-ink">Mark emails seen when you open them</div>
+        <p className="mt-0.5 text-[13px] text-ink-faint">
+          {markSeen ? 'As in HEY. Turn off to keep emails new until you mark them seen (U).' : 'Off: emails stay new until you mark them seen (U, or Mark seen above the email).'}
+        </p>
+      </div>
+      <Switch label="Mark emails seen when you open them" hideLabel checked={markSeen} onChange={setMarkSeenOnOpen} />
+    </div>
+  )
+}
+
 function Section({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
   return (
-    <section className="mt-7 border-t border-rule pt-5 first-of-type:mt-6">
+    <section className="mt-7 border-t border-rule pt-5 first-of-type:mt-6 first-of-type:border-t-0 first-of-type:pt-0">
       <h3 className="text-[14px] font-semibold">{title}</h3>
       <p className="mt-0.5 mb-3.5 text-[13px] leading-snug text-ink-faint">{hint}</p>
       {children}

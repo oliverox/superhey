@@ -3,18 +3,19 @@ import type { AppStatus, BoxRow, PostingRow } from '@shared/api'
 import { api, useLive } from './api'
 import { useAppStatus } from './hooks'
 import { Sidebar } from './components/Sidebar'
-import { PostingList } from './components/Lists'
+import { groupOf, PostingList, useCollapsedGroups } from './components/Lists'
 import { SearchField, SearchFilters, SearchResults } from './components/Search'
 import { ActivityDrawer, Toasts } from './components/Activity'
 import { Reader, type ReaderTarget } from './components/Reader'
 import { SetupScreen, StartingScreen } from './components/Setup'
 import { useTheme } from './theme'
+import { markSeenOnOpen } from './prefs'
 import { useShortcut } from './shortcuts'
 import { ShortcutHelp } from './components/ShortcutHelp'
 import { Tooltips } from './components/Tooltips'
 import { CommandBar } from './components/CommandBar'
 import { Settings } from './components/Settings'
-import { doneFor, TodayDone, TodayList, todayLabel, todayThreads, type TodayData } from './components/Today'
+import { doneFor, TodayList, todayLabel, todayThreads, type TodayData } from './components/Today'
 import type { Command } from './commands/model'
 import { boxCommands, emailCommand, labelCommands } from './commands/sources'
 import { Composer, type ComposeRequest } from './components/Composer'
@@ -32,6 +33,10 @@ export function App() {
 const BOX_ORDER = ['imbox', 'feedbox', 'trailbox', 'laterbox', 'asidebox', 'bubblebox']
 
 function Workspace({ status }: { status: AppStatus }) {
+  // A test instance says so in the title bar and the Dock's window list too.
+  useEffect(() => {
+    document.title = status.testInstance ? 'SuperHey — TEST INSTANCE' : 'SuperHey'
+  }, [status.testInstance])
   const boxes = useLive(() => api.boxes(), [], (e) => e.type === 'change')
   const ordered = useMemo(
     () => [...(boxes.data ?? [])].sort((a, b) => BOX_ORDER.indexOf(a.kind) - BOX_ORDER.indexOf(b.kind)),
@@ -95,13 +100,19 @@ function Workspace({ status }: { status: AppStatus }) {
     return () => window.removeEventListener('myhey:compose', onRestore)
   }, [])
 
-  const list = searching ? searchRows : onToday ? todayThreads(todayData) : (postings.data ?? [])
+  const groups = useCollapsedGroups(activeBox?.id)
+  // j/k move through what's showing: rows in folded groups are skipped.
+  const boxRows = useMemo(() => (postings.data ?? []).filter((p) => !groups.collapsed.has(groupOf(p))), [postings.data, groups.collapsed])
+  // Today with nothing open has nothing for a reader to show: it takes the whole width until you open something.
+  const todayAlone = onToday && !screening && !query && !target
+  const list = searching ? searchRows : onToday ? todayThreads(todayData) : boxRows
   const selectedIndex = target?.postingId != null ? list.findIndex((p) => p.id === target.postingId) : -1
 
   /** `markSeen: false` shows a thread without reading it (Today putting its first item up). */
   const open = useCallback((p: PostingRow, markSeen = true) => {
     // Opening a thread marks it seen, as in HEY. Kept out of the activity log.
-    if (markSeen && !p.seen && !p.isBundle) api.runAction({ type: 'seen', postingId: p.id, seen: true }, 'auto').catch(() => {})
+    // Unless Settings says seen is yours to mark (u).
+    if (markSeen && markSeenOnOpen() && !p.seen && !p.isBundle) api.runAction({ type: 'seen', postingId: p.id, seen: true }, 'auto').catch(() => {})
     setTarget({
       postingId: p.id,
       topicId: p.topicId,
@@ -177,7 +188,7 @@ function Workspace({ status }: { status: AppStatus }) {
 
   return (
     <div
-      className="tiles grid h-full grid-cols-[232px_minmax(340px,440px)_1fr]"
+      className={`tiles grid h-full ${todayAlone ? 'grid-cols-[232px_1fr]' : 'grid-cols-[232px_minmax(340px,440px)_1fr]'}`}
       onMouseDown={(e) => {
         const pane = (e.target as HTMLElement).closest<HTMLElement>('[data-pane]')?.dataset.pane as PaneId | undefined
         if (pane) setActivePane(pane)
@@ -277,19 +288,19 @@ function Workspace({ status }: { status: AppStatus }) {
           {activeBox?.kind === 'imbox' && <ScreenerBanner count={waiting.length} onOpen={openScreener} />}
           <PostingList
             key={activeBox?.id}
-            postings={list}
+            postings={postings.data ?? []}
             loading={postings.loading && !postings.data}
             selectedId={target?.postingId ?? null}
             onOpen={open}
+            collapsed={groups.collapsed}
+            onToggleGroup={groups.toggle}
           />
           </>
         )}
       </section>
 
       <div data-pane="reader" className="contents">
-        {onToday && !screening && !query && !target ? (
-          <TodayDone />
-        ) : (
+        {!todayAlone && (
         <Reader
           target={target}
           active={activePane === 'reader'}

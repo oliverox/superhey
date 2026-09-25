@@ -59,6 +59,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     sync: null,
     problem: null,
     backfill: { running: false, postings: 0 },
+    testInstance: Object.keys(process.env).some((k) => k.startsWith('MYHEY_TEST_') && process.env[k] === '1'),
   }
 
   constructor(

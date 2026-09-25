@@ -174,6 +174,21 @@ async function menu(name: string, item: string) {
   await click([...host.querySelectorAll('[role=menuitem]')].find((i) => i.textContent === item)!)
 }
 
+describe('Reading', () => {
+  it('turns marking seen on open off and on', async () => {
+    localStorage.removeItem('pref:mark-seen-on-open')
+    await open()
+    expect(text()).toContain('Mark emails seen when you open them')
+    expect(sw('Mark emails seen when you open them').getAttribute('aria-checked')).toBe('true')
+    await click(sw('Mark emails seen when you open them'))
+    expect(localStorage.getItem('pref:mark-seen-on-open')).toBe('false')
+    expect(sw('Mark emails seen when you open them').getAttribute('aria-checked')).toBe('false')
+    expect(text()).toContain('emails stay new until you mark them seen')
+    await click(sw('Mark emails seen when you open them'))
+    expect(localStorage.getItem('pref:mark-seen-on-open')).toBe('true')
+  })
+})
+
 describe('Settings: providers', () => {
   it('starts with none connected, and adds one from the list with its key', async () => {
     await open()
