@@ -78,7 +78,7 @@ function Workspace({ status }: { status: AppStatus }) {
   }, [])
   useShortcut('screener', openScreener, waiting.length > 0 && !screening)
   const searchRef = useRef<HTMLInputElement>(null)
-  const { theme, setTheme, toggle: toggleTheme } = useTheme()
+  const { theme, setTheme, toggle: toggleTheme, scheme, setScheme, toggleDark } = useTheme()
   const [activePane, setActivePane] = useState<PaneId>('list')
   const [showActivity, setShowActivity] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
@@ -130,6 +130,8 @@ function Workspace({ status }: { status: AppStatus }) {
   useShortcut('prevThread', () => step(-1))
   useShortcut('search', () => searchRef.current?.focus())
   useShortcut('theme', toggleTheme)
+  // Light and dark are the Default theme's (Omarchy is dark).
+  useShortcut('appearance', toggleDark, theme === 'default')
   const showBox = (id: number) => {
     setOnToday(false)
     setScreening(false)
@@ -188,6 +190,8 @@ function Workspace({ status }: { status: AppStatus }) {
         today={{ active: onToday && !screening, count: todayData?.toHandle ?? null, onSelect: goToToday }}
         status={status}
         theme={theme}
+        scheme={scheme}
+        onScheme={setScheme}
         onTheme={setTheme}
         active={activePane === 'sidebar'}
         onOpenActivity={() => setShowActivity(true)}

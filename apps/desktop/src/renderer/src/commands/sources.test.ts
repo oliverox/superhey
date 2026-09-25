@@ -44,7 +44,8 @@ describe('shortcutCommands', () => {
   it('answers to other words: "delete" finds Move to Trash', () => {
     const list = shortcutCommands(() => true, vi.fn())
     expect(rank('delete', list)[0]?.command.title).toBe('Move to Trash')
-    expect(rank('dark', list)[0]?.command.title).toBe('Switch theme')
+    expect(rank('dark', list)[0]?.command.title).toBe('Light or dark mode')
+    expect(rank('omarchy', list)[0]?.command.title).toBe('Switch theme')
   })
 })
 

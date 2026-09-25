@@ -2,7 +2,8 @@ import type { AppStatus, BoxRow, EventRow } from '@shared/api'
 import { api, useLive } from '../api'
 import { clock, startOfDay } from '../format'
 import { withShortcut } from '../shortcuts'
-import { THEMES, type Theme } from '../theme'
+import { nextScheme, THEMES, type Scheme, type Theme } from '../theme'
+import { OmarchyLogo } from './OmarchyLogo'
 
 interface Props {
   boxes: BoxRow[]
@@ -11,6 +12,9 @@ interface Props {
   status: AppStatus
   theme: Theme
   onTheme: (t: Theme) => void
+  /** Light, dark or the system's, for the Default theme. */
+  scheme: Scheme
+  onScheme: (s: Scheme) => void
   active: boolean
   onOpenActivity: () => void
   onOpenSettings: () => void
@@ -18,7 +22,7 @@ interface Props {
   today: { active: boolean; count: number | null; onSelect: () => void }
 }
 
-export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onTheme, active, onOpenActivity, onOpenSettings, today }: Props) {
+export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onTheme, scheme, onScheme, active, onOpenActivity, onOpenSettings, today }: Props) {
   return (
     <aside className="pane flex flex-col bg-side text-side-ink" data-pane="sidebar" data-active={active}>
       <div className="drag h-[52px] shrink-0" />
@@ -86,7 +90,10 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
             Settings
           </button>
         </div>
-        <ThemeSwitch theme={theme} onTheme={onTheme} />
+        <div className="mb-3 flex items-center gap-1.5">
+          <ThemeSwitch theme={theme} onTheme={onTheme} />
+          {theme === 'default' && <SchemeButton scheme={scheme} onScheme={onScheme} />}
+        </div>
         <SyncStatus status={status} />
       </footer>
     </aside>
@@ -131,21 +138,54 @@ function Agenda() {
 
 function ThemeSwitch({ theme, onTheme }: { theme: Theme; onTheme: (t: Theme) => void }) {
   return (
-    <div role="radiogroup" aria-label="Theme" className="mb-3 flex rounded-ui bg-side-sel/60 p-0.5" title="Switch theme (⇧T)">
+    <div role="radiogroup" aria-label="Theme" className="flex flex-1 rounded-ui bg-side-sel/60 p-0.5" title="Switch theme (⇧T)">
       {THEMES.map((t) => (
         <button
           key={t.id}
           role="radio"
+          aria-label={t.label}
           aria-checked={theme === t.id}
           onClick={() => onTheme(t.id)}
           className={`flex-1 rounded-ui py-1 text-[11.5px] font-medium transition-colors ${
             theme === t.id ? 'bg-side-sel text-side-ink shadow-sm' : 'text-side-faint hover:text-side-soft'
           }`}
         >
-          {t.label}
+          {t.id === 'omarchy' ? <OmarchyLogo className="mx-auto h-[10px] w-auto" /> : t.label}
         </button>
       ))}
     </div>
+  )
+}
+
+const SCHEME_NAMES: Record<Scheme, string> = { auto: 'Auto (as macOS)', light: 'Light', dark: 'Dark' }
+
+/** Cycles the Default theme's appearance: Auto → Light → Dark. */
+function SchemeButton({ scheme, onScheme }: { scheme: Scheme; onScheme: (s: Scheme) => void }) {
+  const label = `Appearance: ${SCHEME_NAMES[scheme]}. Click for ${SCHEME_NAMES[nextScheme(scheme)].replace(' (as macOS)', '')} (⇧D toggles light and dark)`
+  return (
+    <button
+      type="button"
+      onClick={() => onScheme(nextScheme(scheme))}
+      aria-label={label}
+      title={label}
+      className="flex size-[30px] shrink-0 items-center justify-center rounded-ui bg-side-sel/60 text-side-soft transition-colors hover:text-side-ink"
+    >
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
+        {scheme === 'light' ? (
+          <>
+            <circle cx="8" cy="8" r="3" />
+            <path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1" />
+          </>
+        ) : scheme === 'dark' ? (
+          <path d="M13 9.5A5.5 5.5 0 0 1 6.5 3a5.5 5.5 0 1 0 6.5 6.5Z" strokeLinejoin="round" />
+        ) : (
+          <>
+            <circle cx="8" cy="8" r="5.5" />
+            <path d="M8 2.5v11A5.5 5.5 0 0 0 8 2.5Z" fill="currentColor" stroke="none" />
+          </>
+        )}
+      </svg>
+    </button>
   )
 }
 

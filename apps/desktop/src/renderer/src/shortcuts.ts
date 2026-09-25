@@ -54,6 +54,7 @@ export const SHORTCUTS = {
   settings: { keys: ['mod+,'], label: 'Settings', group: 'App', whileTyping: true },
   help: { keys: ['?'], label: 'Keyboard shortcuts', group: 'App' },
   theme: { keys: ['T'], label: 'Switch theme', group: 'App' },
+  appearance: { keys: ['D'], label: 'Light or dark mode', group: 'App' },
 } as const satisfies Record<string, ShortcutDef>
 
 export type ShortcutId = keyof typeof SHORTCUTS
