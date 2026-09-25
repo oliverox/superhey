@@ -1,11 +1,10 @@
 import { EventEmitter } from 'node:events'
-import { createAnthropic } from '@ai-sdk/anthropic'
-import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { APICallError, generateText, Output, type LanguageModel } from 'ai'
 import type { z } from 'zod'
 import type { Repo } from '../cache/repo'
-import { costOf, maxCostOf, PROVIDER_NAME, type CloudProvider } from './models'
+import { costOf, maxCostOf } from './models'
+import { PROVIDER_IDS, PROVIDERS, type ProviderId } from './providers'
 import { route, type AiSettings, type AiTask, type Route, type TestTask } from './settings'
 
 export type AiErrorCode = 'not-set-up' | 'budget' | 'auth' | 'unreachable' | 'rate-limited' | 'failed'
@@ -34,7 +33,7 @@ export interface AiRequest<S extends z.ZodType | undefined = undefined> {
 
 export interface AiResult<T> {
   output: T
-  engine: CloudProvider | 'local'
+  engine: ProviderId | 'local'
   model: string
   usage: { input: number; output: number; costUsd: number }
   ms: number
@@ -45,7 +44,7 @@ type Resolved = Exclude<Route, { engine: null }>
 export interface AiClientOptions {
   settings: () => AiSettings
   /** A provider's API key, read from the keychain when needed; null when none is stored. */
-  apiKey: (provider: CloudProvider) => string | null
+  apiKey: (provider: ProviderId) => string | null
   repo: Repo
   now?: () => Date
   /** Builds the model for a route; tests pass fakes. */
@@ -77,8 +76,8 @@ export class AiClient extends EventEmitter<{ usage: [] }> {
 
   async run<S extends z.ZodType | undefined = undefined>(req: AiRequest<S>): Promise<AiResult<S extends z.ZodType ? z.infer<S> : string>> {
     const settings = this.opts.settings()
-    const keys = { claude: this.opts.apiKey('claude'), openai: this.opts.apiKey('openai') }
-    const r = route(settings, req.task, { claude: !!keys.claude, openai: !!keys.openai })
+    const keys = Object.fromEntries(PROVIDER_IDS.map((p) => [p, this.opts.apiKey(p)])) as Record<ProviderId, string | null>
+    const r = route(settings, req.task, Object.fromEntries(PROVIDER_IDS.map((p) => [p, !!keys[p]])) as Record<ProviderId, boolean>)
     if (!r.engine) throw new AiError('not-set-up', r.reason)
     const key = r.engine === 'local' ? null : keys[r.engine]
 
@@ -131,8 +130,7 @@ export class AiClient extends EventEmitter<{ usage: [] }> {
 
 function defaultModel(r: Resolved, apiKey: string | null): LanguageModel {
   if (r.engine === 'local') return createOpenAICompatible({ name: 'local', baseURL: r.baseUrl, supportsStructuredOutputs: true })(r.model)
-  if (r.engine === 'claude') return createAnthropic({ apiKey: apiKey ?? undefined })(r.model)
-  return createOpenAI({ apiKey: apiKey ?? undefined })(r.model)
+  return PROVIDERS[r.engine].connect(apiKey ?? '', r.model)
 }
 
 /** A provider's failure, said plainly. */
@@ -142,8 +140,9 @@ function explain(e: unknown, r: Resolved): AiError {
   const status = APICallError.isInstance(inner) ? inner.statusCode : undefined
   const text = inner instanceof Error ? inner.message : String(inner)
   if (r.engine !== 'local') {
-    const who = PROVIDER_NAME[r.engine]
-    if (status === 401 || status === 403) return new AiError('auth', `${who} didn’t accept the API key.`)
+    const who = PROVIDERS[r.engine].name
+    // Most say 401/403; xAI says 400 "Incorrect API key provided".
+    if (status === 401 || status === 403 || (status === 400 && /api key/i.test(text))) return new AiError('auth', `${who} didn’t accept the API key.`)
     if (status === 429) return new AiError('rate-limited', `${who} is rate-limiting this key. Try again in a minute.`)
     if (status === 404) return new AiError('failed', `${who} doesn’t offer the model “${r.model}” to this key.`)
   } else if (/ECONNREFUSED|fetch failed|ENOTFOUND|Cannot connect/i.test(text) || (APICallError.isInstance(inner) && status == null)) {

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { AiClient, AiError, listLocalModels } from '../src/ai/client'
 import { costOf, maxCostOf } from '../src/ai/models'
+import { checkKey, CLOUD_MODELS, keyHint, PROVIDER_IDS, PROVIDERS, type ProviderId } from '../src/ai/providers'
 import { aiMode, readAiSettings, route, type AiSettings } from '../src/ai/settings'
 import { openDb } from '../src/cache/db'
 import { Repo } from '../src/cache/repo'
@@ -11,86 +12,144 @@ import { Repo } from '../src/cache/repo'
 const settings = (over: Record<string, unknown> = {}): AiSettings => readAiSettings(over)
 const withLocal = { local: { enabled: true, model: 'llama3.2', baseUrl: 'http://localhost:11434/v1' } }
 
-const CLAUDE = { claude: true, openai: false }
-const OPENAI = { claude: false, openai: true }
-const BOTH = { claude: true, openai: true }
-const NONE = { claude: false, openai: false }
+const keys = (...ids: ProviderId[]) => ({ claude: ids.includes('claude'), openai: ids.includes('openai'), grok: ids.includes('grok') })
+const CLAUDE = keys('claude')
+const OPENAI = keys('openai')
+const GROK = keys('grok')
+const ALL = keys('claude', 'openai', 'grok')
+const NONE = keys()
+
+describe('providers', () => {
+  it('lists Claude, OpenAI and Grok, each with models, prices and defaults of its own', () => {
+    expect(PROVIDER_IDS).toEqual(['claude', 'openai', 'grok'])
+    for (const id of PROVIDER_IDS) {
+      const p = PROVIDERS[id]
+      const own = CLOUD_MODELS.filter((m) => m.provider === id).map((m) => m.id)
+      expect(own).toContain(p.defaults.cheap)
+      expect(own).toContain(p.defaults.quality)
+      expect(p.keyUrl).toMatch(/^https:\/\//)
+    }
+    expect(CLOUD_MODELS.map((m) => m.id)).toContain('claude-fable-5-1')
+    expect(new Set(CLOUD_MODELS.map((m) => m.id)).size).toBe(CLOUD_MODELS.length)
+  })
+
+  it('checks keys per provider, naming the provider a misplaced key belongs to', () => {
+    expect(checkKey('claude', '  sk-ant-api03-' + 'a'.repeat(30) + '\n')).toBe('sk-ant-api03-' + 'a'.repeat(30))
+    expect(checkKey('openai', 'sk-proj-' + 'b'.repeat(30))).toMatch(/^sk-proj-/)
+    expect(checkKey('grok', 'xai-' + 'c'.repeat(40))).toMatch(/^xai-/)
+    expect(() => checkKey('openai', 'sk-ant-api03-' + 'a'.repeat(30))).toThrow('That looks like a Claude key, not an OpenAI one.')
+    expect(() => checkKey('grok', 'sk-proj-' + 'b'.repeat(30))).toThrow('That looks like an OpenAI key, not a Grok one.')
+    expect(() => checkKey('claude', 'sk-proj-' + 'b'.repeat(30))).toThrow('That looks like an OpenAI key, not a Claude one.')
+    expect(() => checkKey('claude', 'xai-' + 'c'.repeat(40))).toThrow(/Anthropic API key/) // Grok's format isn't distinctive
+    expect(() => checkKey('grok', 'short')).toThrow(/xAI API key/)
+    expect(() => checkKey('grok', 'xai-' + 'c'.repeat(30) + ' d')).toThrow(/xAI/)
+    expect(() => checkKey('claude', 42)).toThrow(/Anthropic/)
+  })
+
+  it('hints at a key without revealing it', () => {
+    expect(keyHint('sk-ant-api03-secretsecret-WXYZ')).toBe('sk-ant-…WXYZ')
+    expect(keyHint('sk-proj-secretsecret-QRST')).toBe('sk-proj-…QRST')
+    expect(keyHint('xai-secretsecret-ABCD')).toBe('xai-…ABCD')
+    expect(keyHint('Zm9vYmFyYmF6cXV4-EFGH')).toBe('…EFGH')
+  })
+})
 
 describe('AI settings', () => {
-  it('defaults to both clouds on (once they have keys), Claude preferred, local off, a $5 budget', () => {
-    const s = settings()
-    expect(s).toMatchObject({ claude: { enabled: true }, openai: { enabled: true }, preferredCloud: 'claude', local: { enabled: false }, monthlyBudgetUsd: 5, tasks: {} })
+  it('defaults to every provider on (once it has a key), in registry order, local off, a $5 budget', () => {
+    expect(settings()).toMatchObject({ providers: {}, order: ['claude', 'openai', 'grok'], local: { enabled: false }, monthlyBudgetUsd: 5, tasks: {} })
+  })
+
+  it('keeps each provider in the order exactly once, whatever was saved', () => {
+    expect(settings({ order: ['grok', 'grok'] }).order).toEqual(['grok', 'claude', 'openai'])
+    expect(settings({ order: ['gemini'] }).order).toEqual(['claude', 'openai', 'grok']) // unknown: defaults
+  })
+
+  it('brings settings saved before the provider list forward', () => {
+    const old = { claude: { enabled: false }, openai: { enabled: true }, preferredCloud: 'openai', monthlyBudgetUsd: 9, tasks: { draft: { engine: 'openai' } } }
+    expect(readAiSettings(old)).toMatchObject({
+      providers: { claude: { enabled: false }, openai: { enabled: true } },
+      order: ['openai', 'claude', 'grok'],
+      monthlyBudgetUsd: 9,
+      tasks: { draft: { engine: 'openai' } },
+    })
   })
 
   it('falls back to the defaults for settings that do not parse', () => {
     expect(readAiSettings({ monthlyBudgetUsd: -3 }).monthlyBudgetUsd).toBe(5)
     expect(readAiSettings({ local: { baseUrl: 'file:///etc/passwd' } }).local.baseUrl).toBe('http://localhost:11434/v1')
-    expect(readAiSettings({ preferredCloud: 'gemini' }).preferredCloud).toBe('claude')
     expect(readAiSettings('nonsense')).toEqual(settings())
   })
 
-  it('describes the setup: which cloud runs automatic tasks, and whether a local model helps', () => {
+  it('describes the setup: which provider runs automatic tasks, and whether a local model helps', () => {
     expect(aiMode(settings(), NONE)).toEqual({ cloud: null, local: false })
-    expect(aiMode(settings(), CLAUDE)).toEqual({ cloud: 'claude', local: false })
-    expect(aiMode(settings(), OPENAI)).toEqual({ cloud: 'openai', local: false })
-    expect(aiMode(settings(), BOTH)).toEqual({ cloud: 'claude', local: false })
-    expect(aiMode(settings({ preferredCloud: 'openai' }), BOTH)).toEqual({ cloud: 'openai', local: false })
-    expect(aiMode(settings({ ...withLocal, claude: { enabled: false } }), CLAUDE)).toEqual({ cloud: null, local: true })
-    expect(aiMode(settings(withLocal), OPENAI)).toEqual({ cloud: 'openai', local: true })
+    expect(aiMode(settings(), GROK)).toEqual({ cloud: 'grok', local: false })
+    expect(aiMode(settings(), ALL)).toEqual({ cloud: 'claude', local: false })
+    expect(aiMode(settings({ order: ['grok', 'openai', 'claude'] }), ALL)).toEqual({ cloud: 'grok', local: false })
+    expect(aiMode(settings({ ...withLocal, providers: { claude: { enabled: false } } }), CLAUDE)).toEqual({ cloud: null, local: true })
   })
 })
 
 describe('routing', () => {
-  it('uses the quick model of a cloud for quick tasks and its main model for the rest', () => {
-    expect(route(settings(), 'summary', CLAUDE)).toEqual({ engine: 'claude', model: 'claude-haiku-4-5-20251001' })
+  it('uses each provider’s quick model for quick tasks and its main model for the rest', () => {
+    expect(route(settings(), 'summary', CLAUDE)).toEqual({ engine: 'claude', model: 'claude-haiku-4-5' })
     expect(route(settings(), 'draft', CLAUDE)).toEqual({ engine: 'claude', model: 'claude-sonnet-5' })
     expect(route(settings(), 'summary', OPENAI)).toEqual({ engine: 'openai', model: 'gpt-6-luna' })
     expect(route(settings(), 'draft', OPENAI)).toEqual({ engine: 'openai', model: 'gpt-6-sol' })
+    expect(route(settings(), 'summary', GROK)).toEqual({ engine: 'grok', model: 'grok-4.3' })
+    expect(route(settings(), 'draft', GROK)).toEqual({ engine: 'grok', model: 'grok-4.7' })
   })
 
-  it('with both clouds, uses the preferred one, or the other when it is turned off', () => {
-    expect(route(settings(), 'draft', BOTH).engine).toBe('claude')
-    expect(route(settings({ preferredCloud: 'openai' }), 'draft', BOTH).engine).toBe('openai')
-    expect(route(settings({ claude: { enabled: false } }), 'draft', BOTH).engine).toBe('openai')
+  it('uses the first provider in the order that is connected and on', () => {
+    expect(route(settings(), 'draft', ALL).engine).toBe('claude')
+    expect(route(settings({ order: ['grok', 'claude', 'openai'] }), 'draft', ALL).engine).toBe('grok')
+    expect(route(settings({ order: ['grok', 'claude', 'openai'] }), 'draft', keys('claude', 'openai')).engine).toBe('claude')
+    expect(route(settings({ providers: { claude: { enabled: false } } }), 'draft', ALL).engine).toBe('openai')
+  })
+
+  it('uses a provider’s own choice of quick and main models', () => {
+    const s = settings({ providers: { claude: { models: { quality: 'claude-fable-5-1', cheap: 'gpt-6-luna' } } } })
+    expect(route(s, 'draft', CLAUDE)).toEqual({ engine: 'claude', model: 'claude-fable-5-1' })
+    // Another provider's model is no choice for Claude: its default stands.
+    expect(route(s, 'summary', CLAUDE)).toEqual({ engine: 'claude', model: 'claude-haiku-4-5' })
   })
 
   it('with a local model too, sends quick tasks local and the rest to the cloud', () => {
     const s = settings(withLocal)
-    expect(route(s, 'classify', OPENAI)).toMatchObject({ engine: 'local', model: 'llama3.2' })
-    expect(route(s, 'agent', OPENAI)).toMatchObject({ engine: 'openai', model: 'gpt-6-sol' })
+    expect(route(s, 'classify', GROK)).toMatchObject({ engine: 'local', model: 'llama3.2' })
+    expect(route(s, 'agent', GROK)).toMatchObject({ engine: 'grok', model: 'grok-4.7' })
   })
 
   it('honours a task pinned to an engine or model, or turned off', () => {
     const s = settings({
       ...withLocal,
-      tasks: { summary: { engine: 'claude', model: 'claude-opus-5-5' }, extract: { engine: 'openai', model: 'gpt-6-astra' }, draft: { engine: 'local' }, insights: { enabled: false } },
+      tasks: { summary: { engine: 'claude', model: 'claude-opus-5-5' }, extract: { engine: 'grok', model: 'grok-4.7' }, draft: { engine: 'local' }, insights: { enabled: false } },
     })
-    expect(route(s, 'summary', BOTH)).toEqual({ engine: 'claude', model: 'claude-opus-5-5' })
-    expect(route(s, 'extract', BOTH)).toEqual({ engine: 'openai', model: 'gpt-6-astra' })
-    expect(route(s, 'draft', BOTH)).toMatchObject({ engine: 'local' })
-    expect(route(s, 'insights', BOTH)).toMatchObject({ engine: null, reason: expect.stringMatching(/turned off/) })
-    // A task pinned to an engine that isn't set up says so rather than quietly switching.
-    expect(route(s, 'summary', OPENAI)).toMatchObject({ engine: null, reason: expect.stringMatching(/Claude/) })
+    expect(route(s, 'summary', ALL)).toEqual({ engine: 'claude', model: 'claude-opus-5-5' })
+    expect(route(s, 'extract', ALL)).toEqual({ engine: 'grok', model: 'grok-4.7' })
+    expect(route(s, 'draft', ALL)).toMatchObject({ engine: 'local' })
+    expect(route(s, 'insights', ALL)).toMatchObject({ engine: null, reason: expect.stringMatching(/turned off/) })
+    // A task pinned to a provider that isn't set up says so rather than quietly switching.
+    expect(route(s, 'extract', CLAUDE)).toMatchObject({ engine: null, reason: 'This task uses Grok, which isn’t set up.' })
   })
 
   it('uses a task’s model only on its own provider', () => {
-    // An OpenAI model chosen for a task that runs on Claude (automatically) falls back to Claude's default.
     const s = settings({ tasks: { draft: { model: 'gpt-6-astra' } } })
     expect(route(s, 'draft', CLAUDE)).toEqual({ engine: 'claude', model: 'claude-sonnet-5' })
     expect(route(s, 'draft', OPENAI)).toEqual({ engine: 'openai', model: 'gpt-6-astra' })
   })
 
   it('says what to set up when nothing is', () => {
-    expect(route(settings(), 'summary', NONE)).toMatchObject({ engine: null, reason: expect.stringMatching(/Settings/) })
+    expect(route(settings(), 'summary', NONE)).toMatchObject({ engine: null, reason: 'Add an AI provider or a local model in Settings.' })
     expect(route(settings({ local: { enabled: true, model: '' } }), 'summary', NONE).engine).toBeNull()
   })
 
   it('routes the connection tests to the engine they name', () => {
-    expect(route(settings(withLocal), 'test-openai', BOTH)).toEqual({ engine: 'openai', model: 'gpt-6-luna' })
-    expect(route(settings(withLocal), 'test-claude', BOTH)).toEqual({ engine: 'claude', model: 'claude-haiku-4-5-20251001' })
-    expect(route(settings(withLocal), 'test-local', BOTH)).toMatchObject({ engine: 'local' })
-    expect(route(settings(), 'test-openai', CLAUDE)).toEqual({ engine: null, reason: 'Add an OpenAI API key first.' })
+    expect(route(settings(withLocal), 'test-openai', ALL)).toEqual({ engine: 'openai', model: 'gpt-6-luna' })
+    expect(route(settings(withLocal), 'test-grok', ALL)).toEqual({ engine: 'grok', model: 'grok-4.3' })
+    expect(route(settings(withLocal), 'test-local', ALL)).toMatchObject({ engine: 'local' })
     expect(route(settings(), 'test-claude', OPENAI)).toEqual({ engine: null, reason: 'Add an Anthropic API key first.' })
+    expect(route(settings(), 'test-openai', CLAUDE)).toEqual({ engine: null, reason: 'Add an OpenAI API key first.' })
+    expect(route(settings(), 'test-grok', CLAUDE)).toEqual({ engine: null, reason: 'Add an xAI API key first.' })
   })
 })
 
@@ -100,7 +159,7 @@ describe('cost', () => {
     expect(costOf('claude-sonnet-5', { input: 1_000_000, cacheRead: 0, cacheWrite: 0, output: 0 })).toBeCloseTo(2)
     expect(costOf('claude-sonnet-5', { input: 0, cacheRead: 0, cacheWrite: 0, output: 1_000_000 })).toBeCloseTo(10)
     expect(costOf('claude-sonnet-5', { input: 1_000_000, cacheRead: 500_000, cacheWrite: 500_000, output: 0 })).toBeCloseTo(0.1 + 1.25)
-    expect(costOf('claude-haiku-4-5-20251001', { input: 1000, cacheRead: 0, cacheWrite: 0, output: 1000 })).toBeCloseTo(0.006)
+    expect(costOf('claude-haiku-4-5', { input: 1000, cacheRead: 0, cacheWrite: 0, output: 1000 })).toBeCloseTo(0.006)
     expect(costOf('llama3.2', { input: 1e6, cacheRead: 0, cacheWrite: 0, output: 1e6 })).toBe(0)
   })
 
@@ -111,8 +170,15 @@ describe('cost', () => {
     expect(costOf('gpt-6-astra', { input: 0, cacheRead: 0, cacheWrite: 0, output: 1_000_000 })).toBeCloseTo(50)
   })
 
+  it('prices Grok, and Claude Fable 5.1', () => {
+    // Grok 4.3: $1.25 in, $0.20 cached, $2.50 out. Fable 5.1: $10 in, $50 out.
+    expect(costOf('grok-4.3', { input: 1_000_000, cacheRead: 0, cacheWrite: 0, output: 1_000_000 })).toBeCloseTo(3.75)
+    expect(costOf('grok-4.7', { input: 1_000_000, cacheRead: 1_000_000, cacheWrite: 0, output: 0 })).toBeCloseTo(0.5)
+    expect(costOf('claude-fable-5-1', { input: 1_000_000, cacheRead: 0, cacheWrite: 0, output: 1_000_000 })).toBeCloseTo(60)
+  })
+
   it('bounds a call from above before it is made', () => {
-    expect(maxCostOf('claude-haiku-4-5-20251001', 4000, 1000)).toBeCloseTo(0.004 + 0.005)
+    expect(maxCostOf('claude-haiku-4-5', 4000, 1000)).toBeCloseTo(0.004 + 0.005)
   })
 })
 
@@ -137,13 +203,14 @@ function fake(opts: { text?: string; input?: number; output?: number; cacheRead?
   return { model, calls }
 }
 
-/** `key`: the Claude key (default one); `openaiKey`: OpenAI's (default none). */
-function client(opts: { settings?: AiSettings; key?: string | null; openaiKey?: string | null; model?: MockLanguageModelV4; now?: Date } = {}) {
+/** `key`: the Claude key (default one); `openaiKey`, `grokKey`: theirs (default none). */
+function client(opts: { settings?: AiSettings; key?: string | null; openaiKey?: string | null; grokKey?: string | null; model?: MockLanguageModelV4; now?: Date } = {}) {
   const repo = new Repo(openDb(':memory:'))
   const used: Array<{ engine: string; model: string; key: string | null }> = []
+  const stored = { claude: opts.key === undefined ? 'sk-ant-test' : opts.key, openai: opts.openaiKey ?? null, grok: opts.grokKey ?? null }
   const ai = new AiClient({
     settings: () => opts.settings ?? settings(),
-    apiKey: (provider) => (provider === 'claude' ? (opts.key === undefined ? 'sk-ant-test' : opts.key) : (opts.openaiKey ?? null)),
+    apiKey: (provider) => stored[provider],
     repo,
     now: () => opts.now ?? new Date('2026-09-25T12:00:00'),
     model: (r, key) => {
@@ -161,11 +228,11 @@ describe('AiClient', () => {
     const onUsage = vi.fn()
     ai.on('usage', onUsage)
     const r = await ai.run({ task: 'summary', system: 'Summarise.', prompt: 'the email' })
-    expect(r).toMatchObject({ output: 'A short summary.', engine: 'claude', model: 'claude-haiku-4-5-20251001', usage: { input: 2000, output: 100 } })
+    expect(r).toMatchObject({ output: 'A short summary.', engine: 'claude', model: 'claude-haiku-4-5', usage: { input: 2000, output: 100 } })
     expect(r.usage.costUsd).toBeCloseTo(0.002 + 0.0005)
-    expect(used).toEqual([{ engine: 'claude', model: 'claude-haiku-4-5-20251001', key: 'sk-ant-test' }])
+    expect(used).toEqual([{ engine: 'claude', model: 'claude-haiku-4-5', key: 'sk-ant-test' }])
     expect(repo.aiUsageSince('2026-09-01T00:00:00Z')).toEqual([
-      { task: 'summary', engine: 'claude', model: 'claude-haiku-4-5-20251001', calls: 1, input: 2000, output: 100, costUsd: expect.closeTo(0.0025, 6) },
+      { task: 'summary', engine: 'claude', model: 'claude-haiku-4-5', calls: 1, input: 2000, output: 100, costUsd: expect.closeTo(0.0025, 6) },
     ])
     expect(onUsage).toHaveBeenCalledTimes(1)
   })
@@ -182,13 +249,15 @@ describe('AiClient', () => {
     await expect(ai.run({ task: 'draft', system: 's', prompt: 'x'.repeat(2000) })).rejects.toMatchObject({ code: 'budget' })
   })
 
-  it('gives each cloud only its own key', async () => {
-    const { ai, used } = client({ key: 'sk-ant-A', openaiKey: 'sk-proj-B', settings: settings({ tasks: { extract: { engine: 'openai' } } }) })
+  it('gives each provider only its own key', async () => {
+    const { ai, used } = client({ key: 'sk-ant-A', openaiKey: 'sk-proj-B', grokKey: 'xai-C', settings: settings({ tasks: { extract: { engine: 'openai' }, classify: { engine: 'grok' } } }) })
     await ai.run({ task: 'summary', system: 's', prompt: 'p' })
     await ai.run({ task: 'extract', system: 's', prompt: 'p' })
+    await ai.run({ task: 'classify', system: 's', prompt: 'p' })
     expect(used).toEqual([
-      { engine: 'claude', model: 'claude-haiku-4-5-20251001', key: 'sk-ant-A' },
+      { engine: 'claude', model: 'claude-haiku-4-5', key: 'sk-ant-A' },
       { engine: 'openai', model: 'gpt-6-luna', key: 'sk-proj-B' },
+      { engine: 'grok', model: 'grok-4.3', key: 'xai-C' },
     ])
   })
 
@@ -257,6 +326,14 @@ describe('AiClient', () => {
     await expect(ai.run({ task: 'summary', system: 's', prompt: 'p' })).rejects.toMatchObject({ code: 'auth', message: 'Claude didn’t accept the API key.' })
     const openai = client({ key: null, openaiKey: 'sk-proj-x', model: fake({ error: reject }).model })
     await expect(openai.ai.run({ task: 'summary', system: 's', prompt: 'p' })).rejects.toMatchObject({ code: 'auth', message: 'OpenAI didn’t accept the API key.' })
+    // xAI answers a bad key with 400 (seen live), not 401.
+    const xaiReject = new APICallError({ message: 'invalid-argument: Incorrect API key provided. You can obtain an API key from https://console.x.ai.', url: 'https://api.x.ai/v1/chat/completions', requestBodyValues: {}, statusCode: 400, isRetryable: false })
+    const grok = client({ key: null, grokKey: 'xai-x', model: fake({ error: xaiReject }).model })
+    await expect(grok.ai.run({ task: 'summary', system: 's', prompt: 'p' })).rejects.toMatchObject({ code: 'auth', message: 'Grok didn’t accept the API key.' })
+    // Any other 400 is reported as it is.
+    const bad = new APICallError({ message: 'max_tokens too large', url: 'https://api.x.ai/v1/chat/completions', requestBodyValues: {}, statusCode: 400, isRetryable: false })
+    const other = client({ key: null, grokKey: 'xai-x', model: fake({ error: bad }).model })
+    await expect(other.ai.run({ task: 'summary', system: 's', prompt: 'p' })).rejects.toMatchObject({ code: 'failed', message: 'max_tokens too large' })
 
     const down = Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } })
     const local = client({ settings: settings(withLocal), key: null, model: fake({ error: down }).model })
@@ -265,11 +342,12 @@ describe('AiClient', () => {
   })
 
   it('runs the connection tests on the engine they name', async () => {
-    const { ai, used } = client({ settings: settings(withLocal), openaiKey: 'sk-proj-x' })
+    const { ai, used } = client({ settings: settings(withLocal), openaiKey: 'sk-proj-x', grokKey: 'xai-x' })
     await ai.run({ task: 'test-local', system: 's', prompt: 'p' })
     await ai.run({ task: 'test-claude', system: 's', prompt: 'p' })
     await ai.run({ task: 'test-openai', system: 's', prompt: 'p' })
-    expect(used.map((u) => u.engine)).toEqual(['local', 'claude', 'openai'])
+    await ai.run({ task: 'test-grok', system: 's', prompt: 'p' })
+    expect(used.map((u) => u.engine)).toEqual(['local', 'claude', 'openai', 'grok'])
   })
 })
 

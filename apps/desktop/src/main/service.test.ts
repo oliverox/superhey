@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openDb, Repo, type Core } from '@myhey/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ApiEvent } from '../shared/api'
+import type { AiStatus, ApiEvent } from '../shared/api'
 import { AppService, type SecretStore } from './service'
 
 // A core that needs neither the HEY CLI nor the network: only the cache is real.
@@ -53,14 +53,23 @@ async function service(secrets: SecretStore | null = memorySecrets()) {
 
 const OPENAI_KEY = 'sk-proj-' + 'b'.repeat(40) + 'QRST'
 
+const GROK_KEY = 'xai-' + 'c'.repeat(40) + 'MNOP'
+const hintOf = (status: AiStatus, id: string) => status.providers.find((p) => p.id === id)!.hint
+
 describe('AI settings in the service', () => {
   it('starts from the defaults, with nothing set up', async () => {
     const { s } = await service()
     const status = await s.aiStatus()
-    expect(status).toMatchObject({ mode: { cloud: null, local: false }, keys: { claude: { hint: null }, openai: { hint: null } }, canStoreKey: true, month: { spentUsd: 0, budgetUsd: 5, calls: 0 } })
+    expect(status).toMatchObject({ mode: { cloud: null, local: false }, canStoreKey: true, month: { spentUsd: 0, budgetUsd: 5, calls: 0 } })
+    expect(status.providers.map((p) => [p.id, p.hint, p.enabled])).toEqual([
+      ['claude', null, true],
+      ['openai', null, true],
+      ['grok', null, true],
+    ])
+    expect(status.providers[2]).toMatchObject({ name: 'Grok', company: 'xAI', models: { cheap: 'grok-4.3', quality: 'grok-4.7' } })
     expect(status.tasks.map((t) => t.id)).toEqual(['summary', 'classify', 'extract', 'draft', 'agent', 'insights'])
     expect(status.tasks[0]!.runsOn).toMatchObject({ engine: null })
-    expect(new Set(status.models.map((m) => m.provider))).toEqual(new Set(['claude', 'openai']))
+    expect(new Set(status.models.map((m) => m.provider))).toEqual(new Set(['claude', 'openai', 'grok']))
   })
 
   it('stores each key in the secret store and only ever shows a hint of it', async () => {
@@ -68,26 +77,31 @@ describe('AI settings in the service', () => {
     const { s, events } = await service(secrets)
     let status = await s.setApiKey('claude', `  ${KEY}\n`) // pasted with spaces around it
     expect(secrets.values.get('anthropic-api-key')).toBe(KEY)
-    expect(status.keys.claude.hint).toBe('sk-ant-…WXYZ')
+    expect(hintOf(status, 'claude')).toBe('sk-ant-…WXYZ')
     expect(status.mode.cloud).toBe('claude')
-    expect(status.tasks.find((t) => t.id === 'summary')!.runsOn).toEqual({ engine: 'claude', model: 'claude-haiku-4-5-20251001' })
+    expect(status.tasks.find((t) => t.id === 'summary')!.runsOn).toEqual({ engine: 'claude', model: 'claude-haiku-4-5' })
 
-    status = await s.setApiKey('openai', OPENAI_KEY)
+    await s.setApiKey('openai', OPENAI_KEY)
+    status = await s.setApiKey('grok', GROK_KEY)
     expect(secrets.values.get('openai-api-key')).toBe(OPENAI_KEY)
-    expect(status.keys.openai.hint).toBe('sk-…QRST')
-    expect(status.mode.cloud).toBe('claude') // still preferred
-    status = await s.setAiSettings({ ...status.settings, preferredCloud: 'openai' })
-    expect(status.tasks.find((t) => t.id === 'summary')!.runsOn).toEqual({ engine: 'openai', model: 'gpt-6-luna' })
+    expect(secrets.values.get('xai-api-key')).toBe(GROK_KEY)
+    expect(hintOf(status, 'openai')).toBe('sk-proj-…QRST')
+    expect(hintOf(status, 'grok')).toBe('xai-…MNOP')
+    expect(status.mode.cloud).toBe('claude') // first in the order
 
-    // Nothing the UI can read holds either key.
+    // Reordering moves automatic tasks to the new first provider, listed first.
+    status = await s.setAiSettings({ ...status.settings, order: ['grok', 'claude', 'openai'] })
+    expect(status.providers.map((p) => p.id)).toEqual(['grok', 'claude', 'openai'])
+    expect(status.tasks.find((t) => t.id === 'draft')!.runsOn).toEqual({ engine: 'grok', model: 'grok-4.7' })
+
+    // Nothing the UI can read holds any key.
     const readable = JSON.stringify([await s.aiStatus(), events])
-    expect(readable).not.toContain(KEY.slice(10, -4))
-    expect(readable).not.toContain(OPENAI_KEY.slice(10, -4))
+    for (const k of [KEY, OPENAI_KEY, GROK_KEY]) expect(readable).not.toContain(k.slice(10, -4))
     expect(events).toContainEqual({ type: 'ai' })
 
     await s.setApiKey('claude', null)
-    expect([...secrets.values.keys()]).toEqual(['openai-api-key'])
-    expect((await s.aiStatus()).keys.claude.hint).toBeNull()
+    expect([...secrets.values.keys()].sort()).toEqual(['openai-api-key', 'xai-api-key'])
+    expect(hintOf(await s.aiStatus(), 'claude')).toBeNull()
   })
 
   it('refuses keys that do not belong to the provider, keeping the ones stored', async () => {
@@ -95,11 +109,12 @@ describe('AI settings in the service', () => {
     const { s } = await service(secrets)
     await s.setApiKey('claude', KEY)
     await s.setApiKey('openai', OPENAI_KEY)
-    for (const bad of ['', 'sk-proj-abc', OPENAI_KEY, 'sk-ant-short', 'sk-ant-' + 'a'.repeat(30) + ' b', 42, { key: KEY }]) {
+    for (const bad of ['', 'sk-proj-abc', 'sk-ant-short', 'sk-ant-' + 'a'.repeat(30) + ' b', 42, { key: KEY }]) {
       await expect(s.setApiKey('claude', bad)).rejects.toThrow(/Anthropic API key/)
     }
-    // An Anthropic key pasted into OpenAI's field is a mistake, not an OpenAI key.
-    for (const bad of ['', 'sk-short', KEY, 'pk-' + 'a'.repeat(30)]) await expect(s.setApiKey('openai', bad)).rejects.toThrow(/OpenAI API key/)
+    await expect(s.setApiKey('claude', OPENAI_KEY)).rejects.toThrow('That looks like an OpenAI key, not a Claude one.')
+    await expect(s.setApiKey('openai', KEY)).rejects.toThrow('That looks like a Claude key, not an OpenAI one.')
+    await expect(s.setApiKey('grok', OPENAI_KEY)).rejects.toThrow('That looks like an OpenAI key, not a Grok one.')
     await expect(s.setApiKey('gemini', KEY)).rejects.toThrow(/bad provider/)
     expect(secrets.values.get('anthropic-api-key')).toBe(KEY)
     expect(secrets.values.get('openai-api-key')).toBe(OPENAI_KEY)
@@ -135,6 +150,7 @@ describe('AI settings in the service', () => {
     const { s } = await service()
     expect(await s.testAi('claude')).toEqual({ ok: false, code: 'not-set-up', message: 'Add an Anthropic API key first.' })
     expect(await s.testAi('openai')).toEqual({ ok: false, code: 'not-set-up', message: 'Add an OpenAI API key first.' })
+    expect(await s.testAi('grok')).toEqual({ ok: false, code: 'not-set-up', message: 'Add an xAI API key first.' })
     expect(await s.testAi('local')).toEqual({ ok: false, code: 'not-set-up', message: 'Choose a local model first.' })
     await expect(s.testAi('gpt')).rejects.toThrow(/bad engine/)
   })

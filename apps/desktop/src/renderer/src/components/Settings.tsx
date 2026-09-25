@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import type { AiSettings, AiStatus, AiTask, AiTestResult, CloudProvider } from '@shared/api'
+import type { AiSettings, AiStatus, AiTask, AiTestResult, ProviderId } from '@shared/api'
 import { api, useLive } from '../api'
+import { Menu, MenuItem, MenuSeparator } from './Menu'
 
 /**
  * Settings, over the app (⌘, or the command bar). For now: AI. Changes apply as they're
@@ -47,12 +48,8 @@ export function Settings({ onClose }: { onClose: () => void }) {
               <ModeLine status={s} />
               {error && <p className="mt-3 rounded-ui bg-danger/10 px-3 py-2 text-[12.5px] text-danger">{error}</p>}
 
-              <Section title="Claude" hint="Anthropic’s models. Uses your own API key; Anthropic bills you for what it uses.">
-                <CloudSetup provider="claude" status={s} onToggle={(enabled) => save((x) => ({ ...x, claude: { enabled } }))} />
-              </Section>
-
-              <Section title="OpenAI" hint="OpenAI’s GPT models. Uses your own API key; OpenAI bills you for what it uses.">
-                <CloudSetup provider="openai" status={s} onToggle={(enabled) => save((x) => ({ ...x, openai: { enabled } }))} />
+              <Section title="AI providers" hint="Your own API keys; each company bills you for what it uses. Automatic tasks use the first provider that’s on.">
+                <Providers status={s} save={save} />
               </Section>
 
               <Section title="Local model" hint="Free and private: runs on this Mac with Ollama or LM Studio. Good for quick tasks; weaker at drafting.">
@@ -74,15 +71,12 @@ export function Settings({ onClose }: { onClose: () => void }) {
   )
 }
 
-const PROVIDERS: Record<CloudProvider, { name: string; placeholder: string; console: string; consoleName: string; company: string }> = {
-  claude: { name: 'Claude', placeholder: 'sk-ant-…', console: 'https://console.anthropic.com/settings/keys', consoleName: 'console.anthropic.com', company: 'Anthropic' },
-  openai: { name: 'OpenAI', placeholder: 'sk-…', console: 'https://platform.openai.com/api-keys', consoleName: 'platform.openai.com', company: 'OpenAI' },
-}
+type Provider = AiStatus['providers'][number]
 
 function ModeLine({ status }: { status: AiStatus }) {
   const local = status.settings.local.model
   const { cloud, local: hasLocal } = status.mode
-  const cloudName = cloud ? PROVIDERS[cloud].name : null
+  const cloudName = cloud ? status.providers.find((p) => p.id === cloud)?.name : null
   const text =
     cloudName && hasLocal
       ? `Quick tasks run on ${local}, on this Mac; the rest on ${cloudName}.`
@@ -90,7 +84,7 @@ function ModeLine({ status }: { status: AiStatus }) {
         ? `Everything runs on ${cloudName}.`
         : hasLocal
           ? `Everything runs on ${local}, on this Mac.`
-          : 'AI is off until you add an API key or choose a local model.'
+          : 'AI is off until you add a provider or choose a local model.'
   return (
     <p className="mt-5 flex items-center gap-2 text-[13px] text-ink-soft">
       <span aria-hidden className={`size-2 rounded-full ${cloud || hasLocal ? 'bg-accent' : 'bg-rule-strong'}`} />
@@ -109,28 +103,226 @@ function Section({ title, hint, children }: { title: string; hint: string; child
   )
 }
 
-function CloudSetup({ provider, status, onToggle }: { provider: CloudProvider; status: AiStatus; onToggle: (enabled: boolean) => void }) {
-  const info = PROVIDERS[provider]
-  const keyHint = status.keys[provider].hint
-  const { canStoreKey } = status
-  const [editing, setEditing] = useState(false)
+/**
+ * The connected providers, in the order automatic tasks try them, and a way to add one.
+ * Adding a provider the app doesn't know yet is a registry entry in the core; nothing here
+ * names a provider.
+ */
+function Providers({ status, save }: { status: AiStatus; save: (change: (s: AiSettings) => AiSettings) => void }) {
+  const connected = status.providers.filter((p) => p.hint)
+  const available = status.providers.filter((p) => !p.hint)
+  const [adding, setAdding] = useState<ProviderId | 'pick' | null>(null)
+  const names = modelNames(status)
+
+  // Swap a provider with its neighbour among the connected ones (the order also holds the rest).
+  const move = (id: ProviderId, by: -1 | 1) => {
+    const i = connected.findIndex((p) => p.id === id)
+    const other = connected[i + by]
+    if (!other) return
+    save((s) => {
+      const order = [...s.order]
+      const a = order.indexOf(id)
+      const b = order.indexOf(other.id)
+      ;[order[a], order[b]] = [order[b]!, order[a]!]
+      return { ...s, order }
+    })
+  }
+
+  return (
+    <div className="space-y-3">
+      {connected.length > 0 ? (
+        <ul className="divide-y divide-rule rounded-ui-lg border border-rule" aria-label="Connected providers">
+          {connected.map((p, i) => (
+            <ProviderRow
+              key={p.id}
+              provider={p}
+              status={status}
+              names={names}
+              first={i === 0}
+              last={i === connected.length - 1}
+              onMove={(by) => move(p.id, by)}
+              save={save}
+            />
+          ))}
+        </ul>
+      ) : (
+        <p className="rounded-ui-lg border border-dashed border-rule-strong px-4 py-3 text-[13px] text-ink-faint">No provider yet. Add one with its API key; you can add more later.</p>
+      )}
+
+      {adding && adding !== 'pick' ? (
+        <div className="rounded-ui-lg border border-rule px-4 py-3.5">
+          <div className="mb-2.5 text-[13px] font-semibold">Add {status.providers.find((p) => p.id === adding)!.name}</div>
+          <KeyForm provider={status.providers.find((p) => p.id === adding)!} canStoreKey={status.canStoreKey} onDone={() => setAdding(null)} />
+        </div>
+      ) : adding === 'pick' ? (
+        <div className="rounded-ui-lg border border-rule p-1.5" role="group" aria-label="Choose a provider">
+          {available.map((p) => (
+            <button key={p.id} onClick={() => setAdding(p.id)} className="flex w-full items-baseline gap-3 rounded-ui px-3 py-2 text-left hover:bg-pane-alt">
+              <span className="w-16 shrink-0 text-[13px] font-semibold text-ink">{p.name}</span>
+              <span className="text-[12.5px] text-ink-faint">{p.blurb}</span>
+            </button>
+          ))}
+          <button onClick={() => setAdding(null)} className="mt-1 w-full rounded-ui px-3 py-1.5 text-left text-[12.5px] text-ink-faint hover:bg-pane-alt hover:text-ink">
+            Cancel
+          </button>
+        </div>
+      ) : (
+        available.length > 0 && (
+          <button onClick={() => setAdding('pick')} className="btn">
+            + Add provider
+          </button>
+        )
+      )}
+    </div>
+  )
+}
+
+function ProviderRow({
+  provider: p,
+  status,
+  names,
+  first,
+  last,
+  onMove,
+  save,
+}: {
+  provider: Provider
+  status: AiStatus
+  names: Map<string, string>
+  first: boolean
+  last: boolean
+  onMove: (by: -1 | 1) => void
+  save: (change: (s: AiSettings) => AiSettings) => void
+}) {
+  const [panel, setPanel] = useState<'models' | 'key' | null>(null)
+  const [test, setTest] = useState<AiTestResult | 'running' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const models = status.models.filter((m) => m.provider === p.id)
+  const setProvider = (patch: Partial<NonNullable<AiSettings['providers'][ProviderId]>>) =>
+    save((s) => ({ ...s, providers: { ...s.providers, [p.id]: { enabled: true, models: {}, ...s.providers[p.id], ...patch } } }))
+
+  const runTest = async () => {
+    setTest('running')
+    try {
+      setTest(await api.testAi(p.id))
+    } catch (e) {
+      setTest({ ok: false, code: 'failed', message: message(e) })
+    }
+  }
+  const remove = async () => {
+    setError(null)
+    try {
+      await api.setApiKey(p.id, null)
+    } catch (e) {
+      setError(message(e))
+    }
+  }
+
+  return (
+    <li className="px-4 py-3" aria-label={p.name}>
+      <div className="flex items-center gap-3">
+        <span aria-hidden className={`size-2 shrink-0 rounded-full ${p.enabled ? 'bg-accent' : 'bg-rule-strong'}`} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <span className={`text-[13.5px] font-semibold ${p.enabled ? 'text-ink' : 'text-ink-faint'}`}>{p.name}</span>
+            <span className="font-mono text-[12px] text-ink-faint" aria-label={`Stored ${p.name} key`}>
+              {p.hint}
+            </span>
+            {!p.enabled && <span className="text-[12px] text-ink-faint">off</span>}
+          </div>
+          <div className="mt-0.5 text-[12px] text-ink-faint">
+            {names.get(p.models.cheap)} for quick tasks · {names.get(p.models.quality)} for the rest
+          </div>
+        </div>
+        {!(first && last) && (
+          <span className="flex">
+            <button onClick={() => onMove(-1)} disabled={first} aria-label={`Move ${p.name} up`} title="Try earlier" className="rounded-ui px-1.5 py-1 text-ink-faint hover:bg-pane-sunk hover:text-ink disabled:opacity-30">
+              ↑
+            </button>
+            <button onClick={() => onMove(1)} disabled={last} aria-label={`Move ${p.name} down`} title="Try later" className="rounded-ui px-1.5 py-1 text-ink-faint hover:bg-pane-sunk hover:text-ink disabled:opacity-30">
+              ↓
+            </button>
+          </span>
+        )}
+        <button onClick={() => void runTest()} disabled={test === 'running' || !p.enabled} className="btn">
+          {test === 'running' ? 'Testing…' : 'Test'}
+        </button>
+        <Menu label={`${p.name} options`} icon={<span aria-hidden className="text-[15px] leading-none">⋯</span>}>
+          {(close) => (
+            <>
+              <MenuItem onSelect={() => (close(), setPanel('models'))}>Change models…</MenuItem>
+              <MenuItem onSelect={() => (close(), setPanel('key'))}>Replace key…</MenuItem>
+              <MenuItem onSelect={() => (close(), setProvider({ enabled: !p.enabled }))}>{p.enabled ? 'Turn off' : 'Turn on'}</MenuItem>
+              <MenuSeparator />
+              <MenuItem danger onSelect={() => (close(), void remove())}>
+                Remove
+              </MenuItem>
+            </>
+          )}
+        </Menu>
+      </div>
+
+      {test && test !== 'running' && (
+        <p className={`mt-2 text-[12.5px] ${test.ok ? 'text-ink-soft' : 'text-danger'}`}>
+          {test.ok ? (
+            <>
+              <span className="text-accent">✓</span> {names.get(test.model) ?? test.model} answered in {(test.ms / 1000).toFixed(1)} s · {money(test.costUsd)}
+            </>
+          ) : (
+            test.message
+          )}
+        </p>
+      )}
+      {error && <p className="mt-2 text-[12.5px] text-danger">{error}</p>}
+
+      {panel === 'models' && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[12.5px] text-ink-soft">
+          {(['cheap', 'quality'] as const).map((tier) => (
+            <label key={tier} className="flex items-center gap-2">
+              {tier === 'cheap' ? 'Quick tasks' : 'The rest'}
+              <select
+                value={p.models[tier]}
+                onChange={(e) => setProvider({ models: { ...status.settings.providers[p.id]?.models, [tier]: e.target.value } })}
+                aria-label={`${p.name}: model for ${tier === 'cheap' ? 'quick tasks' : 'the rest'}`}
+                className="field py-1 text-[12.5px]"
+              >
+                {models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {names.get(m.id)} · ${m.price.input}/${m.price.output}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+          <button onClick={() => setPanel(null)} className="ml-auto text-ink-faint hover:text-ink">
+            Done
+          </button>
+        </div>
+      )}
+      {panel === 'key' && (
+        <div className="mt-3">
+          <KeyForm provider={p} canStoreKey={status.canStoreKey} onDone={() => setPanel(null)} />
+        </div>
+      )}
+    </li>
+  )
+}
+
+/** A provider's API key: pasted, checked by the main process, stored in the keychain. */
+function KeyForm({ provider: p, canStoreKey, onDone }: { provider: Provider; canStoreKey: boolean; onDone: () => void }) {
   const [value, setValue] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
-  const showForm = !keyHint || editing
+  useEffect(() => input.current?.focus(), [])
 
-  useEffect(() => {
-    if (editing) input.current?.focus()
-  }, [editing])
-
-  const store = async (key: string | null) => {
+  const store = async () => {
     setBusy(true)
     setError(null)
     try {
-      await api.setApiKey(provider, key)
-      setEditing(false)
+      await api.setApiKey(p.id, value)
       setValue('')
+      onDone()
     } catch (e) {
       setError(message(e))
     } finally {
@@ -139,70 +331,48 @@ function CloudSetup({ provider, status, onToggle }: { provider: CloudProvider; s
   }
 
   return (
-    <div className="space-y-3">
-      {showForm ? (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (value.trim()) void store(value)
-          }}
-          className="space-y-2"
-        >
-          <div className="flex gap-2">
-            <input
-              ref={input}
-              type="password"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder={info.placeholder}
-              aria-label={`${info.name} API key`}
-              autoComplete="off"
-              spellCheck={false}
-              disabled={!canStoreKey || busy}
-              className="field min-w-0 flex-1 font-mono text-[13px]"
-            />
-            <button type="submit" disabled={!value.trim() || busy || !canStoreKey} className="btn-primary">
-              {busy ? 'Saving…' : 'Save'}
-            </button>
-            {keyHint && (
-              <button type="button" onClick={() => (setEditing(false), setValue(''), setError(null))} className="btn">
-                Cancel
-              </button>
-            )}
-          </div>
-          <p className="text-[12px] leading-snug text-ink-faint">
-            {canStoreKey ? (
-              <>
-                Create one at{' '}
-                <a href={info.console} target="_blank" rel="noreferrer" className="text-accent hover:underline">
-                  {info.consoleName}
-                </a>
-                . It's kept encrypted in your Mac's keychain and only ever sent to {info.company}.
-              </>
-            ) : (
-              'This Mac’s keychain isn’t available here, so a key can’t be stored safely.'
-            )}
-          </p>
-        </form>
-      ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-ui bg-pane-sunk px-2.5 py-1 font-mono text-[12.5px] text-ink-soft" aria-label={`Stored ${info.name} key`}>
-            {keyHint}
-          </span>
-          <button onClick={() => setEditing(true)} className="btn">
-            Replace
-          </button>
-          <button onClick={() => void store(null)} disabled={busy} className="btn hover:text-danger">
-            Remove
-          </button>
-          <span className="ml-auto flex items-center gap-3">
-            <Switch label={`Use ${info.name}`} checked={status.settings[provider].enabled} onChange={onToggle} />
-          </span>
-        </div>
-      )}
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (value.trim()) void store()
+      }}
+      className="space-y-2"
+    >
+      <div className="flex gap-2">
+        <input
+          ref={input}
+          type="password"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={p.keyPlaceholder}
+          aria-label={`${p.name} API key`}
+          autoComplete="off"
+          spellCheck={false}
+          disabled={!canStoreKey || busy}
+          className="field min-w-0 flex-1 font-mono text-[13px]"
+        />
+        <button type="submit" disabled={!value.trim() || busy || !canStoreKey} className="btn-primary">
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        <button type="button" onClick={onDone} className="btn">
+          Cancel
+        </button>
+      </div>
       {error && <p className="text-[12.5px] text-danger">{error}</p>}
-      {keyHint && !editing && <ConnectionTest engine={provider} disabled={!status.settings[provider].enabled} />}
-    </div>
+      <p className="text-[12px] leading-snug text-ink-faint">
+        {canStoreKey ? (
+          <>
+            Create one at{' '}
+            <a href={p.keyUrl} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+              {new URL(p.keyUrl).host}
+            </a>
+            . It's kept encrypted in your Mac's keychain and only ever sent to {p.company}.
+          </>
+        ) : (
+          'This Mac’s keychain isn’t available here, so a key can’t be stored safely.'
+        )}
+      </p>
+    </form>
   )
 }
 
@@ -293,7 +463,7 @@ function LocalSetup({ status, save }: { status: AiStatus; save: (change: (s: AiS
   )
 }
 
-function ConnectionTest({ engine, disabled }: { engine: CloudProvider | 'local'; disabled?: boolean }) {
+function ConnectionTest({ engine, disabled }: { engine: ProviderId | 'local'; disabled?: boolean }) {
   const [result, setResult] = useState<AiTestResult | null>(null)
   const [busy, setBusy] = useState(false)
   const run = async () => {
@@ -326,24 +496,9 @@ function Tasks({ status, save }: { status: AiStatus; save: (change: (s: AiSettin
   const names = modelNames(status)
   const set = (id: AiTask, patch: Partial<NonNullable<AiSettings['tasks'][AiTask]>>) =>
     save((s) => ({ ...s, tasks: { ...s.tasks, [id]: { enabled: true, engine: 'auto', ...s.tasks[id], ...patch } } }))
-  const bothClouds = !!status.keys.claude.hint && !!status.keys.openai.hint
 
   return (
     <>
-      {bothClouds && (
-        <label className="mb-3 flex items-center gap-2 text-[13px] text-ink-soft">
-          Automatic tasks use
-          <select
-            value={status.settings.preferredCloud}
-            onChange={(e) => save((s) => ({ ...s, preferredCloud: e.target.value as CloudProvider }))}
-            aria-label="Cloud for automatic tasks"
-            className="field py-1 text-[12.5px]"
-          >
-            <option value="claude">Claude</option>
-            <option value="openai">OpenAI</option>
-          </select>
-        </label>
-      )}
       <table className="w-full text-[13px]">
         <thead className="sr-only">
           <tr>
@@ -368,15 +523,21 @@ function Tasks({ status, save }: { status: AiStatus; save: (change: (s: AiSettin
                   <div className="text-[12px] text-ink-faint">{runsOn(t.runsOn, names)}</div>
                 </td>
                 <td className="py-2.5 pr-2 text-right whitespace-nowrap">
-                  <select value={engine} onChange={(e) => set(t.id, { engine: e.target.value as 'auto' | CloudProvider | 'local' })} aria-label={`${t.label}: engine`} disabled={!enabled} className="field py-1 text-[12.5px]">
+                  <select value={engine} onChange={(e) => set(t.id, { engine: e.target.value as 'auto' | ProviderId | 'local' })} aria-label={`${t.label}: engine`} disabled={!enabled} className="field py-1 text-[12.5px]">
                     <option value="auto">Automatic</option>
-                    <option value="claude">Claude</option>
-                    <option value="openai">OpenAI</option>
+                    {/* Connected providers, and whichever this task is pinned to even if it isn't. */}
+                    {status.providers
+                      .filter((p) => p.hint || p.id === engine)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
                     <option value="local">Local model</option>
                   </select>{' '}
                   {models.length > 0 && (
                     <select value={model} onChange={(e) => set(t.id, { model: e.target.value || undefined })} aria-label={`${t.label}: model`} disabled={!enabled} className="field py-1 text-[12.5px]">
-                      <option value="">Default</option>
+                      <option value="">{`${names.get(status.providers.find((p) => p.id === cloud)?.models[t.tier] ?? '') ?? ''} (default)`}</option>
                       {models.map((m) => (
                         <option key={m.id} value={m.id}>
                           {names.get(m.id)} · ${m.price.input}/${m.price.output}

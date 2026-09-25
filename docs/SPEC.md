@@ -42,7 +42,7 @@ through the official HEY CLI (`hey`), so all changes are visible in every HEY cl
 | Platform | Desktop app, Electron + React + TypeScript, Mac first, then Windows/Linux | Decided |
 | Hosted web app | Rejected: would hold users' HEY credentials and mail on our servers; recurring costs | Decided |
 | Localhost web app | Used for development only (same core runs in a browser), not the shipped product | Decided |
-| AI provider | User's choice: Claude API key, OpenAI API key, local model, or mixed (a cloud plus local) | Decided |
+| AI provider | User's choice among cloud providers (Claude, OpenAI, Grok; more by adding a registry entry), a local model, or mixed | Decided |
 | Claude subscription | Cannot power in-app features (Anthropic policy); supported via MCP server instead | Decided |
 | Autonomy | Suggestions + user-approved rules | Decided |
 | Auto-drafts location | Local until accepted; saved to HEY only when the user accepts | Decided |
@@ -115,8 +115,15 @@ Providers via AI SDK so they are swappable:
 |---|---|---|
 | Claude | User's Anthropic API key | Best quality. Key stored in OS keychain (Electron safeStorage). |
 | Local | Ollama / LM Studio (OpenAI-compatible endpoint) | Free, private, lower quality. App checks the model is present. |
-| OpenAI | User's OpenAI API key | GPT-6 Luna for quick tasks, GPT-6 Sol for the rest. Key in the keychain, like Claude's. |
-| Mixed (default when both set) | Local for high-volume tasks, the cloud (Claude or OpenAI) for reasoning | Cheapest good option. With both cloud keys, the user picks which runs automatic tasks. |
+| OpenAI | User's OpenAI API key | GPT-6 Luna for quick tasks, GPT-6 Sol for the rest. |
+| Grok | User's xAI API key | Grok 4.3 for quick tasks, Grok 4.7 for the rest. |
+| Mixed (default when both set) | Local for high-volume tasks, the cloud for reasoning | Cheapest good option. |
+
+Cloud providers live in one registry (`packages/core/src/ai/providers.ts`): key format, key
+URL, how to connect, models with list prices, default quick/main models. Settings lists the
+connected ones in priority order (automatic tasks use the first that's on) with "Add
+provider"; each can change its models, be turned off, re-keyed or removed. Adding a
+provider is a registry entry plus checking its prices on its own site.
 
 Task routing (each task has a default tier the user can override):
 

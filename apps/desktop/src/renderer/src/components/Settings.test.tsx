@@ -2,57 +2,72 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AiSettings, AiStatus, AiTestResult, ApiEvent, CloudProvider } from '@shared/api'
+import type { AiSettings, AiStatus, AiTestResult, ApiEvent, ProviderId } from '@shared/api'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 /** A stand-in for the main process: holds the settings and key, and says what changed. */
+const REGISTRY = [
+  { id: 'claude', name: 'Claude', company: 'Anthropic', blurb: 'Anthropic’s models.', keyUrl: 'https://console.anthropic.com/settings/keys', keyPlaceholder: 'sk-ant-…', prefix: 'sk-ant-', defaults: { cheap: 'claude-haiku-4-5', quality: 'claude-sonnet-5' } },
+  { id: 'openai', name: 'OpenAI', company: 'OpenAI', blurb: 'OpenAI’s GPT models.', keyUrl: 'https://platform.openai.com/api-keys', keyPlaceholder: 'sk-…', prefix: 'sk-', defaults: { cheap: 'gpt-6-luna', quality: 'gpt-6-sol' } },
+  { id: 'grok', name: 'Grok', company: 'xAI', blurb: 'xAI’s Grok models.', keyUrl: 'https://console.x.ai', keyPlaceholder: 'xai-…', prefix: 'xai-', defaults: { cheap: 'grok-4.3', quality: 'grok-4.7' } },
+] as const
+const MODELS: AiStatus['models'] = [
+  { id: 'claude-haiku-4-5', provider: 'claude', name: 'Claude Haiku 4.5', price: { input: 1, output: 5 } },
+  { id: 'claude-sonnet-5', provider: 'claude', name: 'Claude Sonnet 5', price: { input: 2, output: 10 } },
+  { id: 'claude-fable-5-1', provider: 'claude', name: 'Claude Fable 5.1', price: { input: 10, output: 50 } },
+  { id: 'gpt-6-luna', provider: 'openai', name: 'GPT-6 Luna', price: { input: 0.1, output: 0.5 } },
+  { id: 'gpt-6-sol', provider: 'openai', name: 'GPT-6 Sol', price: { input: 2, output: 10 } },
+  { id: 'grok-4.3', provider: 'grok', name: 'Grok 4.3', price: { input: 1.25, output: 2.5 } },
+  { id: 'grok-4.7', provider: 'grok', name: 'Grok 4.7', price: { input: 2, output: 6 } },
+]
+
+/** A stand-in for the main process: holds the settings and keys, and says what changed. */
 function fakeBackend() {
   const listeners = new Set<(e: ApiEvent) => void>()
   const state = {
     settings: {
-      claude: { enabled: true },
-      openai: { enabled: true },
-      preferredCloud: 'claude',
+      providers: {},
+      order: ['claude', 'openai', 'grok'],
       local: { enabled: false, baseUrl: 'http://localhost:11434/v1', model: '' },
       tasks: {},
       monthlyBudgetUsd: 5,
     } as AiSettings,
-    keys: { claude: null, openai: null } as Record<CloudProvider, string | null>,
+    keys: { claude: null, openai: null, grok: null } as Record<ProviderId, string | null>,
     spent: 0.42,
     localModels: ['llama3.2', 'qwen3:8b'] as string[] | Error,
-    test: { ok: true, engine: 'claude', model: 'claude-haiku-4-5-20251001', ms: 812, reply: 'OK', costUsd: 0.0001 } as AiTestResult,
+    test: { ok: true, engine: 'claude', model: 'claude-haiku-4-5', ms: 812, reply: 'OK', costUsd: 0.0001 } as AiTestResult,
   }
-  const DEFAULTS = { claude: { cheap: 'claude-haiku-4-5-20251001', quality: 'claude-sonnet-5' }, openai: { cheap: 'gpt-6-luna', quality: 'gpt-6-sol' } } as const
+  const def = (id: ProviderId) => REGISTRY.find((r) => r.id === id)!
+  const on = (id: ProviderId) => state.settings.providers[id]?.enabled ?? true
+  const modelFor = (id: ProviderId, tier: 'cheap' | 'quality') => state.settings.providers[id]?.models?.[tier] ?? def(id).defaults[tier]
   const status = (): AiStatus => {
     const s = state.settings
-    const ready = (['claude', 'openai'] as const).filter((p) => state.keys[p] && s[p].enabled).sort((a) => (a === s.preferredCloud ? -1 : 1))
+    const ready = s.order.filter((id) => state.keys[id] && on(id))
     const cloud = ready[0] ?? null
     const local = s.local.enabled && !!s.local.model
     const runsOn = (tier: 'cheap' | 'quality') =>
-      cloud ? { engine: cloud, model: DEFAULTS[cloud][tier] } : local ? { engine: 'local' as const, model: s.local.model } : { engine: null, reason: 'Set up Claude, OpenAI or a local model in Settings.' }
-    const hint = (k: string | null) => (k ? `${k.slice(0, k.startsWith('sk-ant-') ? 7 : 3)}…${k.slice(-4)}` : null)
+      cloud ? { engine: cloud, model: modelFor(cloud, tier) } : local ? { engine: 'local' as const, model: s.local.model } : { engine: null, reason: 'Add an AI provider or a local model in Settings.' }
     return {
       settings: structuredClone(s),
       mode: { cloud, local },
-      keys: { claude: { hint: hint(state.keys.claude) }, openai: { hint: hint(state.keys.openai) } },
+      providers: s.order.map((id) => {
+        const { prefix: _p, defaults: _d, ...info } = def(id)
+        const k = state.keys[id]
+        return { ...info, hint: k ? `${def(id).prefix}…${k.slice(-4)}` : null, enabled: on(id), models: { cheap: modelFor(id, 'cheap'), quality: modelFor(id, 'quality') } }
+      }),
       canStoreKey: true,
       tasks: [
         { id: 'summary', label: 'Thread summaries', tier: 'cheap', runsOn: runsOn('cheap') },
         { id: 'draft', label: 'Reply drafts in your voice', tier: 'quality', runsOn: runsOn('quality') },
       ],
-      models: [
-        { id: 'claude-haiku-4-5-20251001', provider: 'claude', name: 'Claude Haiku 4.5', price: { input: 1, output: 5 } },
-        { id: 'claude-sonnet-5', provider: 'claude', name: 'Claude Sonnet 5', price: { input: 2, output: 10 } },
-        { id: 'gpt-6-luna', provider: 'openai', name: 'GPT-6 Luna', price: { input: 0.1, output: 0.5 } },
-        { id: 'gpt-6-sol', provider: 'openai', name: 'GPT-6 Sol', price: { input: 2, output: 10 } },
-      ],
+      models: MODELS,
       month: {
         since: new Date(2026, 8, 1).toISOString(),
         spentUsd: state.spent,
         budgetUsd: s.monthlyBudgetUsd,
         calls: 3,
-        byTask: [{ task: 'summary', engine: 'claude', model: 'claude-haiku-4-5-20251001', calls: 3, input: 12_300, output: 812, costUsd: 0.42 }],
+        byTask: [{ task: 'summary', engine: 'claude', model: 'claude-haiku-4-5', calls: 3, input: 12_300, output: 812, costUsd: 0.42 }],
       },
     }
   }
@@ -61,9 +76,9 @@ function fakeBackend() {
   const methods: Record<string, (...a: never[]) => unknown> = {
     aiStatus: () => status(),
     setAiSettings: (s: AiSettings) => ((state.settings = s), changed(), status()),
-    setApiKey: (provider: CloudProvider, k: string | null) => {
-      if (k !== null && provider === 'claude' && !k.startsWith('sk-ant-')) throw new Error('That doesn’t look like an Anthropic API key (they start with “sk-ant-”).')
-      if (k !== null && provider === 'openai' && (!k.startsWith('sk-') || k.startsWith('sk-ant-'))) throw new Error('That doesn’t look like an OpenAI API key (they start with “sk-”).')
+    setApiKey: (provider: ProviderId, k: string | null) => {
+      if (k !== null && !k.startsWith(def(provider).prefix)) throw new Error(`That doesn’t look like an ${def(provider).company} API key.`)
+      if (k !== null && provider !== 'claude' && k.startsWith('sk-ant-')) throw new Error(`That looks like a Claude key, not ${provider === 'openai' ? 'an' : 'a'} ${def(provider).name} one.`)
       state.keys[provider] = k
       changed()
       return status()
@@ -149,94 +164,111 @@ async function key(el: Element, k: string) {
   await flush()
 }
 
-describe('Settings: Claude', () => {
-  it('asks for a key when none is stored, saves it, then shows only a hint', async () => {
+const CLAUDE_KEY = 'sk-ant-api03-old-old-old-old-ABCD'
+const rows = () => [...host.querySelectorAll('[aria-label="Connected providers"] > li')].map((li) => li.getAttribute('aria-label'))
+const row = (name: string) => host.querySelector<HTMLElement>(`[aria-label="Connected providers"] > li[aria-label="${name}"]`)!
+const within = (el: Element, name: string) => [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === name)!
+/** Opens a provider's ⋯ menu and picks an item. */
+async function menu(name: string, item: string) {
+  await click(byLabel(`${name} options`))
+  await click([...host.querySelectorAll('[role=menuitem]')].find((i) => i.textContent === item)!)
+}
+
+describe('Settings: providers', () => {
+  it('starts with none connected, and adds one from the list with its key', async () => {
     await open()
-    expect(text()).toContain('AI is off until you add an API key')
-    const input = byLabel<HTMLInputElement>('Claude API key')
+    expect(text()).toContain('AI is off until you add a provider')
+    expect(text()).toContain('No provider yet.')
+    await click(button('+ Add provider'))
+    const choices = [...host.querySelectorAll('[aria-label="Choose a provider"] button')].map((b) => b.textContent)
+    expect(choices).toEqual(['ClaudeAnthropic’s models.', 'OpenAIOpenAI’s GPT models.', 'GrokxAI’s Grok models.', 'Cancel'])
+    await click([...host.querySelectorAll('[aria-label="Choose a provider"] button')][2]!)
+    expect(text()).toContain('Add Grok')
+    const input = byLabel<HTMLInputElement>('Grok API key')
     expect(input.type).toBe('password')
-    expect(button('Save').disabled).toBe(true)
-    await typeInto(input, 'sk-ant-api03-secretsecretsecret-WXYZ')
+    expect(document.activeElement).toBe(input)
+    expect(host.querySelector('a[href="https://console.x.ai"]')?.textContent).toBe('console.x.ai')
+    await typeInto(input, 'xai-secretsecretsecretsecret-MNOP')
     await click(button('Save'))
-    expect(backend.called('setApiKey')).toEqual([['claude', 'sk-ant-api03-secretsecretsecret-WXYZ']])
-    expect(byLabel('Stored Claude key').textContent).toBe('sk-ant-…WXYZ')
-    expect(host.querySelector('[aria-label="Claude API key"]')).toBeNull()
+    expect(backend.called('setApiKey')).toEqual([['grok', 'xai-secretsecretsecretsecret-MNOP']])
+    expect(rows()).toEqual(['Grok'])
+    expect(byLabel('Stored Grok key').textContent).toBe('xai-…MNOP')
     expect(text()).not.toContain('secretsecret')
-    expect(text()).toContain('Everything runs on Claude.')
+    expect(text()).toContain('Grok 4.3 for quick tasks · Grok 4.7 for the rest')
+    expect(text()).toContain('Everything runs on Grok.')
+    // Only the ones not yet connected are offered next.
+    await click(button('+ Add provider'))
+    expect([...host.querySelectorAll('[aria-label="Choose a provider"] button')].map((b) => b.textContent?.slice(0, 6))).toEqual(['Claude', 'OpenAI', 'Cancel'])
   })
 
   it('shows why a key was refused, and keeps what was typed', async () => {
     await open()
-    await typeInto(byLabel<HTMLInputElement>('Claude API key'), 'sk-proj-nope')
+    await click(button('+ Add provider'))
+    await click([...host.querySelectorAll('[aria-label="Choose a provider"] button')][1]!)
+    await typeInto(byLabel<HTMLInputElement>('OpenAI API key'), CLAUDE_KEY)
     await click(button('Save'))
-    expect(text()).toContain('doesn’t look like an Anthropic API key')
-    expect(byLabel<HTMLInputElement>('Claude API key').value).toBe('sk-proj-nope')
+    expect(text()).toContain('That looks like a Claude key, not an OpenAI one.')
+    expect(byLabel<HTMLInputElement>('OpenAI API key').value).toBe(CLAUDE_KEY)
+    expect(rows()).toEqual([])
   })
 
-  it('replaces or removes a stored key, and turns Claude off without forgetting it', async () => {
-    backend.state.keys.claude = 'sk-ant-api03-old-old-old-old-ABCD'
+  it('orders the connected providers, and automatic tasks follow the first', async () => {
+    backend.state.keys = { claude: CLAUDE_KEY, openai: 'sk-proj-old-old-old-old-EFGH', grok: 'xai-old-old-old-old-IJKL' }
     await open()
-    await click(button('Replace'))
+    expect(rows()).toEqual(['Claude', 'OpenAI', 'Grok'])
+    expect(byLabel<HTMLButtonElement>('Move Claude up').disabled).toBe(true)
+    await click(byLabel('Move Grok up'))
+    expect(backend.called('setAiSettings').at(-1)![0]).toMatchObject({ order: ['claude', 'grok', 'openai'] })
+    expect(rows()).toEqual(['Claude', 'Grok', 'OpenAI'])
+    await click(byLabel('Move Claude down'))
+    expect(rows()).toEqual(['Grok', 'Claude', 'OpenAI'])
+    expect(text()).toContain('Everything runs on Grok.')
+  })
+
+  it('moves among connected providers only, keeping the rest of the order', async () => {
+    backend.state.keys = { claude: CLAUDE_KEY, openai: null, grok: 'xai-old-old-old-old-IJKL' }
+    await open()
+    await click(byLabel('Move Grok up'))
+    // OpenAI (not connected) keeps its place between them.
+    expect(backend.called('setAiSettings').at(-1)![0]).toMatchObject({ order: ['grok', 'openai', 'claude'] })
+  })
+
+  it('tests a provider and says how it went', async () => {
+    backend.state.keys.claude = CLAUDE_KEY
+    await open()
+    await click(within(row('Claude'), 'Test'))
+    expect(backend.called('testAi')).toEqual([['claude']])
+    expect(row('Claude').textContent).toContain('Haiku 4.5 answered in 0.8 s · $0.0001')
+    backend.state.test = { ok: false, code: 'auth', message: 'Claude didn’t accept the API key.' }
+    await click(within(row('Claude'), 'Test'))
+    expect(row('Claude').textContent).toContain('Claude didn’t accept the API key.')
+  })
+
+  it('changes a provider’s models, turns it off and on, replaces and removes its key', async () => {
+    backend.state.keys.claude = CLAUDE_KEY
+    await open()
+    await menu('Claude', 'Change models…')
+    await typeInto(byLabel<HTMLSelectElement>('Claude: model for the rest'), 'claude-fable-5-1')
+    expect(backend.called('setAiSettings').at(-1)![0]).toMatchObject({ providers: { claude: { enabled: true, models: { quality: 'claude-fable-5-1' } } } })
+    expect(row('Claude').textContent).toContain('Haiku 4.5 for quick tasks · Fable 5.1 for the rest')
+
+    await menu('Claude', 'Turn off')
+    expect(backend.called('setAiSettings').at(-1)![0]).toMatchObject({ providers: { claude: { enabled: false, models: { quality: 'claude-fable-5-1' } } } })
+    expect(row('Claude').textContent).toContain('off')
+    expect(within(row('Claude'), 'Test').disabled).toBe(true)
+    await menu('Claude', 'Turn on')
+    expect(backend.called('setAiSettings').at(-1)![0]).toMatchObject({ providers: { claude: { enabled: true } } })
+
+    await menu('Claude', 'Replace key…')
     expect(document.activeElement).toBe(byLabel('Claude API key'))
-    await click(button('Cancel'))
-    await click(sw('Use Claude'))
-    expect(backend.called('setAiSettings').at(-1)![0]).toMatchObject({ claude: { enabled: false } })
-    await click(button('Remove'))
+    await typeInto(byLabel<HTMLInputElement>('Claude API key'), 'sk-ant-api03-new-new-new-new-WXYZ')
+    await click(within(row('Claude'), 'Save'))
+    expect(backend.called('setApiKey').at(-1)).toEqual(['claude', 'sk-ant-api03-new-new-new-new-WXYZ'])
+    expect(byLabel('Stored Claude key').textContent).toBe('sk-ant-…WXYZ')
+
+    await menu('Claude', 'Remove')
     expect(backend.called('setApiKey').at(-1)).toEqual(['claude', null])
-    expect(byLabel('Claude API key')).not.toBeNull()
-  })
-
-  it('tests the connection and says how it went', async () => {
-    backend.state.keys.claude = 'sk-ant-api03-old-old-old-old-ABCD'
-    await open()
-    await click(button('Test connection'))
-    expect(text()).toContain('claude-haiku-4-5-20251001 answered in 0.8 s · $0.0001')
-    backend.state.test = { ok: false, code: 'auth', message: 'Claude didn’t accept the API key. Check it in Settings.' }
-    await click(button('Test connection'))
-    expect(text()).toContain('Claude didn’t accept the API key')
-  })
-})
-
-describe('Settings: OpenAI', () => {
-  it('takes its own key, beside Claude’s, and runs everything on it when it’s the only one', async () => {
-    await open()
-    await typeInto(byLabel<HTMLInputElement>('OpenAI API key'), 'sk-proj-abcdefabcdefabcdef-QRST')
-    const saves = [...host.querySelectorAll('button')].filter((b) => b.textContent === 'Save')
-    expect(saves).toHaveLength(2) // one per provider
-    await click(saves[1]!)
-    expect(backend.called('setApiKey')).toEqual([['openai', 'sk-proj-abcdefabcdefabcdef-QRST']])
-    expect(byLabel('Stored OpenAI key').textContent).toBe('sk-…QRST')
-    expect(byLabel('Claude API key')).not.toBeNull() // Claude still asks for its own
-    expect(text()).toContain('Everything runs on OpenAI.')
-    expect(text()).toContain('GPT-6 Luna') // what summaries run on
-  })
-
-  it('refuses an Anthropic key pasted into OpenAI’s field', async () => {
-    await open()
-    await typeInto(byLabel<HTMLInputElement>('OpenAI API key'), 'sk-ant-api03-wrongplace-wrongplace')
-    await click([...host.querySelectorAll('button')].filter((b) => b.textContent === 'Save')[1]!)
-    expect(text()).toContain('doesn’t look like an OpenAI API key')
-    expect(backend.state.keys.openai).toBeNull()
-  })
-
-  it('with both keys, asks which cloud runs automatic tasks, and offers that cloud’s models', async () => {
-    backend.state.keys = { claude: 'sk-ant-api03-old-old-old-old-ABCD', openai: 'sk-proj-old-old-old-old-EFGH' }
-    await open()
-    const models = () => [...byLabel<HTMLSelectElement>('Reply drafts in your voice: model').options].map((o) => o.textContent)
-    expect(models()).toEqual(['Default', 'Haiku 4.5 · $1/$5', 'Sonnet 5 · $2/$10'])
-    await typeInto(byLabel<HTMLSelectElement>('Cloud for automatic tasks'), 'openai')
-    expect(backend.called('setAiSettings').at(-1)![0]).toMatchObject({ preferredCloud: 'openai' })
-    expect(text()).toContain('Everything runs on OpenAI.')
-    expect(models()).toEqual(['Default', 'GPT-6 Luna · $0.1/$0.5', 'GPT-6 Sol · $2/$10'])
-    // A task pinned to Claude keeps offering Claude's models.
-    await typeInto(byLabel<HTMLSelectElement>('Thread summaries: engine'), 'claude')
-    expect([...byLabel<HTMLSelectElement>('Thread summaries: model').options].map((o) => o.value)).toEqual(['', 'claude-haiku-4-5-20251001', 'claude-sonnet-5'])
-  })
-
-  it('hides the chooser with only one cloud', async () => {
-    backend.state.keys.claude = 'sk-ant-api03-old-old-old-old-ABCD'
-    await open()
-    expect(host.querySelector('[aria-label="Cloud for automatic tasks"]')).toBeNull()
+    expect(rows()).toEqual([])
   })
 })
 
@@ -274,12 +306,17 @@ describe('Settings: local model', () => {
 })
 
 describe('Settings: tasks, budget and usage', () => {
-  it('pins a task to an engine or model, or turns it off', async () => {
-    backend.state.keys.claude = 'sk-ant-api03-old-old-old-old-ABCD'
+  it('pins a task to a connected provider or model, or turns it off', async () => {
+    backend.state.keys = { claude: CLAUDE_KEY, openai: null, grok: 'xai-old-old-old-old-IJKL' }
     await open()
     expect(text()).toContain('Haiku 4.5') // what summaries run on
-    await typeInto(byLabel<HTMLSelectElement>('Reply drafts in your voice: engine'), 'local')
-    expect(backend.called('setAiSettings').at(-1)![0]).toMatchObject({ tasks: { draft: { engine: 'local', enabled: true } } })
+    const engines = [...byLabel<HTMLSelectElement>('Reply drafts in your voice: engine').options].map((o) => o.textContent)
+    expect(engines).toEqual(['Automatic', 'Claude', 'Grok', 'Local model']) // OpenAI isn't connected
+    const models = () => [...byLabel<HTMLSelectElement>('Reply drafts in your voice: model').options].map((o) => o.textContent)
+    expect(models()).toEqual(['Sonnet 5 (default)', 'Haiku 4.5 · $1/$5', 'Sonnet 5 · $2/$10', 'Fable 5.1 · $10/$50'])
+    await typeInto(byLabel<HTMLSelectElement>('Reply drafts in your voice: engine'), 'grok')
+    expect(backend.called('setAiSettings').at(-1)![0]).toMatchObject({ tasks: { draft: { engine: 'grok', enabled: true } } })
+    expect(models()).toEqual(['Grok 4.7 (default)', 'Grok 4.3 · $1.25/$2.5', 'Grok 4.7 · $2/$6'])
     await typeInto(byLabel<HTMLSelectElement>('Thread summaries: model'), 'claude-sonnet-5')
     expect(backend.called('setAiSettings').at(-1)![0]).toMatchObject({ tasks: { summary: { model: 'claude-sonnet-5' } } })
     await click(sw('Thread summaries: on'))

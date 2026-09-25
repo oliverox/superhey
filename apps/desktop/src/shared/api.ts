@@ -17,22 +17,34 @@ import type {
   ThreadView,
   AiSettings,
   AiTask,
-  CloudProvider,
+  ProviderId,
 } from '@myhey/core'
 
-export type { OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, SyncStatus, ThreadView, AiSettings, AiTask, CloudProvider }
+export type { OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId }
 
 /** Everything Settings shows about AI. API keys themselves never leave the main process. */
 export interface AiStatus {
   settings: AiSettings
-  /** Which cloud runs automatic tasks (if any), and whether a local model takes the quick ones. */
-  mode: { cloud: CloudProvider | null; local: boolean }
-  /** "sk-ant-…abcd" for each provider with a key stored. */
-  keys: Record<CloudProvider, { hint: string | null }>
+  /** Which provider runs automatic tasks (if any), and whether a local model takes the quick ones. */
+  mode: { cloud: ProviderId | null; local: boolean }
+  /** Every provider the app knows, in priority order. Connected: a key is stored (`hint`). */
+  providers: Array<{
+    id: ProviderId
+    name: string
+    company: string
+    blurb: string
+    keyUrl: string
+    keyPlaceholder: string
+    /** "sk-ant-…abcd" when a key is stored. */
+    hint: string | null
+    enabled: boolean
+    /** The models it uses for quick and main tasks. */
+    models: { cheap: string; quality: string }
+  }>
   /** Whether keys can be stored safely here (the OS keychain is available). */
   canStoreKey: boolean
-  tasks: Array<{ id: AiTask; label: string; tier: 'cheap' | 'quality'; runsOn: { engine: CloudProvider | 'local'; model: string } | { engine: null; reason: string } }>
-  models: Array<{ id: string; provider: CloudProvider; name: string; price: { input: number; output: number } }>
+  tasks: Array<{ id: AiTask; label: string; tier: 'cheap' | 'quality'; runsOn: { engine: ProviderId | 'local'; model: string } | { engine: null; reason: string } }>
+  models: Array<{ id: string; provider: ProviderId; name: string; price: { input: number; output: number } }>
   month: {
     since: string
     spentUsd: number
@@ -43,7 +55,7 @@ export interface AiStatus {
 }
 
 export type AiTestResult =
-  | { ok: true; engine: CloudProvider | 'local'; model: string; ms: number; reply: string; costUsd: number }
+  | { ok: true; engine: ProviderId | 'local'; model: string; ms: number; reply: string; costUsd: number }
   | { ok: false; code: string; message: string }
 
 export type SetupProblem =
@@ -102,11 +114,11 @@ export interface Api {
   /** Replaces the AI settings; anything invalid is refused. */
   setAiSettings(settings: AiSettings): Promise<AiStatus>
   /** Stores (or with null, forgets) a provider's API key in the keychain. */
-  setApiKey(provider: CloudProvider, key: string | null): Promise<AiStatus>
+  setApiKey(provider: ProviderId, key: string | null): Promise<AiStatus>
   /** The models a local server offers (Ollama, LM Studio). */
   localModels(baseUrl: string): Promise<string[]>
   /** A tiny real call to check an engine works; counted in the usage meter. */
-  testAi(engine: CloudProvider | 'local'): Promise<AiTestResult>
+  testAi(engine: ProviderId | 'local'): Promise<AiTestResult>
 }
 
 export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>

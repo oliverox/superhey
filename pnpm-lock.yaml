@@ -88,6 +88,9 @@ importers:
       '@ai-sdk/openai-compatible':
         specifier: ^3.0.55
         version: 3.0.55(zod@4.6.5)
+      '@ai-sdk/xai':
+        specifier: ^5.0.8
+        version: 5.0.8(zod@4.6.5)
       ai:
         specifier: ^7.0.114
         version: 7.0.114(zod@4.6.5)
@@ -143,6 +146,12 @@ packages:
   '@ai-sdk/provider@4.0.18':
     resolution: {integrity: sha512-+GZJIgz1jk86pwEbb3f1BD2bdoSKyWE4Jg4YUc7NMnMozbWemSKYZcw2F4nMaO5qwsL5A8RmioAKW81YktRpIQ==}
     engines: {node: '>=22'}
+
+  '@ai-sdk/xai@5.0.8':
+    resolution: {integrity: sha512-UA8lFVMrRenNnP78SUdybRr/bu7yqshiw8qq64Ywhs7XZWgkQO3usw7UB2sLvrgBNZzNvbOsif4kakQ+Kj2HrA==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
 
   '@asamuzakjp/css-color@7.0.1':
     resolution: {integrity: sha512-C9duntabagkBZ1LebM7FKmphR4Q1pBclLxVbZETQV0akkFjV0ooFxo8FlvAQyKj9F6l8rEnmidgcTlpyxFYizg==}
@@ -1987,6 +1996,12 @@ snapshots:
   '@ai-sdk/provider@4.0.18':
     dependencies:
       json-schema: 0.4.0
+
+  '@ai-sdk/xai@5.0.8(zod@4.6.5)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.18
+      '@ai-sdk/provider-utils': 5.0.47(zod@4.6.5)
+      zod: 4.6.5
 
   '@asamuzakjp/css-color@7.0.1':
     dependencies:

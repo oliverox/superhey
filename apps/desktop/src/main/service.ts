@@ -10,9 +10,14 @@ import {
   AiError,
   AiSettings,
   aiMode,
+  checkKey,
   CLOUD_MODELS,
-  CLOUD_PROVIDERS,
-  type CloudProvider,
+  keyHint,
+  PROVIDER_IDS,
+  PROVIDERS,
+  providerModel,
+  providerSettings,
+  type ProviderId,
   listLocalModels,
   readAiSettings,
   route,
@@ -34,13 +39,6 @@ export interface SecretStore {
   available(): boolean
   get(name: string): string | null
   set(name: string, value: string | null): void
-}
-
-/** Where each provider's key is kept, and what one looks like. */
-const KEYS: Record<CloudProvider, { name: string; pattern: RegExp; hint: string }> = {
-  claude: { name: 'anthropic-api-key', pattern: /^sk-ant-[A-Za-z0-9_-]{20,300}$/, hint: 'That doesn’t look like an Anthropic API key (they start with “sk-ant-”).' },
-  // OpenAI keys start "sk-" (project keys "sk-proj-"); an Anthropic key here is a mistake.
-  openai: { name: 'openai-api-key', pattern: /^sk-(?!ant-)[A-Za-z0-9_-]{20,300}$/, hint: 'That doesn’t look like an OpenAI API key (they start with “sk-”).' },
 }
 
 const BACKFILL_DELAY_MS = 1_000
@@ -233,16 +231,28 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
 
   async aiStatus(): Promise<AiStatus> {
     const s = this.aiSettings
-    const stored = { claude: this.apiKey('claude'), openai: this.apiKey('openai') }
-    const has = { claude: !!stored.claude, openai: !!stored.openai }
+    const stored = Object.fromEntries(PROVIDER_IDS.map((p) => [p, this.apiKey(p)])) as Record<ProviderId, string | null>
+    const has = Object.fromEntries(PROVIDER_IDS.map((p) => [p, !!stored[p]])) as Record<ProviderId, boolean>
     const ai = this.needAi()
     const since = ai.monthStart()
     const byTask = this.need().repo.aiUsageSince(since)
-    const hint = (k: string | null) => (k ? `${k.slice(0, k.startsWith('sk-ant-') ? 7 : 3)}…${k.slice(-4)}` : null)
     return {
       settings: s,
       mode: aiMode(s, has),
-      keys: { claude: { hint: hint(stored.claude) }, openai: { hint: hint(stored.openai) } },
+      providers: s.order.map((id) => {
+        const p = PROVIDERS[id]
+        return {
+          id,
+          name: p.name,
+          company: p.company,
+          blurb: p.blurb,
+          keyUrl: p.keyUrl,
+          keyPlaceholder: p.keyPlaceholder,
+          hint: stored[id] ? keyHint(stored[id]) : null,
+          enabled: providerSettings(s, id).enabled,
+          models: { cheap: providerModel(s, id, 'cheap'), quality: providerModel(s, id, 'quality') },
+        }
+      }),
       canStoreKey: this.opts.secrets?.available() ?? false,
       tasks: AI_TASK_IDS.map((id) => {
         const r = route(s, id, has)
@@ -269,16 +279,11 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
   }
 
   async setApiKey(provider: unknown, key: unknown) {
-    if (!CLOUD_PROVIDERS.includes(provider as CloudProvider)) throw new Error('bad provider')
-    const spec = KEYS[provider as CloudProvider]
+    if (!PROVIDER_IDS.includes(provider as ProviderId)) throw new Error('bad provider')
+    const id = provider as ProviderId
     const secrets = this.opts.secrets
     if (!secrets) throw new Error('Keys can’t be stored in browser dev mode.')
-    if (key === null) secrets.set(spec.name, null)
-    else {
-      const k = typeof key === 'string' ? key.trim() : ''
-      if (!spec.pattern.test(k)) throw new Error(spec.hint)
-      secrets.set(spec.name, k)
-    }
+    secrets.set(PROVIDERS[id].secretName, key === null ? null : checkKey(id, key))
     this.emit('event', { type: 'ai' })
     return this.aiStatus()
   }
@@ -289,10 +294,10 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
   }
 
   async testAi(engine: unknown): Promise<AiTestResult> {
-    if (engine !== 'claude' && engine !== 'openai' && engine !== 'local') throw new Error('bad engine')
+    if (engine !== 'local' && !PROVIDER_IDS.includes(engine as ProviderId)) throw new Error('bad engine')
     try {
       const r = await this.needAi().run({
-        task: `test-${engine}`,
+        task: `test-${engine as ProviderId | 'local'}`,
         system: 'You are checking a connection. Reply with exactly: OK',
         prompt: 'Connection test.',
         maxOutputTokens: 16,
@@ -333,8 +338,8 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
 
   // Internals
 
-  private apiKey(provider: CloudProvider): string | null {
-    return this.opts.secrets?.get(KEYS[provider].name) ?? null
+  private apiKey(provider: ProviderId): string | null {
+    return this.opts.secrets?.get(PROVIDERS[provider].secretName) ?? null
   }
 
   private needAi(): AiClient {
