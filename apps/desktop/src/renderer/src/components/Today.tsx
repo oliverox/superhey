@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { PostingRow, ThreadItem, TodayView, TodoItem } from '@shared/api'
 import { api } from '../api'
-import { clock } from '../format'
 import { stripSubjectPrefixes } from '../mail/forwarded'
-import { withShortcut } from '../shortcuts'
 import { Avatar } from './Avatar'
 
 export type TodayData = TodayView & { screener: number }
@@ -31,7 +29,17 @@ export function todayThreads(t: TodayData | null): PostingRow[] {
  * waiting on. Each item leaves once handled in HEY; "Not now" puts a thread off until it
  * changes.
  */
-export function TodayList({ today, selectedId, onOpen }: { today: TodayData | null; selectedId: number | null; onOpen: (p: PostingRow) => void }) {
+export function TodayList({
+  today,
+  selectedId,
+  onOpen,
+  onGoToBox,
+}: {
+  today: TodayData | null
+  selectedId: number | null
+  onOpen: (p: PostingRow) => void
+  onGoToBox: (boxId: number) => void
+}) {
   const listRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
@@ -39,14 +47,7 @@ export function TodayList({ today, selectedId, onOpen }: { today: TodayData | nu
 
   if (!today) return <p className="px-5 py-10 text-center text-ink-faint">Loading…</p>
   const { due, replyLater, waiting } = today
-  if (today.toHandle === 0) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center px-8 pb-16 text-center">
-        <p className="font-app text-[17px] font-medium text-ink">You’re caught up.</p>
-        <p className="mt-1.5 text-[12.5px] leading-snug text-ink-faint">Nothing due, nothing waiting on your reply, nobody to chase.</p>
-      </div>
-    )
-  }
+  const fresh = today.newSince.boxes
 
   const row = (i: ThreadItem, reason: string) => <ThreadRow key={i.key} item={i} reason={reason} selected={i.posting.id === selectedId} onOpen={() => onOpen(i.posting)} />
   return (
@@ -65,6 +66,26 @@ export function TodayList({ today, selectedId, onOpen }: { today: TodayData | nu
       )}
       {replyLater.length > 0 && <Section title="Reply Later" count={replyLater.length}>{(limit) => replyLater.slice(0, limit).map((i) => row(i, why.replyLater(i)))}</Section>}
       {waiting.length > 0 && <Section title="Waiting on others" count={waiting.length}>{(limit) => waiting.slice(0, limit).map((i) => row(i, why.waiting(i)))}</Section>}
+      {today.toHandle === 0 && (
+        <div className="px-5 pt-10 pb-4 text-center">
+          <p className="font-app text-[16px] font-medium text-ink">You’re caught up.</p>
+          <p className="mt-1 text-[12.5px] text-ink-faint">Nothing due, nothing waiting on your reply, nobody to chase.</p>
+        </div>
+      )}
+      {fresh.length > 0 && (
+        <section aria-label="New">
+          <h2 className="eyebrow px-5 pt-5 pb-1.5">{today.newSince.since ? 'New since you last looked' : 'New today'}</h2>
+          <ul className="flex flex-wrap gap-1.5 px-5">
+            {fresh.map((b) => (
+              <li key={b.boxId}>
+                <button onClick={() => onGoToBox(b.boxId)} className="rounded-ui border border-rule px-2.5 py-1 text-[12.5px] text-ink-soft hover:border-rule-strong hover:text-ink">
+                  {b.name} <span className="font-semibold text-ink tabular-nums">{b.count}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   )
 }
@@ -154,86 +175,20 @@ function TodoRow({ item }: { item: TodoItem }) {
   )
 }
 
-const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long' })
+/** The date for Today's header: "Fri 25 Sep". */
+export const todayLabel = (d = new Date()) => new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).format(d)
 
-/**
- * The reader pane on Today, before a thread is opened: the day at a glance. How much is
- * left, the day's calendar, and what came in since you last looked.
- */
-export function TodayOverview({ today, onGoToBox, onOpenScreener }: { today: TodayData | null; onGoToBox: (boxId: number) => void; onOpenScreener: () => void }) {
-  const now = new Date()
-  const newBoxes = today?.newSince.boxes ?? []
+/** The reader on Today when there's no thread to open: nothing left to handle. */
+export function TodayDone({ toDos }: { toDos: number }) {
   return (
-    <main className="pane flex min-h-0 flex-col bg-pane-alt" aria-label="Today at a glance">
-      <div className="drag h-[52px] shrink-0 border-b border-rule bg-pane" />
-      <div className="scroll min-h-0 flex-1">
-        <div className="mx-auto max-w-[560px] px-10 pt-10 pb-16">
-          <h1 className="rise font-app text-[28px] leading-tight font-semibold tracking-[-0.02em]">{dayFormat.format(now)}</h1>
-          <p className="mt-1 text-[14px] text-ink-soft">
-            {!today ? '…' : today.toHandle === 0 ? 'You’re caught up.' : `${plural(today.toHandle, 'thing')} to handle.`}
-          </p>
-
-          <Block title="Calendar">
-            {!today?.events.length ? (
-              <p className="text-ink-faint">Nothing on the calendar today.</p>
-            ) : (
-              <ul className="space-y-2">
-                {today.events.map((e) => (
-                  <li key={e.key} className="flex gap-4">
-                    <span className="w-[72px] shrink-0 text-right text-[12.5px] text-ink-faint tabular-nums">{e.allDay ? 'All day' : clock(e.startsAt)}</span>
-                    <span className="min-w-0">
-                      <span className="text-ink">{e.title}</span>
-                      {e.location && <span className="block truncate text-[12.5px] text-ink-faint">{e.location}</span>}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Block>
-
-          <Block title={today?.newSince.since ? 'New since you last looked' : 'New today'}>
-            {newBoxes.length === 0 && !today?.screener ? (
-              <p className="text-ink-faint">Nothing new.</p>
-            ) : (
-              <ul className="space-y-0.5">
-                {newBoxes.map((b) => (
-                  <li key={b.boxId}>
-                    <OverviewLink onClick={() => onGoToBox(b.boxId)} label={b.name} value={`${b.count} new`} />
-                  </li>
-                ))}
-                {!!today?.screener && (
-                  <li>
-                    <OverviewLink onClick={onOpenScreener} label="The Screener" value={`${plural(today.screener, 'first-time sender')} waiting`} title={withShortcut('Open The Screener', 'screener')} />
-                  </li>
-                )}
-              </ul>
-            )}
-          </Block>
-
-          <p className="mt-12 text-[12px] text-ink-faint">
-            <kbd>j</kbd> / <kbd>k</kbd> to go through Today · <kbd>1</kbd>–<kbd>6</kbd> for boxes · <kbd>⌘K</kbd> for anything
-          </p>
-        </div>
+    <main className="pane flex flex-col bg-pane-alt">
+      <div className="drag h-[52px] shrink-0" />
+      <div className="flex flex-1 flex-col items-center justify-center px-8 text-center text-ink-faint">
+        <p className="font-app text-[17px] font-medium text-ink-soft">{toDos ? `${plural(toDos, 'to-do')} left, and no threads.` : 'You’re caught up.'}</p>
+        <p className="mt-2 text-[12.5px]">
+          <kbd>1</kbd>–<kbd>6</kbd> for boxes · <kbd>⌘K</kbd> for anything
+        </p>
       </div>
     </main>
   )
 }
-
-function Block({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="mt-9">
-      <h2 className="eyebrow mb-3">{title}</h2>
-      <div className="text-[13.5px]">{children}</div>
-    </section>
-  )
-}
-
-function OverviewLink({ onClick, label, value, title }: { onClick: () => void; label: string; value: string; title?: string }) {
-  return (
-    <button onClick={onClick} title={title} className="-mx-2 flex w-[calc(100%+1rem)] items-baseline gap-3 rounded-ui px-2 py-1.5 text-left hover:bg-pane-sunk">
-      <span className="text-ink">{label}</span>
-      <span className="ml-auto text-[12.5px] text-ink-soft tabular-nums">{value}</span>
-    </button>
-  )
-}
-

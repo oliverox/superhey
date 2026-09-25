@@ -58,7 +58,7 @@ const click = (el: Element) =>
 
 describe('TodayList', () => {
   it('lists what’s due, what you meant to reply to, and who you’re waiting on, each with why', () => {
-    act(() => root.render(createElement(Today.TodayList, { today: data(), selectedId: null, onOpen: vi.fn() })))
+    act(() => root.render(createElement(Today.TodayList, { today: data(), selectedId: null, onOpen: vi.fn(), onGoToBox: vi.fn() })))
     const sections = [...host.querySelectorAll('section')].map((s) => s.getAttribute('aria-label'))
     expect(sections).toEqual(['Due', 'Reply Later', 'Waiting on others'])
     expect(text()).toContain('File the declaration3 days late · To-do')
@@ -69,7 +69,7 @@ describe('TodayList', () => {
 
   it('opens a thread, completes a to-do in HEY, and puts a thread off with Not now', async () => {
     const onOpen = vi.fn()
-    act(() => root.render(createElement(Today.TodayList, { today: data(), selectedId: 3, onOpen })))
+    act(() => root.render(createElement(Today.TodayList, { today: data(), selectedId: 3, onOpen, onGoToBox: vi.fn() })))
     const row = [...host.querySelectorAll('[role=option]')].find((r) => r.textContent?.includes('Invitation'))!
     expect(row.getAttribute('aria-selected')).toBe('true')
     await click(row)
@@ -86,7 +86,7 @@ describe('TodayList', () => {
 
   it('shows a few per section, and the rest on request', async () => {
     const many = Array.from({ length: 8 }, (_, i) => thread(10 + i, `Parked ${i}`, i))
-    act(() => root.render(createElement(Today.TodayList, { today: data({ replyLater: many, toHandle: 11 }), selectedId: null, onOpen: vi.fn() })))
+    act(() => root.render(createElement(Today.TodayList, { today: data({ replyLater: many, toHandle: 11 }), selectedId: null, onOpen: vi.fn(), onGoToBox: vi.fn() })))
     const later = () => host.querySelectorAll('section[aria-label="Reply Later"] [role=option]').length
     expect(later()).toBe(5)
     await click([...host.querySelectorAll('button')].find((b) => b.textContent === 'Show all 8')!)
@@ -94,38 +94,36 @@ describe('TodayList', () => {
   })
 
   it('says you’re caught up when there’s nothing to handle', () => {
-    act(() => root.render(createElement(Today.TodayList, { today: data({ due: { todos: [], bubbled: [] }, replyLater: [], waiting: [], toHandle: 0 }), selectedId: null, onOpen: vi.fn() })))
+    act(() => root.render(createElement(Today.TodayList, { today: data({ due: { todos: [], bubbled: [] }, replyLater: [], waiting: [], toHandle: 0 }), selectedId: null, onOpen: vi.fn(), onGoToBox: vi.fn() })))
     expect(text()).toContain('You’re caught up.')
-    expect(host.querySelector('section')).toBeNull()
+    expect(host.querySelector('section')).toBeNull() // nothing new either
   })
 })
 
-describe('TodayOverview', () => {
-  it('shows the day’s calendar and what’s new, each a click from its box', async () => {
+describe('What’s new, and nothing left', () => {
+  it('lists new mail per box at the end, each a click from its box', async () => {
     const onGoToBox = vi.fn()
-    const onOpenScreener = vi.fn()
-    const today = data({
-      events: [{ key: 'e1', id: 1, calendarId: null, title: 'Treasury meeting', startsAt: '2026-09-25T18:00:00Z', endsAt: null, allDay: false, location: 'Port Louis' }],
-      newSince: { since: '2026-09-25T06:00:00Z', boxes: [{ boxId: 201228, kind: 'imbox', name: 'Imbox', count: 4 }] },
-      screener: 2,
-    })
-    act(() => root.render(createElement(Today.TodayOverview, { today, onGoToBox, onOpenScreener })))
-    expect(text()).toContain('4 things to handle.')
-    expect(text()).toContain('Treasury meeting')
-    expect(text()).toContain('Port Louis')
-    expect(text()).toContain('New since you last looked')
-    await click([...host.querySelectorAll('button')].find((b) => b.textContent?.startsWith('Imbox'))!)
-    expect(onGoToBox).toHaveBeenCalledWith(201228)
-    await click([...host.querySelectorAll('button')].find((b) => b.textContent?.startsWith('The Screener'))!)
-    expect(onOpenScreener).toHaveBeenCalled()
-    expect(text()).toContain('2 first-time senders waiting')
+    const today = data({ newSince: { since: '2026-09-25T06:00:00Z', boxes: [{ boxId: 201228, kind: 'imbox', name: 'Imbox', count: 4 }, { boxId: 201229, kind: 'feedbox', name: 'The Feed', count: 12 }] } })
+    act(() => root.render(createElement(Today.TodayList, { today, selectedId: null, onOpen: vi.fn(), onGoToBox })))
+    const sections = [...host.querySelectorAll('section')].map((s) => s.getAttribute('aria-label'))
+    expect(sections.at(-1)).toBe('New')
+    expect(host.querySelector('section[aria-label="New"]')!.textContent).toBe('New since you last lookedImbox 4The Feed 12')
+    await click([...host.querySelectorAll('section[aria-label="New"] button')][1]!)
+    expect(onGoToBox).toHaveBeenCalledWith(201229)
   })
 
-  it('is calm when there’s nothing', () => {
-    act(() => root.render(createElement(Today.TodayOverview, { today: data({ toHandle: 0 }), onGoToBox: vi.fn(), onOpenScreener: vi.fn() })))
+  it('says you’re caught up, and still shows what’s new', () => {
+    const today = data({ due: { todos: [], bubbled: [] }, replyLater: [], waiting: [], toHandle: 0, newSince: { since: null, boxes: [{ boxId: 1, kind: 'imbox', name: 'Imbox', count: 2 }] } })
+    act(() => root.render(createElement(Today.TodayList, { today, selectedId: null, onOpen: vi.fn(), onGoToBox: vi.fn() })))
     expect(text()).toContain('You’re caught up.')
-    expect(text()).toContain('Nothing on the calendar today.')
-    expect(text()).toContain('Nothing new.')
+    expect(text()).toContain('New todayImbox 2')
+  })
+
+  it('fills the reader when there’s no thread to open', () => {
+    act(() => root.render(createElement(Today.TodayDone, { toDos: 0 })))
+    expect(text()).toContain('You’re caught up.')
+    act(() => root.render(createElement(Today.TodayDone, { toDos: 2 })))
+    expect(text()).toContain('2 to-dos left, and no threads.')
   })
 })
 

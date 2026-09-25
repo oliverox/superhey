@@ -13,7 +13,7 @@ import { ShortcutHelp } from './components/ShortcutHelp'
 import { Tooltips } from './components/Tooltips'
 import { CommandBar } from './components/CommandBar'
 import { Settings } from './components/Settings'
-import { TodayList, TodayOverview, todayThreads, type TodayData } from './components/Today'
+import { TodayDone, TodayList, todayLabel, todayThreads, type TodayData } from './components/Today'
 import type { Command } from './commands/model'
 import { boxCommands, emailCommand, labelCommands } from './commands/sources'
 import { Composer, type ComposeRequest } from './components/Composer'
@@ -92,9 +92,10 @@ function Workspace({ status }: { status: AppStatus }) {
   const list = onToday ? todayThreads(todayData) : (postings.data ?? [])
   const selectedIndex = target?.postingId != null ? list.findIndex((p) => p.id === target.postingId) : -1
 
-  const open = useCallback((p: PostingRow) => {
+  /** `markSeen: false` shows a thread without reading it (Today putting its first item up). */
+  const open = useCallback((p: PostingRow, markSeen = true) => {
     // Opening a thread marks it seen, as in HEY. Kept out of the activity log.
-    if (!p.seen && !p.isBundle) api.runAction({ type: 'seen', postingId: p.id, seen: true }, 'auto').catch(() => {})
+    if (markSeen && !p.seen && !p.isBundle) api.runAction({ type: 'seen', postingId: p.id, seen: true }, 'auto').catch(() => {})
     setTarget({
       postingId: p.id,
       topicId: p.topicId,
@@ -105,6 +106,13 @@ function Workspace({ status }: { status: AppStatus }) {
       sender: p.senderName ?? p.senderEmail,
     })
   }, [])
+
+  // On Today, the reader shows the first thing to handle, so there's never an empty pane to
+  // look at. It isn't marked seen: you haven't chosen to read it.
+  const firstOnToday = todayThreads(todayData)[0]
+  useEffect(() => {
+    if (onToday && !screening && !query && !target && firstOnToday) open(firstOnToday, false)
+  }, [onToday, screening, query, target, firstOnToday, open])
 
   // Keyboard (see shortcuts.ts for the full map).
   const step = (delta: number) => {
@@ -190,7 +198,9 @@ function Workspace({ status }: { status: AppStatus }) {
             ) : query ? (
               'Search'
             ) : onToday ? (
-              'Today'
+              <span className="flex items-baseline gap-2">
+                Today <span className="text-[12.5px] font-normal text-ink-faint">{todayLabel()}</span>
+              </span>
             ) : (
               (activeBox?.name ?? '')
             )}
@@ -238,7 +248,10 @@ function Workspace({ status }: { status: AppStatus }) {
             activeTopicId={target?.topicId ?? null}
           />
         ) : onToday ? (
-          <TodayList today={todayData} selectedId={target?.postingId ?? null} onOpen={open} />
+          <>
+            <ScreenerBanner count={waiting.length} onOpen={openScreener} />
+            <TodayList today={todayData} selectedId={target?.postingId ?? null} onOpen={open} onGoToBox={showBox} />
+          </>
         ) : (
           <>
           {activeBox?.kind === 'imbox' && <ScreenerBanner count={waiting.length} onOpen={openScreener} />}
@@ -255,7 +268,7 @@ function Workspace({ status }: { status: AppStatus }) {
 
       <div data-pane="reader" className="contents">
         {onToday && !screening && !query && !target ? (
-          <TodayOverview today={todayData} onGoToBox={showBox} onOpenScreener={openScreener} />
+          <TodayDone toDos={todayData?.due.todos.length ?? 0} />
         ) : (
         <Reader
           target={target}
