@@ -47,9 +47,15 @@ describe('Today', () => {
     put('imbox', { id: 14, topic_id: 914, active_at: daysAgo(6), creator: me, contacts: [me], seen: true }) // a note to yourself
     put('trailbox', { id: 15, topic_id: 915, active_at: daysAgo(6), ...fromMe }) // filed away
     put('imbox', { id: 16, topic_id: 916, active_at: daysAgo(8), creator: { ...me, email_address: 'ME@HEY.example' }, contacts: [me, bob], seen: true }) // case
+    put('imbox', { id: 17, topic_id: 917, active_at: daysAgo(5), name: 'Fwd: The report', visible_entry_count: 1, ...fromMe }) // just your forward: for their information
+    put('imbox', { id: 18, topic_id: 918, active_at: daysAgo(5), name: 'TR: Le rapport', visible_entry_count: 1, ...fromMe }) // same, in French
+    put('imbox', { id: 19, topic_id: 919, active_at: daysAgo(4), name: 'Fwd: The report', visible_entry_count: 3, ...fromMe }) // a forward they answered, and you again
     const t = buildToday(repo, input())
-    expect(ids(t.waiting)).toEqual([16, 10])
-    expect(t.waiting.map((i) => i.days)).toEqual([8, 5])
+    expect(ids(t.waiting)).toEqual([16, 10, 19])
+    expect(t.waiting.map((i) => i.days)).toEqual([8, 5, 4])
+    // Each says who you're waiting on (never you).
+    expect(t.waiting.map((i) => i.people!.map((p) => p.email))).toEqual([['bob@example.com'], ['alice@example.com'], ['alice@example.com']])
+    expect(t.waiting[1]!.people![0]).toMatchObject({ name: 'Alice Example', avatar: { initials: 'AE' } })
     // Without your addresses there's nothing to go on.
     expect(buildToday(repo, input({ myEmails: [] })).waiting).toEqual([])
   })
@@ -104,8 +110,10 @@ describe('Today', () => {
       ['imbox', 1],
       ['feedbox', 1],
     ])
+    // The first time: what came in today, not every unread email ever.
+    put('trailbox', { id: 34, topic_id: 934, active_at: daysAgo(90) })
     expect(counts(null)).toEqual([
-      ['imbox', 2],
+      ['imbox', 1],
       ['feedbox', 1],
     ])
   })

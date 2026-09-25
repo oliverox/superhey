@@ -629,7 +629,8 @@ export class Repo {
   /**
    * Threads where you sent the latest message (HEY's posting `creator` is the latest
    * sender) between `fromIso` and `toIso`, to someone besides yourself, and not already
-   * parked, bubbled or filed: waiting on others. Oldest first.
+   * parked, bubbled or filed: waiting on others. Oldest first. A thread that's only your
+   * forward ("Fwd:", "Fw:", French "TR:") is for their information, not waiting on them.
    */
   waitingOnOthers(myEmails: string[], fromIso: string, toIso: string): PostingRow[] {
     const mine = myEmails.map((e) => e.toLowerCase())
@@ -640,6 +641,8 @@ export class Repo {
        AND p.active_at >= ? AND p.active_at < ?
        AND p.box_id NOT IN (SELECT id FROM boxes WHERE kind IN ('laterbox', 'bubblebox', 'feedbox', 'trailbox'))
        AND p.bubbled_up = 0
+       AND NOT (coalesce(p.entry_count, 1) <= 1
+                AND (lower(ltrim(p.subject)) LIKE 'fwd:%' OR lower(ltrim(p.subject)) LIKE 'fw:%' OR lower(ltrim(p.subject)) LIKE 'tr:%'))
        AND EXISTS (SELECT 1 FROM json_each(p.raw_json, '$.contacts') c
                    WHERE lower(json_extract(c.value, '$.email_address')) NOT IN (${list}))`,
       'p.active_at ASC',
@@ -648,6 +651,25 @@ export class Repo {
       toIso,
       ...mine,
     )
+  }
+
+  /** The people on a thread other than you (from HEY's contacts on its posting). */
+  otherPeople(postingId: number, myEmails: string[]): Contact[] {
+    const raw = this.get<{ raw_json: string }>('SELECT raw_json FROM postings WHERE id = ?', postingId)?.raw_json
+    let contacts: Array<Record<string, unknown>> = []
+    try {
+      contacts = (JSON.parse(raw ?? '{}') as { contacts?: Array<Record<string, unknown>> }).contacts ?? []
+    } catch {
+      return []
+    }
+    const mine = new Set(myEmails.map((e) => e.toLowerCase()))
+    const str = (v: unknown) => (typeof v === 'string' && v ? v : null)
+    return contacts.flatMap((c) => {
+      const email = str(c.email_address)?.toLowerCase()
+      if (!email || mine.has(email)) return []
+      const name = str(c.name)
+      return [{ name: name && name !== email ? name : null, email, avatar: { url: str(c.avatar_url), color: str(c.avatar_background_color), initials: str(c.initials) ?? initialsOf(name ?? email) } }]
+    })
   }
 
   /** Unread threads per box that arrived since `sinceIso` (all unread when null); bundles count their mail. */
@@ -825,4 +847,11 @@ export interface TodoRow {
 
 function toTodoRow(r: Record<string, unknown>): TodoRow {
   return { id: Number(r.id), title: (r.title as string) || '(untitled)', dueAt: (r.due_at as string | null) ?? null, completedAt: (r.completed_at as string | null) ?? null }
+}
+
+/** Someone a thread is with, as HEY lists them on its posting. */
+export interface Contact {
+  name: string | null
+  email: string
+  avatar: PostingRow['avatar']
 }

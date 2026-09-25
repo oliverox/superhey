@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { openDb, Repo, type Core } from '@myhey/core'
+import { openDb, Repo, schemas as S, type Core } from '@myhey/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiStatus, ApiEvent } from '../shared/api'
 import { AppService, type SecretStore } from './service'
@@ -14,9 +14,12 @@ function fakeCore(): Core {
     stop: () => {},
     getStatus: () => ({ initialSyncDone: true, watch: 'live', lastError: null }),
     backfillBox: async () => 0,
+    screenerEntries: () => [{ id: 1 }, { id: 2 }],
   })
   return {
     cli: { path: '/fake/hey', version: '1.6.0' },
+    // No HEY to ask for your addresses: Today works without them.
+    client: { senders: async () => [{ id: 1, email: 'me@hey.example' }] },
     repo: new Repo(openDb(':memory:')),
     engine,
     actions: new EventEmitter(),
@@ -161,5 +164,42 @@ describe('AI settings in the service', () => {
     for (const bad of ['file:///etc/passwd', 'localhost:11434', '', 7]) await expect(s.localModels(bad)).rejects.toThrow(/http/)
     expect(fetchSpy).not.toHaveBeenCalled()
     fetchSpy.mockRestore()
+  })
+})
+
+describe('Today in the service', () => {
+  it('assembles Today from the cache, with the Screener count', async () => {
+    const { s } = await service()
+    const t = await s.today(null)
+    expect(t).toMatchObject({ due: { todos: [], bubbled: [] }, replyLater: [], waiting: [], toHandle: 0, screener: 2, newSince: { since: null } })
+    await expect(s.today('yesterday-ish')).rejects.toThrow(/ISO date/)
+    await expect(s.today(42)).rejects.toThrow(/ISO date/)
+  })
+
+  it('keeps "not now" across restarts, only for threads still in the cache', async () => {
+    const { s, events } = await service()
+    const repo = (s as unknown as { core: Core }).core.repo
+    repo.replaceBoxes([{ id: 4, kind: 'laterbox', name: 'Reply Later' }])
+    repo.upsertPostings([S.Posting.parse({ id: 40, topic_id: 940, box_id: 4, name: 'Parked', active_at: '2026-09-20T10:00:00Z', seen: true })])
+    expect((await s.today(null)).replyLater.map((i) => i.posting.id)).toEqual([40])
+    await s.hideFromToday('thread:40', '2026-09-20T10:00:00Z')
+    expect(events).toContainEqual({ type: 'today' })
+    expect((await s.today(null)).replyLater).toEqual([])
+    // A thread that's gone is dropped the next time something is hidden.
+    await s.hideFromToday('thread:999', 'x')
+    expect(JSON.parse(repo.getState('today:hidden')!)).toEqual({ 'thread:40': '2026-09-20T10:00:00Z', 'thread:999': 'x' })
+    await s.hideFromToday('thread:40', '2026-09-20T10:00:00Z')
+    expect(Object.keys(JSON.parse(repo.getState('today:hidden')!))).toEqual(['thread:40'])
+  })
+
+  it('refuses bad "not now" keys', async () => {
+    const { s } = await service()
+    for (const [key, at] of [['todo:1', 'x'], ['thread:abc', 'x'], ['thread:1', 42]] as const) await expect(s.hideFromToday(key, at)).rejects.toThrow(/bad/)
+  })
+
+  it('accepts a to-do action and nothing looser', async () => {
+    const { s } = await service()
+    await expect(s.runAction({ type: 'todo', todoId: 7, done: 'yes' })).rejects.toThrow(/bad action/)
+    await expect(s.runAction({ type: 'todo', todoId: -1, done: true })).rejects.toThrow(/positive integer/)
   })
 })

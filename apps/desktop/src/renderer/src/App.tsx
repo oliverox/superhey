@@ -13,6 +13,7 @@ import { ShortcutHelp } from './components/ShortcutHelp'
 import { Tooltips } from './components/Tooltips'
 import { CommandBar } from './components/CommandBar'
 import { Settings } from './components/Settings'
+import { TodayList, TodayOverview, todayThreads, type TodayData } from './components/Today'
 import type { Command } from './commands/model'
 import { boxCommands, emailCommand, labelCommands } from './commands/sources'
 import { Composer, type ComposeRequest } from './components/Composer'
@@ -37,7 +38,16 @@ function Workspace({ status }: { status: AppStatus }) {
   )
 
   const [boxId, setBoxId] = useState<number | null>(null)
+  // Today is where the app opens; a box replaces it until you come back (0).
+  const [onToday, setOnToday] = useState(true)
   const activeBox = ordered.find((b) => b.id === boxId) ?? ordered[0] ?? null
+  const since = useLastLook(onToday)
+  const today = useLive(
+    () => api.today(since),
+    [since],
+    (e) => e.type === 'today' || e.type === 'action' || (e.type === 'change' && ['postings', 'todos', 'calendar', 'screener'].includes(e.change.kind)),
+  )
+  const todayData = (today.data as TodayData | null) ?? null
 
   const postings = useLive(
     () => (activeBox ? api.postings(activeBox.id) : Promise.resolve([] as PostingRow[])),
@@ -79,7 +89,7 @@ function Workspace({ status }: { status: AppStatus }) {
     return () => window.removeEventListener('myhey:compose', onRestore)
   }, [])
 
-  const list = postings.data ?? []
+  const list = onToday ? todayThreads(todayData) : (postings.data ?? [])
   const selectedIndex = target?.postingId != null ? list.findIndex((p) => p.id === target.postingId) : -1
 
   const open = useCallback((p: PostingRow) => {
@@ -106,7 +116,20 @@ function Workspace({ status }: { status: AppStatus }) {
   useShortcut('prevThread', () => step(-1), !query)
   useShortcut('search', () => searchRef.current?.focus())
   useShortcut('theme', toggleTheme)
-  const goToBox = (i: number) => ordered[i] && setBoxId(ordered[i]!.id)
+  const showBox = (id: number) => {
+    setOnToday(false)
+    setScreening(false)
+    setQuery('')
+    setBoxId(id)
+  }
+  const goToBox = (i: number) => ordered[i] && showBox(ordered[i]!.id)
+  const goToToday = () => {
+    setOnToday(true)
+    setScreening(false)
+    setQuery('')
+    setTarget(null)
+  }
+  useShortcut('today', goToToday)
   useShortcut('box1', () => goToBox(0))
   useShortcut('box2', () => goToBox(1))
   useShortcut('box3', () => goToBox(2))
@@ -143,11 +166,9 @@ function Workspace({ status }: { status: AppStatus }) {
     >
       <Sidebar
         boxes={ordered}
-        activeBoxId={activeBox?.id ?? null}
-        onSelectBox={(id) => {
-          setBoxId(id)
-          setQuery('')
-        }}
+        activeBoxId={onToday || screening ? null : (activeBox?.id ?? null)}
+        onSelectBox={showBox}
+        today={{ active: onToday && !screening, count: todayData?.toHandle ?? null, onSelect: goToToday }}
         status={status}
         theme={theme}
         onTheme={setTheme}
@@ -168,6 +189,8 @@ function Workspace({ status }: { status: AppStatus }) {
               </span>
             ) : query ? (
               'Search'
+            ) : onToday ? (
+              'Today'
             ) : (
               (activeBox?.name ?? '')
             )}
@@ -214,6 +237,8 @@ function Workspace({ status }: { status: AppStatus }) {
             }
             activeTopicId={target?.topicId ?? null}
           />
+        ) : onToday ? (
+          <TodayList today={todayData} selectedId={target?.postingId ?? null} onOpen={open} />
         ) : (
           <>
           {activeBox?.kind === 'imbox' && <ScreenerBanner count={waiting.length} onOpen={openScreener} />}
@@ -229,6 +254,9 @@ function Workspace({ status }: { status: AppStatus }) {
       </section>
 
       <div data-pane="reader" className="contents">
+        {onToday && !screening && !query && !target ? (
+          <TodayOverview today={todayData} onGoToBox={showBox} onOpenScreener={openScreener} />
+        ) : (
         <Reader
           target={target}
           active={activePane === 'reader'}
@@ -241,6 +269,7 @@ function Workspace({ status }: { status: AppStatus }) {
             else setTarget(null)
           }}
         />
+        )}
       </div>
       <Toasts />
       {showActivity && <ActivityDrawer onClose={() => setShowActivity(false)} />}
@@ -251,16 +280,14 @@ function Workspace({ status }: { status: AppStatus }) {
           boxes={ordered}
           postingId={target?.postingId ?? null}
           onClose={() => setShowCommands(false)}
-          goToBox={(id) => {
-            setScreening(false)
-            setQuery('')
-            setBoxId(id)
-          }}
+          goToBox={showBox}
           openEmail={(p) => {
-            setScreening(false)
-            setQuery('')
             // Into its box when it's one of the six, so the list shows it selected.
-            if (ordered.some((b) => b.id === p.boxId)) setBoxId(p.boxId)
+            if (ordered.some((b) => b.id === p.boxId)) showBox(p.boxId)
+            else {
+              setScreening(false)
+              setQuery('')
+            }
             open(p)
           }}
           openActivity={() => setShowActivity(true)}
@@ -313,4 +340,33 @@ function CommandBarHost({
   openRef.current = openEmail
   const findEmails = useCallback(async (q: string) => (await api.findPostings(q, 8)).map((p) => emailCommand(p, (row) => openRef.current(row))), [])
   return <CommandBar commands={commands} findEmails={findEmails} onClose={onClose} />
+}
+
+/**
+ * When you last looked at Today, for "new since you last looked": the time you last left
+ * it (per device). It moves on when you leave Today, not while you're on it, so what's new
+ * stays listed while you work through it.
+ */
+function useLastLook(onToday: boolean): string | null {
+  const KEY = 'today:last-look'
+  const read = () => {
+    try {
+      return localStorage.getItem(KEY)
+    } catch {
+      return null
+    }
+  }
+  const [since, setSince] = useState<string | null>(read)
+  useEffect(() => {
+    if (onToday) {
+      setSince(read())
+      return
+    }
+    try {
+      localStorage.setItem(KEY, new Date().toISOString())
+    } catch {
+      // works without it: "new since" becomes "unread"
+    }
+  }, [onToday])
+  return since
 }

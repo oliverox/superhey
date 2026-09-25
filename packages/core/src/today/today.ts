@@ -1,4 +1,4 @@
-import type { EventRow, PostingRow, Repo, TodoRow } from '../cache/repo'
+import type { Contact, EventRow, PostingRow, Repo, TodoRow } from '../cache/repo'
 
 /**
  * Today: what needs you, assembled from the cache (no AI, no calls to HEY). A queue of
@@ -16,6 +16,8 @@ export interface ThreadItem {
   posting: PostingRow
   /** Whole days since the thread's latest activity. */
   days: number
+  /** Waiting on others: who you wrote to. */
+  people?: Contact[]
 }
 
 export interface TodoItem {
@@ -33,7 +35,7 @@ export interface TodayView {
   waiting: ThreadItem[]
   /** The day's calendar events. */
   events: EventRow[]
-  /** Unread mail per box since you last looked (or all unread, the first time). */
+  /** Unread mail per box since you last looked (the first time: since the start of today). */
   newSince: { since: string | null; boxes: Array<{ boxId: number; kind: string; name: string; count: number }> }
   /** How many items above are yours to handle (events and new mail aren't). */
   toHandle: number
@@ -43,7 +45,7 @@ export interface TodayInput {
   now: Date
   /** Your addresses (for waiting on others). */
   myEmails: string[]
-  /** When you last looked at Today; null the first time. */
+  /** When you last looked at Today; null the first time (then "new" means new today). */
   since: string | null
   /** Items put off with "not now": key → the thread's activity then. They return when it changes. */
   hidden: Record<string, string>
@@ -73,7 +75,7 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
   const waiting = items(
     repo.waitingOnOthers(input.myEmails, new Date(now.getTime() - WAITING_UNTIL_DAYS * DAY).toISOString(), new Date(now.getTime() - WAITING_AFTER_DAYS * DAY).toISOString()),
     seen,
-  )
+  ).map((i) => ({ ...i, people: repo.otherPeople(i.posting.id, input.myEmails) }))
 
   const todos = repo.todosDue(ymd(startOfTomorrow)).map((t) => ({
     key: `todo:${t.id}`,
@@ -87,7 +89,8 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
     replyLater,
     waiting,
     events: repo.events(startOfToday.toISOString(), startOfTomorrow.toISOString()),
-    newSince: { since: input.since, boxes: repo.unseenSince(input.since).filter((b) => b.count > 0 && b.kind !== 'bubblebox' && b.kind !== 'laterbox') },
+    // The first time, "new" is today's: every unread email ever would be noise, not news.
+    newSince: { since: input.since, boxes: repo.unseenSince(input.since ?? startOfToday.toISOString()).filter((b) => b.count > 0 && b.kind !== 'bubblebox' && b.kind !== 'laterbox') },
     toHandle: todos.length + bubbled.length + replyLater.length + waiting.length,
   }
 }

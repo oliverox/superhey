@@ -15,6 +15,7 @@ export interface ShortcutDef {
 export const SHORTCUTS = {
   nextThread: { keys: ['j', 'ArrowDown'], label: 'Next thread', group: 'Navigate' },
   prevThread: { keys: ['k', 'ArrowUp'], label: 'Previous thread', group: 'Navigate' },
+  today: { keys: ['0'], label: 'Today', group: 'Navigate' },
   box1: { keys: ['1'], label: 'Imbox', group: 'Navigate' },
   box2: { keys: ['2'], label: 'The Feed', group: 'Navigate' },
   box3: { keys: ['3'], label: 'Paper Trail', group: 'Navigate' },

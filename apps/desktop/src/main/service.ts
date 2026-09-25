@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events'
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join } from 'node:path'
 import {
+  buildToday,
   AI_TASK_IDS,
   AI_TASKS,
   AiClient,
@@ -227,6 +228,36 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     return this.need().outbox.saveDraft(validateMessage(message, false, true))
   }
 
+  // Today
+
+  async today(since: unknown) {
+    if (since !== null && (typeof since !== 'string' || Number.isNaN(Date.parse(since)))) throw new Error('since must be an ISO date or null')
+    const core = this.need()
+    // Your addresses tell which threads you wrote last; without them, that section is empty.
+    const myEmails = await this.senders().then((s) => s.map((x) => x.email), () => [])
+    const view = buildToday(core.repo, { now: new Date(), myEmails, since, hidden: this.hiddenOnToday() })
+    return { ...view, screener: core.engine.screenerEntries().length }
+  }
+
+  async hideFromToday(key: unknown, activeAt: unknown) {
+    if (typeof key !== 'string' || !/^thread:\d{1,20}$/.test(key)) throw new Error('bad key')
+    if (typeof activeAt !== 'string' || activeAt.length > 40) throw new Error('bad activeAt')
+    const repo = this.need().repo
+    // Keep only threads still in the cache, so the list doesn't grow forever.
+    const kept = Object.fromEntries(Object.entries(this.hiddenOnToday()).filter(([k]) => repo.posting(PostingId(Number(k.slice(7))))))
+    repo.setState('today:hidden', JSON.stringify({ ...kept, [key]: activeAt }))
+    this.emit('event', { type: 'today' })
+  }
+
+  private hiddenOnToday(): Record<string, string> {
+    try {
+      const v = JSON.parse(this.need().repo.getState('today:hidden') ?? '{}') as unknown
+      return v && typeof v === 'object' ? (v as Record<string, string>) : {}
+    } catch {
+      return {}
+    }
+  }
+
   // AI
 
   async aiStatus(): Promise<AiStatus> {
@@ -394,6 +425,10 @@ const BUBBLE_KINDS = ['now', 'tomorrow', 'weekend', 'next-week', 'on']
 function validateAction(input: unknown): Action {
   const a = input as Record<string, unknown>
   if (!a || typeof a !== 'object') throw new Error('bad action')
+  if (a.type === 'todo') {
+    if (typeof a.done !== 'boolean') throw new Error('bad action')
+    return { type: 'todo', todoId: int(a.todoId), done: a.done }
+  }
   if (a.type === 'screen') {
     if (!['approve', 'deny', 'spam'].includes(a.decision as string)) throw new Error('bad action')
     if (a.box != null && !['imbox', 'feedbox', 'trailbox'].includes(a.box as string)) throw new Error('bad action')

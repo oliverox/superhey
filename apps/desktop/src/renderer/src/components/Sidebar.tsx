@@ -14,15 +14,32 @@ interface Props {
   active: boolean
   onOpenActivity: () => void
   onOpenSettings: () => void
+  /** Today, above the boxes: whether it's showing, and how much is left to handle. */
+  today: { active: boolean; count: number | null; onSelect: () => void }
 }
 
-export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onTheme, active, onOpenActivity, onOpenSettings }: Props) {
+export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onTheme, active, onOpenActivity, onOpenSettings, today }: Props) {
   return (
     <aside className="pane flex flex-col bg-side text-side-ink" data-pane="sidebar" data-active={active}>
       <div className="drag h-[52px] shrink-0" />
 
       <nav className="px-3" aria-label="Boxes">
         <ul className="space-y-px">
+          <li className="mb-1.5">
+            <button
+              onClick={today.onSelect}
+              aria-current={today.active ? 'page' : undefined}
+              className={`group flex w-full items-center rounded-ui px-2.5 py-[7px] text-left transition-colors ${
+                today.active ? 'bg-side-sel text-side-ink' : 'text-side-soft hover:bg-side-sel/60 hover:text-side-ink'
+              }`}
+            >
+              <span className="font-medium">Today</span>
+              {!!today.count && <span className="ml-2 text-[11.5px] text-side-faint tabular-nums">{today.count}</span>}
+              <kbd className={`sidebar-key ml-auto ${today.active ? 'is-selected' : ''}`} title="Press 0">
+                0
+              </kbd>
+            </button>
+          </li>
           {boxes.map((box, i) => {
             const selected = box.id === activeBoxId
             return (

@@ -19,7 +19,7 @@ export function ShortcutHelp({ onClose }: { onClose: () => void }) {
   // The six box keys read better as one line.
   const rows = (group: ShortcutDef['group']) =>
     group === 'Navigate'
-      ? [...defs.filter((d) => d.group === group && !/^\d$/.test(d.keys[0]!)), { keys: ['1', '6'], label: 'Go to box', group, range: true }]
+      ? [...defs.filter((d) => d.group === group && !/^[1-9]$/.test(d.keys[0]!)), { keys: ['1', '6'], label: 'Go to box', group, range: true }]
       : defs.filter((d) => d.group === group)
 
   return (

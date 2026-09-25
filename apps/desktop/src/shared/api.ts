@@ -18,9 +18,12 @@ import type {
   AiSettings,
   AiTask,
   ProviderId,
+  TodayView,
+  ThreadItem,
+  TodoItem,
 } from '@myhey/core'
 
-export type { OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId }
+export type { OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId, TodayView, ThreadItem, TodoItem }
 
 /** Everything Settings shows about AI. API keys themselves never leave the main process. */
 export interface AiStatus {
@@ -110,6 +113,10 @@ export interface Api {
   saveDraft(message: OutgoingMessage): Promise<number | null>
   /** Downloads if needed, then opens the file in the system's default app. */
   openAttachment(id: string): Promise<void>
+  /** What needs you today; `since`: when you last looked (for "new since"). */
+  today(since: string | null): Promise<TodayView & { screener: number }>
+  /** "Not now": hides a thread from Today until it changes (`activeAt`: its activity now). */
+  hideFromToday(key: string, activeAt: string): Promise<void>
   aiStatus(): Promise<AiStatus>
   /** Replaces the AI settings; anything invalid is refused. */
   setAiSettings(settings: AiSettings): Promise<AiStatus>
@@ -121,7 +128,7 @@ export interface Api {
   testAi(engine: ProviderId | 'local'): Promise<AiTestResult>
 }
 
-export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
+export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
 export type ApiMethod = (typeof API_METHODS)[number]
 
 export type ApiEvent =
@@ -131,6 +138,8 @@ export type ApiEvent =
   | { type: 'outgoing'; record: OutgoingRecord }
   /** AI settings or usage changed. */
   | { type: 'ai' }
+  /** Something was put off on Today. */
+  | { type: 'today' }
 
 /** Content types the file endpoints serve as themselves; anything else is a download. */
 const INLINE_TYPES = /^(application\/pdf|image\/(png|jpe?g|gif|webp|avif|bmp|svg\+xml))$/
