@@ -174,7 +174,7 @@ function OutgoingToast({ record: r, onClose }: { record: OutgoingRecord; onClose
   }, [r.status])
 
   const reopen = (message = r.message) =>
-    window.dispatchEvent(new CustomEvent('myhey:compose', { detail: { kind: r.kind, message, forwardOf: r.forwardOf } }))
+    window.dispatchEvent(new CustomEvent('superhey:compose', { detail: { kind: r.kind, message, forwardOf: r.forwardOf } }))
   const failed = r.status === 'failed'
   const seconds = Math.max(0, Math.ceil((r.sendsAt - now) / 1000))
   const what = KIND_WORDS[r.kind]

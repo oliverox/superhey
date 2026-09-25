@@ -39,7 +39,7 @@ import {
   localBounds,
   parseQuery,
   searchHey,
-} from '@myhey/core'
+} from '@superhey/core'
 import { API_METHODS, type AiStatus, type AiTestResult, type ThreadAnalysisView, type Api, type ApiEvent, type ApiMethod, type AppStatus, type SetupProblem } from '../shared/api'
 
 /** Where secrets (the Claude API key) are kept: the OS keychain in the app, none in browser dev mode. */
@@ -59,7 +59,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     sync: null,
     problem: null,
     backfill: { running: false, postings: 0 },
-    testInstance: Object.keys(process.env).some((k) => k.startsWith('MYHEY_TEST_') && process.env[k] === '1'),
+    testInstance: Object.keys(process.env).some((k) => k.startsWith('SUPERHEY_TEST_') && process.env[k] === '1'),
   }
 
   constructor(
@@ -91,7 +91,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     this.core = null
     this.update({ phase: 'starting', problem: null })
     try {
-      const core = await (this.opts.createCore ?? createCore)({ ...this.opts, sendingDisabled: process.env.MYHEY_TEST_NO_SEND === '1' })
+      const core = await (this.opts.createCore ?? createCore)({ ...this.opts, sendingDisabled: process.env.SUPERHEY_TEST_NO_SEND === '1' })
       this.core = core
       this.update({ cli: core.cli })
       core.engine.on('change', (change) => this.emit('event', { type: 'change', change }))
@@ -219,9 +219,9 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     if (source !== 'user' && source !== 'auto') throw new Error('bad action source')
     const checked = validateAction(action)
     // A test instance must never decide on a real sender waiting in the Screener.
-    if (checked.type === 'screen' && process.env.MYHEY_TEST_NO_SCREENER_DECISIONS === '1') throw new Error('Screener decisions are off in this test instance')
+    if (checked.type === 'screen' && process.env.SUPERHEY_TEST_NO_SCREENER_DECISIONS === '1') throw new Error('Screener decisions are off in this test instance')
     // Test instances opening threads to check rendering must not mark real mail as seen.
-    if (source === 'auto' && process.env.MYHEY_TEST_NO_AUTO_ACTIONS === '1') throw new Error('automatic actions are off in this instance')
+    if (source === 'auto' && process.env.SUPERHEY_TEST_NO_AUTO_ACTIONS === '1') throw new Error('automatic actions are off in this instance')
     return this.need().actions.run(checked, source)
   }
 

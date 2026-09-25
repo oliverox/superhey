@@ -1,15 +1,15 @@
 {
-  "name": "myhey",
+  "name": "superhey",
   "private": true,
   "packageManager": "pnpm@10.33.2",
   "engines": {
     "node": ">=22.13"
   },
   "scripts": {
-    "dev": "pnpm --filter @myhey/desktop dev",
-    "build": "pnpm --filter @myhey/desktop build",
+    "dev": "pnpm --filter @superhey/desktop dev",
+    "build": "pnpm --filter @superhey/desktop build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
-    "demo": "pnpm --filter @myhey/core demo"
+    "demo": "pnpm --filter @superhey/core demo"
   }
 }

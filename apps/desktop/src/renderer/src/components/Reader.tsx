@@ -515,7 +515,7 @@ function ForwardedLine({ header, threadSubject }: { header: ForwardedHeader; thr
           <span aria-hidden>·</span>
           <button
             type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent('myhey:open-thread', { detail: original }))}
+            onClick={() => window.dispatchEvent(new CustomEvent('superhey:open-thread', { detail: original }))}
             title={`Open the email you forwarded, in ${original.boxId ? 'its box' : 'HEY'}`}
             className="shrink-0 font-medium text-ink-soft hover:text-ink hover:underline"
           >
