@@ -193,14 +193,29 @@ Detect/verify HEY CLI → check `hey auth status` → pick AI mode (API key / lo
 the app works without AI) → initial sync → build voice profile (opt-in) → short
 keyboard tour.
 
-### 5.2 Brief (home screen)
-One calm page, regenerated on open and on new mail:
-- **Needs you:** threads classified as needing a reply, with summary + a ready draft.
-- **Waiting on others:** see 5.5.
-- **Today:** events with prep cards (related threads, people), conflicts flagged.
-- **New since last look:** grouped by meaning (e.g. "3 bookings", "2 bills"), not by time.
-- **Suggestions:** sort/screen suggestions and new rule proposals, batch-approvable.
-- **Done state:** "You're caught up" when empty — no inbox-zero gamification.
+### 5.2 Today (home screen, the landing page)
+A queue of decisions, not a dashboard: every item says why it's there, can be handled in
+one key (open, done, not now), and disappears once handled, down to "You're caught up".
+It opens on launch (key `0`, above the Imbox in the sidebar). Every action goes to HEY
+(Reply Later, Bubble Up, HEY to-dos), so HEY's own apps agree; the only local state is
+"not now" (hidden until the thread changes) and when you last looked.
+
+**Phase 1 (no AI needed):**
+- **Due:** HEY to-dos overdue or due today (complete in one key), threads bubbled up now.
+- **Reply Later:** what you parked to answer, oldest first, with its age.
+- **Waiting on others:** threads where you sent the latest message 3–30 days ago to
+  someone else (HEY's posting `creator` is the latest sender), and no reply since.
+- **Today:** the day's calendar events.
+- **New since you last looked:** unread counts per box, and the Screener.
+- Sections show a few items with "show all"; caught-up state when empty.
+
+**Phase 2 (with per-thread AI analysis, 5.3):** Needs your reply (with summary, later a
+ready draft); deadlines found in mail ("due Friday", "payment due Oct 3") in Due;
+**Coming up** (bookings, renewals, deadlines in the next 7 days); new mail grouped by
+meaning ("3 receipts · file all"); at most one insight. Assembled from cached per-thread
+results; opening Today never sends the mailbox to a model.
+
+**Later:** ready drafts, rule suggestions, meeting prep, morning/afternoon/evening modes.
 
 ### 5.3 Mail views
 - Boxes as HEY defines them, plus **split tabs** built from HEY labels, AI labels and saved
