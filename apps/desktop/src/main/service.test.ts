@@ -70,7 +70,7 @@ describe('AI settings in the service', () => {
       ['grok', null, true],
     ])
     expect(status.providers[2]).toMatchObject({ name: 'Grok', company: 'xAI', models: { cheap: 'grok-4.3', quality: 'grok-4.7' } })
-    expect(status.tasks.map((t) => t.id)).toEqual(['summary', 'classify', 'extract', 'draft', 'agent', 'insights'])
+    expect(status.tasks.map((t) => t.id)).toEqual(['summary', 'classify', 'draft', 'agent', 'insights'])
     expect(status.tasks[0]!.runsOn).toMatchObject({ engine: null })
     expect(new Set(status.models.map((m) => m.provider))).toEqual(new Set(['claude', 'openai', 'grok']))
   })

@@ -52,7 +52,7 @@ function Workspace({ status }: { status: AppStatus }) {
   const postings = useLive(
     () => (activeBox ? api.postings(activeBox.id) : Promise.resolve([] as PostingRow[])),
     [activeBox?.id],
-    (e) => e.type === 'change' && e.change.kind === 'postings' && e.change.boxId === activeBox?.id,
+    (e) => (e.type === 'change' && e.change.kind === 'postings' && e.change.boxId === activeBox?.id) || e.type === 'analysis',
   )
 
   const [query, setQuery] = useState('')

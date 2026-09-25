@@ -63,9 +63,15 @@ export function PostingList({ postings, loading, selectedId, onOpen }: ListProps
                       {label}
                     </span>
                   ))}
+                  {p.ai?.needsReply && (
+                    <span className="shrink-0 text-[11.5px] font-semibold text-accent" title={p.ai.replyReason ? `Needs your reply: ${p.ai.replyReason}` : 'Needs your reply'}>
+                      Reply
+                    </span>
+                  )}
                   <span className="min-w-0 truncate">
                     <span className="font-medium text-ink-soft">{senderLabel(p)}</span>
-                    {p.isBundle ? <> · {bundleNote(p)}</> : p.summary && <> – {p.summary}</>}
+                    {/* The AI's one-line summary when it has read the thread; HEY's opening words otherwise. */}
+                    {p.isBundle ? <> · {bundleNote(p)}</> : (p.ai?.summary ?? p.summary) && <> – {p.ai?.summary ?? p.summary}</>}
                   </span>
                 </div>
               </div>

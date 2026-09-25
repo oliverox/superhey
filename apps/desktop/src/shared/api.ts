@@ -57,6 +57,20 @@ export interface AiStatus {
   }
 }
 
+/** A thread's full analysis, for the details panel. */
+export interface ThreadAnalysisView {
+  summary: string
+  needsReply: boolean
+  replyReason: string | null
+  expectsReply: boolean
+  category: string
+  actionItems: Array<{ text: string; due: string | null }>
+  dates: Array<{ label: string; date: string; time: string | null }>
+  amounts: Array<{ label: string; amount: number; currency: string }>
+  analyzedAt: string
+  model: string
+}
+
 export type AiTestResult =
   | { ok: true; engine: ProviderId | 'local'; model: string; ms: number; reply: string; costUsd: number }
   | { ok: false; code: string; message: string }
@@ -117,6 +131,8 @@ export interface Api {
   today(since: string | null): Promise<TodayView & { screener: number }>
   /** "Not now": hides a thread from Today until it changes (`activeAt`: its activity now). */
   hideFromToday(key: string, activeAt: string): Promise<void>
+  /** What the AI made of a thread: summary, needs reply, action items, dates, amounts. */
+  analysis(topicId: number): Promise<ThreadAnalysisView | null>
   aiStatus(): Promise<AiStatus>
   /** Replaces the AI settings; anything invalid is refused. */
   setAiSettings(settings: AiSettings): Promise<AiStatus>
@@ -128,7 +144,7 @@ export interface Api {
   testAi(engine: ProviderId | 'local'): Promise<AiTestResult>
 }
 
-export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
+export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'analysis', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
 export type ApiMethod = (typeof API_METHODS)[number]
 
 export type ApiEvent =
@@ -140,6 +156,8 @@ export type ApiEvent =
   | { type: 'ai' }
   /** Something was put off on Today. */
   | { type: 'today' }
+  /** A thread was analysed (its summary and needs-reply are in). */
+  | { type: 'analysis'; topicId: number }
 
 /** Content types the file endpoints serve as themselves; anything else is a download. */
 const INLINE_TYPES = /^(application\/pdf|image\/(png|jpe?g|gif|webp|avif|bmp|svg\+xml))$/

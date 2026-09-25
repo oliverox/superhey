@@ -9,6 +9,7 @@ import {
   AI_TASKS,
   AiClient,
   AiError,
+  ThreadAnalyzer,
   AiSettings,
   aiMode,
   checkKey,
@@ -33,7 +34,7 @@ import {
   TopicId,
   type Core,
 } from '@myhey/core'
-import { API_METHODS, type AiStatus, type AiTestResult, type Api, type ApiEvent, type ApiMethod, type AppStatus, type SetupProblem } from '../shared/api'
+import { API_METHODS, type AiStatus, type AiTestResult, type ThreadAnalysisView, type Api, type ApiEvent, type ApiMethod, type AppStatus, type SetupProblem } from '../shared/api'
 
 /** Where secrets (the Claude API key) are kept: the OS keychain in the app, none in browser dev mode. */
 export interface SecretStore {
@@ -73,6 +74,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
 
   private aiSettings: AiSettings
   private ai: AiClient | null = null
+  private analyzer: ThreadAnalyzer | null = null
   private get aiSettingsPath() {
     return join(dirname(this.opts.dbPath), 'ai-settings.json')
   }
@@ -92,6 +94,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
       core.outbox.on('outgoing', (record) => this.emit('event', { type: 'outgoing', record }))
       this.ai = new AiClient({ settings: () => this.aiSettings, apiKey: (p) => this.apiKey(p), repo: core.repo })
       this.ai.on('usage', () => this.emit('event', { type: 'ai' }))
+      this.startAnalysis(core, this.ai)
       await core.engine.start()
       this.update({ phase: 'ready', sync: core.engine.getStatus() })
       void this.backfill(core)
@@ -131,7 +134,17 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
   }
 
   async thread(topicId: number, entryCount: number | null) {
-    return this.need().engine.ensureThread(TopicId(int(topicId)), entryCount == null ? null : int(entryCount))
+    const id = TopicId(int(topicId))
+    const view = await this.need().engine.ensureThread(id, entryCount == null ? null : int(entryCount))
+    // A thread you open is worth understanding, whichever box it's in (a no-op when current).
+    this.analyzer?.enqueue(id, true)
+    return view
+  }
+
+  /** What the AI made of a thread (summary, action items, dates, amounts), or null. */
+  async analysis(topicId: number) {
+    // Stored as the model's validated answer (ThreadAnalysis) plus when and by which model.
+    return this.need().repo.analysis(TopicId(int(topicId))) as ThreadAnalysisView | null
   }
 
   async threadHtml(topicId: number) {
@@ -305,6 +318,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     if (!parsed.success) throw new Error(`Invalid AI settings: ${parsed.error.issues[0]?.message ?? 'unknown'}`)
     this.aiSettings = parsed.data
     writeJson(this.aiSettingsPath, parsed.data)
+    this.analyzer?.resume()
     this.emit('event', { type: 'ai' })
     return this.aiStatus()
   }
@@ -315,6 +329,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     const secrets = this.opts.secrets
     if (!secrets) throw new Error('Keys can’t be stored in browser dev mode.')
     secrets.set(PROVIDERS[id].secretName, key === null ? null : checkKey(id, key))
+    this.analyzer?.resume()
     this.emit('event', { type: 'ai' })
     return this.aiStatus()
   }
@@ -371,6 +386,25 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
 
   private apiKey(provider: ProviderId): string | null {
     return this.opts.secrets?.get(PROVIDERS[provider].secretName) ?? null
+  }
+
+  /**
+   * Analyses new Imbox mail as it arrives, threads as you open them, and on start the last
+   * week's unread Imbox (up to 25). Paused while AI isn't set up; settings changes resume it.
+   */
+  private startAnalysis(core: Core, ai: AiClient) {
+    const analyzer = new ThreadAnalyzer({
+      repo: core.repo,
+      ai,
+      fetchThread: (topicId, entryCount, priority) => core.engine.ensureThread(topicId, entryCount, priority),
+      me: async () => ({ name: null, emails: await this.senders().then((s) => s.map((x) => x.email), () => []) }),
+    })
+    this.analyzer = analyzer
+    analyzer.on('analysis', (topicId) => this.emit('event', { type: 'analysis', topicId }))
+    analyzer.on('error', (err) => console.error('[analysis]', err.message))
+    core.engine.on('mail', ({ topicId, boxKind }) => topicId != null && boxKind === 'imbox' && analyzer.enqueue(topicId))
+    const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
+    for (const topicId of core.repo.unanalysedUnread('imbox', weekAgo, 25)) analyzer.enqueue(topicId)
   }
 
   private needAi(): AiClient {
