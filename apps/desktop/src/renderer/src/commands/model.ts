@@ -15,10 +15,13 @@ export interface Command {
   detail?: string
   /** The shortcut that does the same, shown so it gets learned. */
   keys?: readonly string[]
+  /** What kind of thing it is, drawn as the row's icon (kept when listed under Recent). */
+  icon?: CommandIcon
   run: () => void
 }
 
 export type Section = 'Recent' | 'Actions' | 'Go to' | 'Labels' | 'Emails' | 'App'
+export type CommandIcon = 'action' | 'box' | 'label' | 'email' | 'app'
 
 /** Order of sections when nothing is typed, and for ties. */
 export const SECTION_ORDER: Section[] = ['Recent', 'Actions', 'Go to', 'Labels', 'Emails', 'App']
@@ -32,7 +35,8 @@ export interface Ranked {
 
 /**
  * The commands to show for `query`. Empty: recent choices first, then every section in
- * order. Typed: the best matches of all, whatever their section (a title match beats one
+ * order, leaving out the long ones (each label, each email: "Labels…" covers the first,
+ * and the second need a query). Typed: the best matches of all, whatever their section (a title match beats one
  * only in the keywords or detail).
  */
 export function rank(query: string, commands: Command[], recent: string[] = [], limit = 50): Ranked[] {
@@ -41,7 +45,7 @@ export function rank(query: string, commands: Command[], recent: string[] = [], 
     const recents = recent.flatMap((id) => byId.get(id) ?? []).slice(0, 5)
     const recentIds = new Set(recents.map((c) => c.id))
     const rest = commands
-      .filter((c) => !recentIds.has(c.id) && c.section !== 'Emails')
+      .filter((c) => !recentIds.has(c.id) && c.section !== 'Emails' && c.section !== 'Labels')
       .sort((a, b) => SECTION_ORDER.indexOf(a.section) - SECTION_ORDER.indexOf(b.section))
     return [...recents.map((c) => ({ command: { ...c, section: 'Recent' as const }, indices: [], score: 0 })), ...rest.map((c) => ({ command: c, indices: [], score: 0 }))].slice(0, limit)
   }

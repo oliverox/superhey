@@ -66,6 +66,13 @@ describe('rank', () => {
     expect(r.map((x) => x.command.section)).toEqual(['Recent', 'Actions', 'Actions', 'Actions', 'Go to'])
   })
 
+  it('leaves each label out until something is typed ("Labels…" covers them)', () => {
+    const withLabels = [...list, cmd('Label Travel', { section: 'Labels' }), cmd('Labels…', { keys: ['l'] })]
+    expect(titles('', withLabels)).not.toContain('Label Travel')
+    expect(titles('', withLabels)).toContain('Labels…')
+    expect(titles('travel', withLabels)).toEqual(['Label Travel'])
+  })
+
   it('nudges recent choices up among equal matches', () => {
     const pair = [cmd('Label: Travel', { section: 'Labels' }), cmd('Label: Taxes', { section: 'Labels' })]
     expect(titles('label t', pair, ['Label: Taxes'])[0]).toBe('Label: Taxes')

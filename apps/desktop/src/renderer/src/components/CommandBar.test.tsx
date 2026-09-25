@@ -63,6 +63,9 @@ describe('CommandBar', () => {
     expect(document.activeElement).toBe(input())
     expect(rows()).toEqual(['Reply Later' + 'r', 'Move to Trash' + '#', 'Imbox' + '1', 'Switch theme' + '⇧T'])
     expect([...document.querySelectorAll('.eyebrow')].map((h) => h.textContent)).toEqual(['Actions', 'Go to', 'App'])
+    // Each group after the first is set apart by a rule; every row has an icon.
+    expect([...document.querySelectorAll('.command-heading')].map((h) => h.classList.contains('border-t'))).toEqual([false, true, true])
+    expect(document.querySelectorAll('[role=option] svg')).toHaveLength(4)
     expect(selected()).toContain('Reply Later')
   })
 
