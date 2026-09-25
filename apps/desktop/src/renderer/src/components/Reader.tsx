@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import Markdown, { type Components } from 'react-markdown'
 import type { EntryRow, PostingRow, ThreadView } from '@shared/api'
 import { api, useLive } from '../api'
@@ -160,7 +160,9 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
               <ReaderSkeleton />
             ) : (
               <>
-                <Conversation entries={thread.data.entries} subject={subject} htmlByEntry={html.data ?? {}} />
+                <ThreadTopic.Provider value={thread.data.topicId}>
+                  <Conversation entries={thread.data.entries} subject={subject} htmlByEntry={html.data ?? {}} />
+                </ThreadTopic.Provider>
                 {/* No replying to someone who hasn't been let in yet. */}
                 {target.screeningId == null && <ReplyArea key={thread.data.topicId} thread={thread.data} />}
               </>
@@ -472,8 +474,18 @@ export function useDesignedView(entryHtml: string | undefined) {
  * The forward's origin, as a quiet second line of the header. The original "to" is
  * dropped: it names the forwarder, who is already the sender above.
  */
+/** The thread being read, for what inside it needs to know (a forward's original isn't it). */
+export const ThreadTopic = createContext<number | null>(null)
+
 function ForwardedLine({ header, threadSubject }: { header: ForwardedHeader; threadSubject: string }) {
+  const topicId = useContext(ThreadTopic)
   const date = parseForwardedDate(header.date)
+  // The email you forwarded is its own thread in HEY; find it, to open it from here.
+  const fromEmail = header.from?.email ?? null
+  const original = useLive(
+    () => (fromEmail ? api.forwardedOriginal(fromEmail, header.subject ?? threadSubject, date?.toISOString() ?? null, topicId ?? null) : Promise.resolve(null)),
+    [fromEmail, header.subject, threadSubject, date?.getTime(), topicId],
+  ).data
   const subject = header.subject && !sameSubject(header.subject, threadSubject) ? stripSubjectPrefixes(header.subject) : null
   return (
     <div className="mt-1 flex min-w-0 items-baseline gap-1.5 text-[13px] text-ink-faint">
@@ -496,6 +508,19 @@ function ForwardedLine({ header, threadSubject }: { header: ForwardedHeader; thr
         <>
           <span aria-hidden>·</span>
           <span className="min-w-0 truncate">{subject}</span>
+        </>
+      )}
+      {original && (
+        <>
+          <span aria-hidden>·</span>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('myhey:open-thread', { detail: original }))}
+            title={`Open the email you forwarded, in ${original.boxId ? 'its box' : 'HEY'}`}
+            className="shrink-0 font-medium text-ink-soft hover:text-ink hover:underline"
+          >
+            Open original
+          </button>
         </>
       )}
     </div>

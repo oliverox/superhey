@@ -373,6 +373,23 @@ export class Repo {
     ).map(toPostingRow))
   }
 
+  /**
+   * The thread a forwarded email came from: mail from `fromEmail` with the same subject
+   * (reply/forward prefixes, list tags, quotes and spacing aside), the closest in time to
+   * `at` (its date in the forward), not in `exceptTopic` (the forward's own thread).
+   */
+  forwardedOriginal(fromEmail: string, subject: string, at: string | null, exceptTopic: TopicId | null): PostingRow | null {
+    const want = comparableSubject(subject)
+    if (!want) return null
+    const rows = this.threadRows('p.sender_email = ? AND p.topic_id IS NOT ?', 'p.active_at DESC', fromEmail.toLowerCase(), exceptTopic)
+      .filter((p) => comparableSubject(p.subject) === want)
+    if (!rows.length) return null
+    const t = at ? Date.parse(at) : NaN
+    if (Number.isNaN(t)) return rows[0]!
+    const created = (p: PostingRow) => Date.parse(p.activeAt ?? '')
+    return [...rows].sort((a, b) => Math.abs(created(a) - t) - Math.abs(created(b) - t))[0]!
+  }
+
   /** People you've had mail from whose name or address contains `text`, most mail first (for from: suggestions). */
   correspondents(text: string, limit = 6): Array<{ name: string | null; email: string; count: number }> {
     return this.all<{ name: string | null; email: string; n: number }>(
@@ -974,6 +991,19 @@ function toAttachmentRow(r: Record<string, unknown>): AttachmentRow {
     byteSize: r.byte_size as number | null,
     embedded: /:e-/.test(r.id as string),
   }
+}
+
+/** A subject as compared across a forward: no Re:/Fwd:, list tags, quotes or spacing, lowercased. */
+export function comparableSubject(subject: string | null): string {
+  let s = subject ?? ''
+  for (;;) {
+    const next = s
+      .replace(/^\s*((re|fwd?|fw|aw|wg|tr|sv|vs)\s*(\[\d+\])?\s*:\s*)+/i, '')
+      .replace(/^\s*\[[^\[\]]{2,40}\]\s*/, '')
+    if (next === s) break
+    s = next
+  }
+  return s.replace(/["'“”‘’«»]/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
 }
 
 /**

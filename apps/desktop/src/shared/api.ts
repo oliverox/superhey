@@ -106,6 +106,8 @@ export interface Api {
   search(text: string): Promise<{ rows: PostingRow[]; highlight: string[]; problems: string[] }>
   /** Search the whole mailbox through HEY: one page of 10. */
   searchHey(text: string, page: number): Promise<HeySearchPage>
+  /** The thread a forwarded email came from, when it's in the cache. */
+  forwardedOriginal(fromEmail: string, subject: string, at: string | null, exceptTopic: number | null): Promise<PostingRow | null>
   /** People to suggest for from: and to:. */
   searchPeople(text: string): Promise<Array<{ name: string | null; email: string; count: number }>>
   /** Emails whose subject or sender contains every word of the query (for jumping to one). */
@@ -156,7 +158,7 @@ export interface Api {
   testAi(engine: ProviderId | 'local'): Promise<AiTestResult>
 }
 
-export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'searchHey', 'searchPeople', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'analysis', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
+export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'searchHey', 'searchPeople', 'forwardedOriginal', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'analysis', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
 export type ApiMethod = (typeof API_METHODS)[number]
 
 export type ApiEvent =
