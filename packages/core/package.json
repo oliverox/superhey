@@ -12,6 +12,9 @@
     "demo": "tsx src/dev/demo.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.63",
+    "@ai-sdk/openai-compatible": "^3.0.55",
+    "ai": "^7.0.114",
     "zod": "^4.6.5"
   },
   "devDependencies": {

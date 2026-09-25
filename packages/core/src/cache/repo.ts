@@ -603,6 +603,44 @@ export class Repo {
 
   // Sync state
 
+  /** Logs one model call. */
+  recordAiUsage(u: AiUsageRecord) {
+    this.run(
+      'INSERT INTO ai_usage (at, task, engine, model, input, cache_read, cache_write, output, cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      u.at,
+      u.task,
+      u.engine,
+      u.model,
+      u.input,
+      u.cacheRead,
+      u.cacheWrite,
+      u.output,
+      u.costUsd,
+    )
+  }
+
+  /** Model calls since `sinceIso`, totalled per task, engine and model (most spent first). */
+  aiUsageSince(sinceIso: string): AiUsageTotal[] {
+    return this.all<Record<string, unknown>>(
+      `SELECT task, engine, model, count(*) AS calls, sum(input) AS input, sum(output) AS output, sum(cost_usd) AS cost
+       FROM ai_usage WHERE at >= ? GROUP BY task, engine, model ORDER BY cost DESC, calls DESC`,
+      sinceIso,
+    ).map((r) => ({
+      task: r.task as string,
+      engine: r.engine as string,
+      model: r.model as string,
+      calls: Number(r.calls),
+      input: Number(r.input),
+      output: Number(r.output),
+      costUsd: Number(r.cost),
+    }))
+  }
+
+  /** What Claude calls have cost since `sinceIso`, in USD. */
+  aiSpentSince(sinceIso: string): number {
+    return Number(this.get<{ c: number | null }>('SELECT sum(cost_usd) AS c FROM ai_usage WHERE at >= ?', sinceIso)?.c ?? 0)
+  }
+
   getState(key: string): string | null {
     return this.get<{ value: string }>('SELECT value FROM sync_state WHERE key = ?', key)?.value ?? null
   }
@@ -672,4 +710,26 @@ function fromRaw(rawJson: string, senderName: string | null): Pick<PostingRow, '
 function initialsOf(name: string | null): string {
   const words = (name ?? '').replace(/[^\p{L}\p{N} ]/gu, ' ').split(/\s+/).filter(Boolean)
   return words.slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || '?'
+}
+
+export interface AiUsageRecord {
+  at: string
+  task: string
+  engine: string
+  model: string
+  input: number
+  cacheRead: number
+  cacheWrite: number
+  output: number
+  costUsd: number
+}
+
+export interface AiUsageTotal {
+  task: string
+  engine: string
+  model: string
+  calls: number
+  input: number
+  output: number
+  costUsd: number
 }

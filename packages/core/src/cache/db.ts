@@ -152,6 +152,22 @@ const MIGRATIONS: string[] = [
   UPDATE postings SET is_bundle = 0
    WHERE is_bundle = 1 AND coalesce(json_extract(raw_json, '$.kind'), 'bundle') != 'bundle';
   `,
+  `
+  -- Every model call: for the usage meter and the monthly budget.
+  CREATE TABLE ai_usage (
+    id           INTEGER PRIMARY KEY,
+    at           TEXT NOT NULL,
+    task         TEXT NOT NULL,
+    engine       TEXT NOT NULL,
+    model        TEXT NOT NULL,
+    input        INTEGER NOT NULL DEFAULT 0,
+    cache_read   INTEGER NOT NULL DEFAULT 0,
+    cache_write  INTEGER NOT NULL DEFAULT 0,
+    output       INTEGER NOT NULL DEFAULT 0,
+    cost_usd     REAL NOT NULL DEFAULT 0
+  );
+  CREATE INDEX ai_usage_at ON ai_usage (at);
+  `,
 ]
 
 export type Db = DatabaseSync
