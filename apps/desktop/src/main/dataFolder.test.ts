@@ -21,7 +21,16 @@ describe('moving the old data folder', () => {
     expect(existsSync(join(root, '@myhey'))).toBe(false)
   })
 
-  it('never moves over a folder that already exists, and does nothing twice', () => {
+  it('moves over the folder Electron creates at startup, before the app runs', () => {
+    const { oldDir, newDir } = appData()
+    mkdirSync(join(newDir, 'GPUCache'), { recursive: true })
+    writeFileSync(join(newDir, 'Local State'), '{}')
+    expect(moveOldDataFolder(oldDir, newDir)).toBe('moved')
+    expect(readFileSync(join(newDir, 'cache.db'), 'utf8')).toBe('the cache')
+    expect(existsSync(join(newDir, 'GPUCache'))).toBe(false)
+  })
+
+  it('never moves over a folder that has the app’s data, and does nothing twice', () => {
     const { oldDir, newDir } = appData()
     mkdirSync(newDir)
     writeFileSync(join(newDir, 'cache.db'), 'newer')
