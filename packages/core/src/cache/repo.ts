@@ -638,18 +638,19 @@ export class Repo {
     return this.get<{ n: number | null }>('SELECT max(entry_count) AS n FROM postings WHERE topic_id = ?', topicId)?.n ?? null
   }
 
-  analysisIsCurrent(topicId: TopicId, activeAt: string): boolean {
-    const row = this.get<{ active_at: string }>('SELECT active_at FROM thread_analysis WHERE topic_id = ?', topicId)
-    return row != null && row.active_at >= activeAt
+  /** Whether the thread's analysis covers its latest activity, made with `version`'s instructions (or later). */
+  analysisIsCurrent(topicId: TopicId, activeAt: string, version = 1): boolean {
+    const row = this.get<{ active_at: string; version: number }>('SELECT active_at, version FROM thread_analysis WHERE topic_id = ?', topicId)
+    return row != null && row.active_at >= activeAt && row.version >= version
   }
 
-  saveAnalysis(topicId: TopicId, activeAt: string, engine: string, model: string, a: { summary: string; needsReply: boolean; expectsReply: boolean; category: string }) {
+  saveAnalysis(topicId: TopicId, activeAt: string, engine: string, model: string, a: { summary: string; needsReply: boolean; expectsReply: boolean; category: string }, version = 1) {
     this.run(
-      `INSERT INTO thread_analysis (topic_id, active_at, analyzed_at, engine, model, summary, needs_reply, expects_reply, category, json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO thread_analysis (topic_id, active_at, analyzed_at, engine, model, summary, needs_reply, expects_reply, category, json, version)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (topic_id) DO UPDATE SET active_at = excluded.active_at, analyzed_at = excluded.analyzed_at, engine = excluded.engine,
          model = excluded.model, summary = excluded.summary, needs_reply = excluded.needs_reply, expects_reply = excluded.expects_reply,
-         category = excluded.category, json = excluded.json`,
+         category = excluded.category, json = excluded.json, version = excluded.version`,
       topicId,
       activeAt,
       new Date().toISOString(),
@@ -660,6 +661,7 @@ export class Repo {
       b(a.expectsReply),
       a.category,
       JSON.stringify(a),
+      version,
     )
   }
 
@@ -675,14 +677,15 @@ export class Repo {
   }
 
   /** Unread threads in a box since `sinceIso` that haven't been analysed as they are now: the first run's backlog. */
-  unanalysedUnread(boxKind: string, sinceIso: string, limit: number): TopicId[] {
+  unanalysedUnread(boxKind: string, sinceIso: string, limit: number, version = 1): TopicId[] {
     return this.all<{ topic_id: number }>(
       `SELECT p.topic_id FROM postings p
        WHERE p.box_id IN (SELECT id FROM boxes WHERE kind = ?) AND p.seen = 0 AND p.is_bundle = 0 AND p.topic_id IS NOT NULL AND p.active_at >= ?
-         AND NOT EXISTS (SELECT 1 FROM thread_analysis a WHERE a.topic_id = p.topic_id AND a.active_at >= p.active_at)
+         AND NOT EXISTS (SELECT 1 FROM thread_analysis a WHERE a.topic_id = p.topic_id AND a.active_at >= p.active_at AND a.version >= ?)
        ORDER BY p.active_at DESC LIMIT ?`,
       boxKind,
       sinceIso,
+      version,
       limit,
     ).map((r) => TopicId(r.topic_id))
   }

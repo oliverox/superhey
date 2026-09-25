@@ -19,17 +19,17 @@ const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 // Every field required (nullable where it may be absent): some providers' structured
 // output accepts nothing looser.
 export const ThreadAnalysis = z.object({
-  summary: z.string().describe('One line, at most 100 characters: what this thread is about and where it stands. No greeting, no "This email".'),
+  summary: z.string().describe('One line, at most 100 characters: what this thread is about and where it stands. Start with the substance, not the sender or a category ("Wise notification:"): the app shows those.'),
   needsReply: z.boolean().describe('True only if a person (not an automated sender) asks the user something or expects them to act, and the user has not answered since.'),
   replyReason: z.string().nullable().describe('When needsReply: in a few words, what they want (e.g. "asks if Friday works"). Otherwise null.'),
   expectsReply: z.boolean().describe('When the user wrote the latest message: whether it asks for an answer or action from the others. Otherwise false.'),
   category: z.enum(CATEGORIES),
   actionItems: z
-    .array(z.object({ text: z.string().describe('Something the user has to do, imperative, short.'), due: ymd.nullable().describe('YYYY-MM-DD when a date is stated or clearly implied, else null.') }))
+    .array(z.object({ text: z.string().describe('Something the user has to do, imperative, short.'), due: ymd.nullable().describe('YYYY-MM-DD only when the thread states a deadline for it; never guess one. Else null.') }))
     .describe('At most 5. Only what the user must do, not what others will do.'),
   dates: z
     .array(z.object({ label: z.string(), date: ymd, time: z.string().regex(/^\d{2}:\d{2}$/).nullable() }))
-    .describe('At most 5 dates that matter: deadlines, bookings, check-ins, renewals, appointments.'),
+    .describe('At most 5 dates that matter from today on: deadlines, bookings, check-ins, renewals, appointments. Past dates only if they are missed deadlines. No duplicates.'),
   amounts: z.array(z.object({ label: z.string(), amount: z.number(), currency: z.string() })).describe('At most 5 sums of money that matter: totals paid or due, payouts, fees.'),
 })
 export type ThreadAnalysis = z.infer<typeof ThreadAnalysis>
@@ -52,8 +52,12 @@ Rules:
 - Messages marked from="you" are the user's own.
 - needsReply: true only when a real person asks the user a question or expects them to act, and the user hasn't answered after that. Newsletters, receipts, notifications, marketing and automated messages never need a reply. If the user wrote the latest message, needsReply is false.
 - expectsReply: only when the user wrote the latest message: true if it asks the others for an answer or action ("Can you send the invoice?", "Let me know"), false for sending files, thanks, or FYI.
-- Dates: resolve relative dates ("Friday", "next week") against the message's date, as YYYY-MM-DD. Leave out dates you are unsure of.
-- Keep everything short and plain. Write in the thread's language.`
+- Dates: resolve relative dates ("Friday", "next week") against the message's date, as YYYY-MM-DD. Leave out dates you are unsure of. An action item has a due date only when the thread states one.
+- Never repeat secrets: one-time codes, passwords, PINs, verification or security codes, full card or account numbers. Say "a one-time code" instead.
+- Keep everything short and plain. Start summaries with the substance; the app already shows the sender. Write in the thread's language.`
+
+/** Bumped when the instructions change, so threads are read again as they come up. */
+export const ANALYSIS_VERSION = 2
 
 /** The prompt: the thread as data, newest messages kept when it's long. */
 export function analysisPrompt(thread: ThreadView, me: Me, today: string): string {
@@ -162,7 +166,7 @@ export class ThreadAnalyzer extends EventEmitter<{ analysis: [TopicId]; error: [
   private async analyse(topicId: TopicId) {
     const { repo, ai } = this.deps
     const activeAt = repo.latestActivity(topicId)
-    if (activeAt == null || repo.analysisIsCurrent(topicId, activeAt)) return
+    if (activeAt == null || repo.analysisIsCurrent(topicId, activeAt, ANALYSIS_VERSION)) return
     // No thread is fetched unless a model can read it.
     if (!ai.canRun('summary')) throw new AiError('not-set-up', 'AI isn’t set up.')
     const thread = await this.deps.fetchThread(topicId, repo.entryCount(topicId), 'low')
@@ -175,7 +179,7 @@ export class ThreadAnalyzer extends EventEmitter<{ analysis: [TopicId]; error: [
       schema: ThreadAnalysis,
       maxOutputTokens: 800,
     })
-    repo.saveAnalysis(topicId, activeAt, result.engine, result.model, tidy(result.output))
+    repo.saveAnalysis(topicId, activeAt, result.engine, result.model, tidy(result.output), ANALYSIS_VERSION)
     this.emit('analysis', topicId)
   }
 }
@@ -184,10 +188,19 @@ export class ThreadAnalyzer extends EventEmitter<{ analysis: [TopicId]; error: [
 function tidy(a: ThreadAnalysis): ThreadAnalysis {
   return {
     ...a,
-    summary: a.summary.trim().slice(0, 140),
-    replyReason: a.needsReply ? (a.replyReason?.trim().slice(0, 140) ?? null) : null,
-    actionItems: a.actionItems.slice(0, 5),
+    summary: scrub(a.summary.trim()).slice(0, 140),
+    replyReason: a.needsReply ? (a.replyReason ? scrub(a.replyReason.trim()).slice(0, 140) : null) : null,
+    actionItems: a.actionItems.slice(0, 5).map((i) => ({ ...i, text: scrub(i.text) })),
     dates: a.dates.slice(0, 5),
     amounts: a.amounts.slice(0, 5),
   }
+}
+
+/**
+ * A backstop for secrets the model repeats anyway: a run of 4–8 digits next to a word for
+ * a code or password becomes "••••". Longer numbers (amounts, references) are left alone.
+ */
+export function scrub(text: string): string {
+  return text.replace(/\b(code|otp|password|passcode|pin|one[- ]time[- ]password|verification|security code|mot de passe)\b([^\d\n]{0,24})\b\d{4,8}\b/gi, '$1$2••••')
+    .replace(/\b\d{4,8}\b(?=[^\d\n]{0,12}\b(is your|est votre|code|OTP)\b)/gi, '••••')
 }

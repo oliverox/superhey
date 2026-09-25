@@ -1,6 +1,6 @@
 import { MockLanguageModelV4 } from 'ai/test'
 import { describe, expect, it, vi } from 'vitest'
-import { analysisPrompt, ThreadAnalyzer, type ThreadAnalysis } from '../src/ai/analysis'
+import { ANALYSIS_VERSION, analysisPrompt, scrub, ThreadAnalyzer, type ThreadAnalysis } from '../src/ai/analysis'
 import { AiClient } from '../src/ai/client'
 import { readAiSettings, type AiSettings } from '../src/ai/settings'
 import { openDb } from '../src/cache/db'
@@ -178,5 +178,41 @@ describe('the first run’s backlog', () => {
     repo.saveAnalysis(TopicId(96), '2026-09-25T08:00:00Z', 'claude', 'm', { summary: 's', needsReply: false, expectsReply: false, category: 'other' })
     expect(repo.unanalysedUnread('imbox', '2026-09-18T00:00:00Z', 10)).toEqual([92, 91])
     expect(repo.unanalysedUnread('imbox', '2026-09-18T00:00:00Z', 1)).toEqual([92])
+  })
+})
+
+describe('scrub', () => {
+  it('hides one-time codes the model repeats (as it did with a real one)', () => {
+    expect(scrub('Bank One Time Password: 123456 for a transaction')).toBe('Bank One Time Password: •••• for a transaction')
+    expect(scrub('Your verification code is 123456')).toBe('Your verification code is ••••')
+    expect(scrub('482913 is your Discord code')).toBe('•••• is your Discord code')
+    expect(scrub('Votre code: 5521')).toBe('Votre code: ••••')
+  })
+
+  it('leaves other numbers alone: amounts, references, dates', () => {
+    for (const s of ['$625.23 balance, $0.00 due', 'Tax return submitted, TAN 72665393, acknowledgement ID 4205243', 'Transfer #2391380828 sent', 'Check-in 2026-12-05'])
+      expect(scrub(s)).toBe(s)
+  })
+})
+
+describe('instructions versions', () => {
+  it('reads a thread again when its analysis was made with older instructions', async () => {
+    const { repo, analyzer, fetchThread } = setup()
+    repo.saveAnalysis(TopicId(900), '2026-09-24T09:00:00Z', 'claude', 'claude-haiku-4-5', { summary: 'old', needsReply: false, expectsReply: false, category: 'other' }, ANALYSIS_VERSION - 1)
+    expect(repo.unanalysedUnread('imbox', '2026-09-01T00:00:00Z', 10, ANALYSIS_VERSION)).toEqual([900])
+    analyzer.enqueue(TopicId(900))
+    await analyzer.idle()
+    expect(fetchThread).toHaveBeenCalledTimes(1)
+    expect(repo.analysisIsCurrent(TopicId(900), '2026-09-24T09:00:00Z', ANALYSIS_VERSION)).toBe(true)
+    expect(repo.unanalysedUnread('imbox', '2026-09-01T00:00:00Z', 10, ANALYSIS_VERSION)).toEqual([])
+  })
+
+  it('stores summaries, reasons and action items scrubbed', async () => {
+    const { repo, analyzer } = setup({ answer: { ...ANSWER, summary: 'Your one-time password: 998877', actionItems: [{ text: 'Enter code 445566', due: null }] } })
+    analyzer.enqueue(TopicId(900))
+    await analyzer.idle()
+    const a = repo.analysis(TopicId(900)) as unknown as ThreadAnalysis
+    expect(a.summary).toBe('Your one-time password: ••••')
+    expect(a.actionItems[0]!.text).toBe('Enter code ••••')
   })
 })

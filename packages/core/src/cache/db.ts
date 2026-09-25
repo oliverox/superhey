@@ -183,6 +183,10 @@ const MIGRATIONS: string[] = [
     json          TEXT NOT NULL
   );
   `,
+  `
+  -- Which instructions an analysis was made with: newer ones redo it as the thread comes up.
+  ALTER TABLE thread_analysis ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+  `,
 ]
 
 export type Db = DatabaseSync

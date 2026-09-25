@@ -10,6 +10,7 @@ import {
   AiClient,
   AiError,
   ThreadAnalyzer,
+  ANALYSIS_VERSION,
   AiSettings,
   aiMode,
   checkKey,
@@ -404,7 +405,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     analyzer.on('error', (err) => console.error('[analysis]', err.message))
     core.engine.on('mail', ({ topicId, boxKind }) => topicId != null && boxKind === 'imbox' && analyzer.enqueue(topicId))
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
-    for (const topicId of core.repo.unanalysedUnread('imbox', weekAgo, 25)) analyzer.enqueue(topicId)
+    for (const topicId of core.repo.unanalysedUnread('imbox', weekAgo, 25, ANALYSIS_VERSION)) analyzer.enqueue(topicId)
   }
 
   private needAi(): AiClient {
