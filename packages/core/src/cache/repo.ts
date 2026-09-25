@@ -603,6 +603,87 @@ export class Repo {
 
   // Sync state
 
+  // Today
+
+  /** The latest posting of each thread matching `where` (bundles never count), as list rows. */
+  private threadRows(where: string, order: string, ...params: SQLInputValue[]): PostingRow[] {
+    return this.all<Record<string, unknown>>(
+      `SELECT p.* FROM postings p
+       WHERE p.is_bundle = 0 AND p.topic_id IS NOT NULL AND (${where})
+         AND p.id = (SELECT q.id FROM postings q WHERE q.topic_id = p.topic_id AND q.is_bundle = 0 ORDER BY q.active_at DESC, q.id DESC LIMIT 1)
+       ORDER BY ${order}`,
+      ...params,
+    ).map(toPostingRow)
+  }
+
+  /** Threads HEY has bubbled up now, oldest first. */
+  bubbledUp(): PostingRow[] {
+    return this.threadRows('p.bubbled_up = 1', 'p.active_at ASC')
+  }
+
+  /** What's parked in Reply Later, oldest first. */
+  replyLater(): PostingRow[] {
+    return this.threadRows("p.box_id IN (SELECT id FROM boxes WHERE kind = 'laterbox')", 'p.active_at ASC')
+  }
+
+  /**
+   * Threads where you sent the latest message (HEY's posting `creator` is the latest
+   * sender) between `fromIso` and `toIso`, to someone besides yourself, and not already
+   * parked, bubbled or filed: waiting on others. Oldest first.
+   */
+  waitingOnOthers(myEmails: string[], fromIso: string, toIso: string): PostingRow[] {
+    const mine = myEmails.map((e) => e.toLowerCase())
+    if (!mine.length) return []
+    const list = mine.map(() => '?').join(', ')
+    return this.threadRows(
+      `lower(json_extract(p.raw_json, '$.creator.email_address')) IN (${list})
+       AND p.active_at >= ? AND p.active_at < ?
+       AND p.box_id NOT IN (SELECT id FROM boxes WHERE kind IN ('laterbox', 'bubblebox', 'feedbox', 'trailbox'))
+       AND p.bubbled_up = 0
+       AND EXISTS (SELECT 1 FROM json_each(p.raw_json, '$.contacts') c
+                   WHERE lower(json_extract(c.value, '$.email_address')) NOT IN (${list}))`,
+      'p.active_at ASC',
+      ...mine,
+      fromIso,
+      toIso,
+      ...mine,
+    )
+  }
+
+  /** Unread threads per box that arrived since `sinceIso` (all unread when null); bundles count their mail. */
+  unseenSince(sinceIso: string | null): Array<{ boxId: number; kind: string; name: string; count: number }> {
+    return this.all<Record<string, unknown>>(
+      `SELECT b.id, b.kind, b.name, count(p.id) AS c
+       FROM boxes b JOIN postings p ON p.box_id = b.id
+       WHERE p.seen = 0 AND p.is_bundle = 0 AND (? IS NULL OR p.active_at > ?)
+       GROUP BY b.id ORDER BY b.id`,
+      sinceIso,
+      sinceIso,
+    ).map((r) => ({ boxId: Number(r.id), kind: r.kind as string, name: r.name as string, count: Number(r.c) }))
+  }
+
+  /**
+   * HEY to-dos not done and dated before `beforeDay` (YYYY-MM-DD): overdue and today's,
+   * oldest first. Compared as calendar days: HEY dates them at UTC midnight, which is the
+   * named day wherever you are.
+   */
+  todosDue(beforeDay: string): TodoRow[] {
+    return this.all<Record<string, unknown>>(
+      'SELECT id, title, due_at, completed_at FROM todos WHERE completed_at IS NULL AND due_at IS NOT NULL AND substr(due_at, 1, 10) < ? ORDER BY due_at, id',
+      beforeDay,
+    ).map(toTodoRow)
+  }
+
+  todo(id: number): TodoRow | null {
+    const r = this.get<Record<string, unknown>>('SELECT id, title, due_at, completed_at FROM todos WHERE id = ?', id)
+    return r ? toTodoRow(r) : null
+  }
+
+  /** Marks a to-do done (or not) in the cache, ahead of HEY's answer. */
+  setTodoDone(id: number, completedAt: string | null) {
+    this.run('UPDATE todos SET completed_at = ? WHERE id = ?', completedAt, id)
+  }
+
   /** Logs one model call. */
   recordAiUsage(u: AiUsageRecord) {
     this.run(
@@ -732,4 +813,16 @@ export interface AiUsageTotal {
   input: number
   output: number
   costUsd: number
+}
+
+export interface TodoRow {
+  id: number
+  title: string
+  /** The day it's for (HEY's starts_at). */
+  dueAt: string | null
+  completedAt: string | null
+}
+
+function toTodoRow(r: Record<string, unknown>): TodoRow {
+  return { id: Number(r.id), title: (r.title as string) || '(untitled)', dueAt: (r.due_at as string | null) ?? null, completedAt: (r.completed_at as string | null) ?? null }
 }

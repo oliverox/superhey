@@ -17,9 +17,11 @@ export type Action =
   | { type: 'trash'; postingId: number }
   /** A Screener decision. Keyed by clearance ID (the sender isn't a posting yet). */
   | { type: 'screen'; clearanceId: number; decision: 'approve' | 'deny' | 'spam'; box?: ScreenerBox; name?: string }
+  /** Completes (or reopens) a HEY to-do. */
+  | { type: 'todo'; todoId: number; done: boolean }
 
-/** Actions on a thread already in the cache (everything but Screener decisions). */
-type PostingAction = Exclude<Action, { type: 'screen' }>
+/** Actions on a thread already in the cache (everything but Screener decisions and to-dos). */
+type PostingAction = Exclude<Action, { type: 'screen' | 'todo' }>
 
 /** Who asked: the user, an automatic behaviour (seen-on-open), an undo, and later agents and rules. */
 export type ActionSource = 'user' | 'auto' | 'undo' | 'agent' | 'rule'
@@ -72,6 +74,7 @@ export class ActionRunner extends EventEmitter<{ action: [ActionRecord] }> {
 
   async run(action: Action, source: ActionSource = 'user'): Promise<ActionRecord> {
     if (action.type === 'screen') return this.screen(action, source)
+    if (action.type === 'todo') return this.todo(action, source)
     const posting = this.repo.posting(PostingId(action.postingId))
     if (!posting) throw new Error(`thread ${action.postingId} is not in the cache`)
     const snapshot = this.repo.postingSnapshot(action.postingId)!
@@ -159,6 +162,39 @@ export class ActionRunner extends EventEmitter<{ action: [ActionRecord] }> {
     if (action.decision === 'approve') {
       const box = this.repo.boxByKind(action.box ?? 'imbox')
       if (box) this.engine.requestBoxRefresh(box.id)
+    }
+    return this.publish(id)
+  }
+
+  /**
+   * Completes or reopens a to-do; each undoes the other. Applied to the cache at once, then
+   * verified by reading HEY's to-dos back.
+   */
+  private async todo(action: Extract<Action, { type: 'todo' }>, source: ActionSource): Promise<ActionRecord> {
+    const before = this.repo.todo(action.todoId)
+    if (!before) throw new Error(`to-do ${action.todoId} is not in the cache`)
+    const summary = `${action.done ? 'Completed' : 'Reopened'} “${before.title}”`
+    const inverse: Action[] = [{ ...action, done: !action.done }]
+    const res = this.repo.db
+      .prepare(
+        `INSERT INTO actions (source, type, params_json, status, created_at, posting_id, summary, inverse_json)
+         VALUES (?, 'todo', ?, 'running', ?, 0, ?, ?)`,
+      )
+      .run(source, JSON.stringify(action), new Date().toISOString(), summary, JSON.stringify(inverse))
+    const id = Number(res.lastInsertRowid)
+    this.publish(id)
+    this.repo.setTodoDone(action.todoId, action.done ? new Date().toISOString() : null)
+    this.engine.notify({ kind: 'todos' })
+    try {
+      await this.client.todoDone(action.todoId, action.done)
+      await this.engine.refreshTodos()
+      const after = this.repo.todo(action.todoId)
+      if (!after || (after.completedAt != null) !== action.done) throw new Error("HEY didn't apply the change")
+      this.finish(id, 'done', true, null)
+    } catch (err) {
+      this.repo.setTodoDone(action.todoId, before.completedAt)
+      this.engine.notify({ kind: 'todos' })
+      this.finish(id, 'failed', null, err instanceof Error ? err.message : String(err))
     }
     return this.publish(id)
   }

@@ -295,3 +295,53 @@ describe('ActionRunner: Screener decisions', () => {
     expect(r).toMatchObject({ status: 'failed', error: "HEY didn't apply the decision" })
   })
 })
+
+describe('ActionRunner: to-dos', () => {
+  function todoSetup(opts: { ignore?: boolean } = {}) {
+    const todos = new Map([[7, { id: 7, title: 'File the declaration', starts_at: '2026-09-22T00:00:00Z', completed_at: null as string | null }]])
+    const calls: string[][] = []
+    const exec: Exec = async (_b, raw) => {
+      const a = raw.filter((x) => x !== '--json')
+      calls.push(a)
+      const ok = (data: unknown) => ({ stdout: JSON.stringify({ ok: true, data }), stderr: '', exitCode: 0 })
+      if (a[0] === 'todo' && a[1] === 'list') return ok([...todos.values()])
+      if (a[0] === 'todo' && !opts.ignore) {
+        const t = todos.get(Number(a[2]))!
+        t.completed_at = a[1] === 'complete' ? '2026-09-25T09:00:00Z' : null
+      }
+      return ok({})
+    }
+    const runner = new HeyRunner({ binary: 'hey', exec })
+    const client = new HeyClient(runner)
+    const repo = new Repo(openDb(':memory:'))
+    repo.replaceTodos([...todos.values()])
+    const engine = new SyncEngine(client, repo, runner, { attachmentsDir: mkdtempSync(join(tmpdir(), 'att-')) })
+    const changes: unknown[] = []
+    engine.on('change', (c) => changes.push(c))
+    return { actions: new ActionRunner(client, repo, engine), repo, calls, changes }
+  }
+
+  it('completes a to-do in HEY, confirms it, and reopens it on undo', async () => {
+    const { actions, repo, calls, changes } = todoSetup()
+    const r = await actions.run({ type: 'todo', todoId: 7, done: true })
+    expect(r).toMatchObject({ status: 'done', verified: true, canUndo: true, summary: 'Completed “File the declaration”', type: 'todo' })
+    expect(calls).toContainEqual(['todo', 'complete', '7'])
+    expect(repo.todo(7)!.completedAt).not.toBeNull()
+    expect(changes).toContainEqual({ kind: 'todos' })
+    await actions.undo(r.id)
+    expect(calls).toContainEqual(['todo', 'uncomplete', '7'])
+    expect(repo.todo(7)!.completedAt).toBeNull()
+  })
+
+  it('puts the to-do back when HEY didn’t apply it', async () => {
+    const { actions, repo } = todoSetup({ ignore: true })
+    const r = await actions.run({ type: 'todo', todoId: 7, done: true })
+    expect(r).toMatchObject({ status: 'failed', error: "HEY didn't apply the change" })
+    expect(repo.todo(7)!.completedAt).toBeNull()
+  })
+
+  it('refuses a to-do it doesn’t know', async () => {
+    const { actions } = todoSetup()
+    await expect(actions.run({ type: 'todo', todoId: 99, done: true })).rejects.toThrow(/not in the cache/)
+  })
+})

@@ -226,6 +226,11 @@ export class HeyClient {
     await this.runner.json(['label', 'remove', String(id), '--from', String(labelId)])
   }
 
+  /** Completes (or reopens) a HEY to-do. */
+  async todoDone(id: number, done: boolean) {
+    await this.runner.json(['todo', done ? 'complete' : 'uncomplete', String(id)])
+  }
+
   async trash(id: PostingId) {
     await this.runner.json(['trash', String(id)])
   }
