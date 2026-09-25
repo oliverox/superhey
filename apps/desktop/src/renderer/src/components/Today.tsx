@@ -281,14 +281,16 @@ function TodoRow({ item }: { item: TodoItem }) {
 /** The date for Today's header: "Fri 25 Sep". */
 export const todayLabel = (d = new Date()) => new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).format(d)
 
-/** The reader on Today when there's no thread to open: nothing left to handle. */
-export function TodayDone({ toDos }: { toDos: number }) {
+/**
+ * The reader on Today when there's no thread to open. The list beside already says you're
+ * caught up (or what's left), so this doesn't repeat it: just where to go next.
+ */
+export function TodayDone() {
   return (
     <main className="pane flex flex-col bg-pane-alt">
       <div className="drag h-[52px] shrink-0" />
-      <div className="flex flex-1 flex-col items-center justify-center px-8 text-center text-ink-faint">
-        <p className="font-app text-[17px] font-medium text-ink-soft">{toDos ? `${plural(toDos, 'to-do')} left, and no threads.` : 'You’re caught up.'}</p>
-        <p className="mt-2 text-[12.5px]">
+      <div className="flex flex-1 flex-col items-center justify-center px-8 text-center text-[12.5px] text-ink-faint">
+        <p>
           <kbd>1</kbd>–<kbd>6</kbd> for boxes · <kbd>⌘K</kbd> for anything
         </p>
       </div>

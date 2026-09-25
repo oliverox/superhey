@@ -284,7 +284,7 @@ function Workspace({ status }: { status: AppStatus }) {
 
       <div data-pane="reader" className="contents">
         {onToday && !screening && !query && !target ? (
-          <TodayDone toDos={todayData?.due.todos.length ?? 0} />
+          <TodayDone />
         ) : (
         <Reader
           target={target}
