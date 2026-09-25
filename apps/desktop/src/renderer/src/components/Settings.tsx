@@ -276,20 +276,21 @@ function ProviderRow({
       </div>
 
       {test && test !== 'running' && (
-        <p className={`mt-2 text-[12.5px] ${test.ok ? 'text-ink-soft' : 'text-danger'}`}>
+        // Under the name: the row's own mark already says it works.
+        <p className={`mt-2 pl-[25px] text-[12.5px] ${test.ok ? 'text-ink-soft' : 'text-danger'}`}>
           {test.ok ? (
             <>
-              <Check /> {names.get(test.model) ?? test.model} answered in {(test.ms / 1000).toFixed(1)} s · {money(test.costUsd)}
+              {names.get(test.model) ?? test.model} answered in {(test.ms / 1000).toFixed(1)} s · {money(test.costUsd)}
             </>
           ) : (
             test.message
           )}
         </p>
       )}
-      {error && <p className="mt-2 text-[12.5px] text-danger">{error}</p>}
+      {error && <p className="mt-2 pl-[25px] text-[12.5px] text-danger">{error}</p>}
 
       {panel === 'models' && (
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[12.5px] text-ink-soft">
+        <div className="mt-3 flex pl-[25px] flex-wrap items-center gap-x-4 gap-y-2 text-[12.5px] text-ink-soft">
           {(['cheap', 'quality'] as const).map((tier) => (
             <label key={tier} className="flex items-center gap-2">
               {tier === 'cheap' ? 'Quick tasks' : 'The rest'}
@@ -313,7 +314,7 @@ function ProviderRow({
         </div>
       )}
       {panel === 'key' && (
-        <div className="mt-3">
+        <div className="mt-3 pl-[25px]">
           <KeyForm provider={p} canStoreKey={status.canStoreKey} onDone={() => setPanel(null)} />
         </div>
       )}
