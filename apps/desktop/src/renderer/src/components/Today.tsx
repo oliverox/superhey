@@ -79,6 +79,8 @@ export function TodayList({
   const row = (i: ThreadItem, reason: string) => <ThreadRow key={i.key} item={i} reason={reason} selected={i.posting.id === selectedId} onOpen={() => onOpen(i.posting)} onDone={done(i.posting)} />
   return (
     <div ref={listRef} className="scroll min-h-0 flex-1 pb-6">
+      {/* Full width when nothing's open: kept to a readable measure. */}
+      <div className="mx-auto w-full max-w-[760px]">
       {due.todos.length + due.actions.length + due.bubbled.length > 0 && (
         <Section title="Due" count={due.todos.length + due.actions.length + due.bubbled.length}>
           {(limit) => (
@@ -119,6 +121,7 @@ export function TodayList({
           </ul>
         </section>
       )}
+      </div>
     </div>
   )
 }
@@ -281,19 +284,3 @@ function TodoRow({ item }: { item: TodoItem }) {
 /** The date for Today's header: "Fri 25 Sep". */
 export const todayLabel = (d = new Date()) => new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).format(d)
 
-/**
- * The reader on Today when there's no thread to open. The list beside already says you're
- * caught up (or what's left), so this doesn't repeat it: just where to go next.
- */
-export function TodayDone() {
-  return (
-    <main className="pane flex flex-col bg-pane-alt">
-      <div className="drag h-[52px] shrink-0" />
-      <div className="flex flex-1 flex-col items-center justify-center px-8 text-center text-[13px] text-ink-faint">
-        <p>
-          <kbd>1</kbd>–<kbd>6</kbd> for boxes · <kbd>⌘K</kbd> for anything
-        </p>
-      </div>
-    </main>
-  )
-}

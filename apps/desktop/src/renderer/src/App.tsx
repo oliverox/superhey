@@ -15,7 +15,7 @@ import { ShortcutHelp } from './components/ShortcutHelp'
 import { Tooltips } from './components/Tooltips'
 import { CommandBar } from './components/CommandBar'
 import { Settings } from './components/Settings'
-import { doneFor, TodayDone, TodayList, todayLabel, todayThreads, type TodayData } from './components/Today'
+import { doneFor, TodayList, todayLabel, todayThreads, type TodayData } from './components/Today'
 import type { Command } from './commands/model'
 import { boxCommands, emailCommand, labelCommands } from './commands/sources'
 import { Composer, type ComposeRequest } from './components/Composer'
@@ -103,6 +103,8 @@ function Workspace({ status }: { status: AppStatus }) {
   const groups = useCollapsedGroups(activeBox?.id)
   // j/k move through what's showing: rows in folded groups are skipped.
   const boxRows = useMemo(() => (postings.data ?? []).filter((p) => !groups.collapsed.has(groupOf(p))), [postings.data, groups.collapsed])
+  // Today with nothing open has nothing for a reader to show: it takes the whole width until you open something.
+  const todayAlone = onToday && !screening && !query && !target
   const list = searching ? searchRows : onToday ? todayThreads(todayData) : boxRows
   const selectedIndex = target?.postingId != null ? list.findIndex((p) => p.id === target.postingId) : -1
 
@@ -186,7 +188,7 @@ function Workspace({ status }: { status: AppStatus }) {
 
   return (
     <div
-      className="tiles grid h-full grid-cols-[232px_minmax(340px,440px)_1fr]"
+      className={`tiles grid h-full ${todayAlone ? 'grid-cols-[232px_1fr]' : 'grid-cols-[232px_minmax(340px,440px)_1fr]'}`}
       onMouseDown={(e) => {
         const pane = (e.target as HTMLElement).closest<HTMLElement>('[data-pane]')?.dataset.pane as PaneId | undefined
         if (pane) setActivePane(pane)
@@ -298,9 +300,7 @@ function Workspace({ status }: { status: AppStatus }) {
       </section>
 
       <div data-pane="reader" className="contents">
-        {onToday && !screening && !query && !target ? (
-          <TodayDone />
-        ) : (
+        {!todayAlone && (
         <Reader
           target={target}
           active={activePane === 'reader'}
