@@ -1,4 +1,6 @@
+import type { ThreadAnalysis } from '../ai/analysis'
 import type { Contact, EventRow, PostingRow, Repo, TodoRow } from '../cache/repo'
+import type { TopicId } from '../ids'
 
 /**
  * Today: what needs you, assembled from the cache (no AI, no calls to HEY). A queue of
@@ -18,6 +20,30 @@ export interface ThreadItem {
   days: number
   /** Waiting on others: who you wrote to. */
   people?: Contact[]
+  /** Needs your reply: what they want, in a few words (from the analysis). */
+  reason?: string | null
+}
+
+/** Something the mail says you must do, with a deadline that has come. */
+export interface ActionItem {
+  key: string
+  posting: PostingRow
+  text: string
+  due: string
+  /** Whole days past its deadline; 0 when it's today. */
+  daysLate: number
+}
+
+/** A date found in mail, in the next week. */
+export interface ComingUpItem {
+  key: string
+  posting: PostingRow
+  label: string
+  /** YYYY-MM-DD. */
+  date: string
+  time: string | null
+  /** A deadline for something you must do (not just a date). */
+  isDeadline: boolean
 }
 
 export interface TodoItem {
@@ -29,16 +55,22 @@ export interface TodoItem {
 
 export interface TodayView {
   generatedAt: string
-  /** To-dos overdue or for today, and threads bubbled up now. */
-  due: { todos: TodoItem[]; bubbled: ThreadItem[] }
+  /** To-dos overdue or for today, what mail says is due by today, and threads bubbled up now. */
+  due: { todos: TodoItem[]; actions: ActionItem[]; bubbled: ThreadItem[] }
+  /** Threads the AI judged need your reply (and you haven't parked in Reply Later). */
+  needsReply: ThreadItem[]
   replyLater: ThreadItem[]
   waiting: ThreadItem[]
+  /** Dates in mail over the next week: bookings, renewals, deadlines. */
+  comingUp: ComingUpItem[]
   /** The day's calendar events. */
   events: EventRow[]
   /** Unread mail per box since you last looked (the first time: since the start of today). */
   newSince: { since: string | null; boxes: Array<{ boxId: number; kind: string; name: string; count: number }> }
-  /** How many items above are yours to handle (events and new mail aren't). */
+  /** How many items above are yours to handle (events, dates and new mail aren't). */
   toHandle: number
+  /** Threads Today can't judge until they're analysed (candidates for waiting on others). */
+  needsAnalysis: TopicId[]
 }
 
 export interface TodayInput {
@@ -49,12 +81,12 @@ export interface TodayInput {
   since: string | null
   /** Items put off with "not now": key → the thread's activity then. They return when it changes. */
   hidden: Record<string, string>
-  /**
-   * List waiting on others. Off until the AI can tell whether your last message expects a
-   * reply (#44): "you wrote last" alone mostly finds files sent and thanks said.
-   */
-  waitingOnOthers?: boolean
 }
+
+/** How far back Today looks in analysed mail. */
+const ANALYSED_DAYS = 60
+/** How far ahead Coming up looks. */
+const COMING_UP_DAYS = 7
 
 const DAY = 86_400_000
 
@@ -73,14 +105,56 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
       .filter((p) => shown(p) && p.topicId != null && !seen.has(p.topicId) && (seen.add(p.topicId), true))
       .map((p) => ({ key: `thread:${p.id}`, posting: p, days: daysSince(p.activeAt) }))
 
-  // A thread appears once, in the first section that claims it: bubbled up, then Reply Later, then waiting.
+  const today = ymd(now)
+  const inAWeek = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() + COMING_UP_DAYS))
+  const analysed = repo.currentAnalyses(new Date(now.getTime() - ANALYSED_DAYS * DAY).toISOString()).map((r) => ({ ...r, a: r.analysis as unknown as ThreadAnalysis }))
+  const analysisOf = new Map(analysed.map((r) => [r.posting.topicId!, r.a]))
+
+  // A thread appears once, in the first section that claims it: due (bubbled up, or a
+  // deadline in its mail), needs your reply, Reply Later, waiting on others.
   const seen = new Set<number>()
   const bubbled = items(repo.bubbledUp(), seen)
+
+  const actions: ActionItem[] = []
+  for (const { posting, a } of analysed) {
+    if (!shown(posting) || seen.has(posting.topicId!)) continue
+    const due = (a.actionItems ?? []).filter((i) => i.due != null && i.due <= today)
+    due.forEach((i, n) => actions.push({ key: `action:${posting.id}:${n}`, posting, text: i.text, due: i.due!, daysLate: Math.round((dayStart(today) - dayStart(i.due!)) / DAY) }))
+    if (due.length) seen.add(posting.topicId!)
+  }
+  actions.sort((x, y) => x.due.localeCompare(y.due))
+
+  const laterBox = new Set(repo.replyLater().map((p) => p.topicId))
+  const needsReply = items(
+    analysed.filter(({ posting, a }) => a.needsReply && !laterBox.has(posting.topicId) && !posting.bubbledUp).map((r) => r.posting),
+    seen,
+  ).map((i) => ({ ...i, reason: analysisOf.get(i.posting.topicId!)?.replyReason ?? null }))
+
   const replyLater = items(repo.replyLater(), seen)
-  const waiting = !input.waitingOnOthers ? [] : items(
-    repo.waitingOnOthers(input.myEmails, new Date(now.getTime() - WAITING_UNTIL_DAYS * DAY).toISOString(), new Date(now.getTime() - WAITING_AFTER_DAYS * DAY).toISOString()),
+
+  // Waiting on others: you wrote last, and your message asked for something (the analysis
+  // judges that; "you wrote last" alone is mostly files sent and thanks said).
+  const candidates = repo.waitingOnOthers(input.myEmails, new Date(now.getTime() - WAITING_UNTIL_DAYS * DAY).toISOString(), new Date(now.getTime() - WAITING_AFTER_DAYS * DAY).toISOString())
+  const needsAnalysis = candidates.filter((p) => !analysisOf.has(p.topicId!)).map((p) => p.topicId!)
+  const waiting = items(
+    candidates.filter((p) => analysisOf.get(p.topicId!)?.expectsReply),
     seen,
   ).map((i) => ({ ...i, people: repo.otherPeople(i.posting.id, input.myEmails) }))
+
+  // Coming up: dates from mail in the next week (not claiming threads: a date isn't a task).
+  const comingUp: ComingUpItem[] = []
+  for (const { posting, a } of analysed) {
+    if (!shown(posting)) continue
+    const found = new Set<string>()
+    const add = (label: string, date: string, time: string | null, isDeadline: boolean) => {
+      if (date < today || date > inAWeek || found.has(`${date}|${label.toLowerCase()}`)) return
+      found.add(`${date}|${label.toLowerCase()}`)
+      comingUp.push({ key: `date:${posting.id}:${comingUp.length}`, posting, label, date, time, isDeadline })
+    }
+    for (const d of a.dates ?? []) add(d.label, d.date, d.time, false)
+    for (const i of a.actionItems ?? []) if (i.due && i.due > today) add(i.text, i.due, null, true)
+  }
+  comingUp.sort((x, y) => x.date.localeCompare(y.date) || (x.time ?? '').localeCompare(y.time ?? ''))
 
   const todos = repo.todosDue(ymd(startOfTomorrow)).map((t) => ({
     key: `todo:${t.id}`,
@@ -90,13 +164,16 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
 
   return {
     generatedAt: now.toISOString(),
-    due: { todos, bubbled },
+    due: { todos, actions, bubbled },
+    needsReply,
     replyLater,
     waiting,
+    comingUp: comingUp.slice(0, 8),
     events: repo.events(startOfToday.toISOString(), startOfTomorrow.toISOString()),
     // The first time, "new" is today's: every unread email ever would be noise, not news.
     newSince: { since: input.since, boxes: repo.unseenSince(input.since ?? startOfToday.toISOString()).filter((b) => b.count > 0 && b.kind !== 'bubblebox' && b.kind !== 'laterbox') },
-    toHandle: todos.length + bubbled.length + replyLater.length + waiting.length,
+    toHandle: todos.length + actions.length + bubbled.length + needsReply.length + replyLater.length + waiting.length,
+    needsAnalysis,
   }
 }
 

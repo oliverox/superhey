@@ -676,6 +676,30 @@ export class Repo {
     }
   }
 
+  /**
+   * Threads active since `sinceIso` whose analysis is current (made after their latest
+   * activity), with their latest posting: what Today can say about mail. A thread with
+   * something new since its analysis is left out until it's read again.
+   */
+  currentAnalyses(sinceIso: string): Array<{ posting: PostingRow; analysis: Record<string, unknown> }> {
+    const rows = this.all<Record<string, unknown>>(
+      `SELECT p.*, a.json AS analysis_json FROM thread_analysis a
+       JOIN postings p ON p.topic_id = a.topic_id AND p.is_bundle = 0
+         AND p.id = (SELECT q.id FROM postings q WHERE q.topic_id = a.topic_id AND q.is_bundle = 0 ORDER BY q.active_at DESC, q.id DESC LIMIT 1)
+       WHERE p.active_at >= ? AND a.active_at >= p.active_at
+       ORDER BY p.active_at DESC`,
+      sinceIso,
+    )
+    const postings = this.withAnalysis(rows.map(toPostingRow))
+    return rows.flatMap((r, i) => {
+      try {
+        return [{ posting: postings[i]!, analysis: JSON.parse(r.analysis_json as string) as Record<string, unknown> }]
+      } catch {
+        return []
+      }
+    })
+  }
+
   /** Unread threads in a box since `sinceIso` that haven't been analysed as they are now: the first run's backlog. */
   unanalysedUnread(boxKind: string, sinceIso: string, limit: number, version = 1): TopicId[] {
     return this.all<{ topic_id: number }>(

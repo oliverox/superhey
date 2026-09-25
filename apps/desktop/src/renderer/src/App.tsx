@@ -45,7 +45,7 @@ function Workspace({ status }: { status: AppStatus }) {
   const today = useLive(
     () => api.today(since),
     [since],
-    (e) => e.type === 'today' || e.type === 'action' || (e.type === 'change' && ['postings', 'todos', 'calendar', 'screener'].includes(e.change.kind)),
+    (e) => e.type === 'today' || e.type === 'action' || e.type === 'analysis' || (e.type === 'change' && ['postings', 'todos', 'calendar', 'screener'].includes(e.change.kind)),
   )
   const todayData = (today.data as TodayData | null) ?? null
 

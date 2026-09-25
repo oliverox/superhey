@@ -21,9 +21,11 @@ import type {
   TodayView,
   ThreadItem,
   TodoItem,
+  ActionItem,
+  ComingUpItem,
 } from '@myhey/core'
 
-export type { OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId, TodayView, ThreadItem, TodoItem }
+export type { OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId, TodayView, ThreadItem, TodoItem, ActionItem, ComingUpItem }
 
 /** Everything Settings shows about AI. API keys themselves never leave the main process. */
 export interface AiStatus {

@@ -250,6 +250,8 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     // Your addresses tell which threads you wrote last; without them, that section is empty.
     const myEmails = await this.senders().then((s) => s.map((x) => x.email), () => [])
     const view = buildToday(core.repo, { now: new Date(), myEmails, since, hidden: this.hiddenOnToday() })
+    // What Today couldn't judge yet (have you been waiting on them?) gets read in the background.
+    for (const topicId of view.needsAnalysis) this.analyzer?.enqueue(topicId)
     return { ...view, screener: core.engine.screenerEntries().length }
   }
 

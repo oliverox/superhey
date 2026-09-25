@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import type { PostingRow, ThreadItem, TodayView, TodoItem } from '@shared/api'
+import type { ActionItem, ComingUpItem, PostingRow, ThreadItem, TodayView, TodoItem } from '@shared/api'
 import { api } from '../api'
 import { stripSubjectPrefixes } from '../mail/forwarded'
 import { Avatar } from './Avatar'
@@ -14,14 +14,19 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 export const why = {
   todo: (t: TodoItem) => (t.daysLate === 0 ? 'Due today' : `${plural(t.daysLate, 'day')} late`),
   bubbled: () => 'Bubbled up',
+  action: (a: ActionItem) => (a.daysLate === 0 ? 'Due today' : `${plural(a.daysLate, 'day')} late`),
+  needsReply: (i: ThreadItem) => (i.reason ? capitalise(i.reason) : 'Waiting on your reply'),
   replyLater: (i: ThreadItem) => (i.days === 0 ? 'Waiting on your reply' : `Waiting on your reply · ${plural(i.days, 'day')}`),
   waiting: (i: ThreadItem) => `No reply for ${plural(i.days, 'day')}`,
 }
 
-/** The threads on Today, in the order they're listed (for j / k). */
+const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+/** The threads on Today, in the order they're listed (for j / k), each once. */
 export function todayThreads(t: TodayData | null): PostingRow[] {
   if (!t) return []
-  return [...t.due.bubbled, ...t.replyLater, ...t.waiting].map((i) => i.posting)
+  const all = [...t.due.actions.map((a) => a.posting), ...t.due.bubbled.map((i) => i.posting), ...[...t.needsReply, ...t.replyLater, ...t.waiting].map((i) => i.posting)]
+  return all.filter((p, i) => all.findIndex((q) => q.id === p.id) === i)
 }
 
 /**
@@ -46,26 +51,31 @@ export function TodayList({
   }, [selectedId])
 
   if (!today) return <p className="px-5 py-10 text-center text-ink-faint">Loading…</p>
-  const { due, replyLater, waiting } = today
+  const { due, needsReply, replyLater, waiting, comingUp } = today
   const fresh = today.newSince.boxes
 
   const row = (i: ThreadItem, reason: string) => <ThreadRow key={i.key} item={i} reason={reason} selected={i.posting.id === selectedId} onOpen={() => onOpen(i.posting)} />
   return (
     <div ref={listRef} className="scroll min-h-0 flex-1 pb-6">
-      {(due.todos.length > 0 || due.bubbled.length > 0) && (
-        <Section title="Due" count={due.todos.length + due.bubbled.length}>
+      {due.todos.length + due.actions.length + due.bubbled.length > 0 && (
+        <Section title="Due" count={due.todos.length + due.actions.length + due.bubbled.length}>
           {(limit) => (
             <>
               {due.todos.slice(0, limit).map((t) => (
                 <TodoRow key={t.key} item={t} />
               ))}
-              {due.bubbled.slice(0, Math.max(0, limit - due.todos.length)).map((i) => row(i, why.bubbled()))}
+              {due.actions.slice(0, Math.max(0, limit - due.todos.length)).map((a) => (
+                <ActionRow key={a.key} item={a} selected={a.posting.id === selectedId} onOpen={() => onOpen(a.posting)} />
+              ))}
+              {due.bubbled.slice(0, Math.max(0, limit - due.todos.length - due.actions.length)).map((i) => row(i, why.bubbled()))}
             </>
           )}
         </Section>
       )}
+      {needsReply.length > 0 && <Section title="Needs your reply" count={needsReply.length}>{(limit) => needsReply.slice(0, limit).map((i) => row(i, why.needsReply(i)))}</Section>}
       {replyLater.length > 0 && <Section title="Reply Later" count={replyLater.length}>{(limit) => replyLater.slice(0, limit).map((i) => row(i, why.replyLater(i)))}</Section>}
       {waiting.length > 0 && <Section title="Waiting on others" count={waiting.length}>{(limit) => waiting.slice(0, limit).map((i) => row(i, why.waiting(i)))}</Section>}
+      {comingUp.length > 0 && <ComingUp items={comingUp} selectedId={selectedId} onOpen={onOpen} />}
       {today.toHandle === 0 && (
         <div className="px-5 pt-10 pb-4 text-center">
           <p className="font-app text-[16px] font-medium text-ink">You’re caught up.</p>
@@ -139,6 +149,69 @@ function ThreadRow({ item, reason, selected, onOpen }: { item: ThreadItem; reaso
         Not now
       </button>
     </li>
+  )
+}
+
+/** A deadline found in mail: what to do, from which thread, and how late. */
+function ActionRow({ item, selected, onOpen }: { item: ActionItem; selected: boolean; onOpen: () => void }) {
+  const p = item.posting
+  return (
+    <li
+      role="option"
+      aria-selected={selected}
+      onClick={onOpen}
+      className={`mx-2 flex cursor-default items-center gap-3 rounded-ui py-2.5 pr-3 pl-4 ${selected ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
+    >
+      <Avatar avatar={p.avatar} size={32} seed={p.senderEmail ?? undefined} />
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-medium text-ink">{item.text}</div>
+        <div className="mt-0.5 truncate text-[12.5px] text-ink-faint">
+          <span className={item.daysLate > 0 ? 'text-danger' : 'text-ink-soft'}>{why.action(item)}</span> · {p.subject ? stripSubjectPrefixes(p.subject) : p.senderName}
+        </div>
+      </div>
+    </li>
+  )
+}
+
+const shortDay = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric' })
+/** "Sun 27" for a YYYY-MM-DD; "Today" and "Tomorrow" when it is. */
+function dayLabel(ymd: string) {
+  const [y, m, d] = ymd.split('-').map(Number) as [number, number, number]
+  const date = new Date(y, m - 1, d)
+  const now = new Date()
+  const days = Math.round((date.getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86_400_000)
+  return days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : shortDay.format(date)
+}
+
+/** Dates found in mail over the next week, each a click from its thread. Information, not tasks. */
+function ComingUp({ items, selectedId, onOpen }: { items: ComingUpItem[]; selectedId: number | null; onOpen: (p: PostingRow) => void }) {
+  return (
+    <section aria-label="Coming up">
+      <h2 className="eyebrow px-5 pt-4 pb-1.5">Coming up</h2>
+      <ul>
+        {items.map((c) => (
+          <li key={c.key}>
+            <button
+              onClick={() => onOpen(c.posting)}
+              aria-current={c.posting.id === selectedId || undefined}
+              className={`mx-2 flex w-[calc(100%-1rem)] items-baseline gap-3 rounded-ui py-1.5 pr-3 pl-4 text-left ${c.posting.id === selectedId ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
+            >
+              <span className="w-[68px] shrink-0 text-[12px] text-ink-faint tabular-nums">
+                {dayLabel(c.date)}
+                {c.time && <span className="block">{c.time}</span>}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-ink">
+                  {c.isDeadline && <span className="font-medium text-danger">Due: </span>}
+                  {c.label}
+                </span>
+                <span className="block truncate text-[12px] text-ink-faint">{c.posting.subject ? stripSubjectPrefixes(c.posting.subject) : c.posting.senderName}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
