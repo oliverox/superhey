@@ -3,7 +3,7 @@ import Markdown, { type Components } from 'react-markdown'
 import type { EntryRow, PostingRow, ThreadView } from '@shared/api'
 import { api, useLive } from '../api'
 import { dayAndTime, longDate } from '../format'
-import { parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes, type ForwardedHeader } from '../mail/forwarded'
+import { type ForwardedHeader, parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes, unwrapHardBreaks } from '../mail/forwarded'
 import { displayName } from '../mail/people'
 import { isDesigned } from '../mail/html'
 import { splitQuoted, type QuotedSplit } from '../mail/quoted'
@@ -349,7 +349,8 @@ function Message({
 
 /** A message's body split for display: what it adds, the history it quotes, any forward. */
 function messageParts(entry: EntryRow, index: number) {
-  const full = stripAttachmentLines(entry.bodyMd, entry.attachments)
+  // Mail written at a fixed width reads as prose again (its hard breaks mid-sentence go).
+  const full = unwrapHardBreaks(stripAttachmentLines(entry.bodyMd, entry.attachments))
   // Replies carry the conversation below them; show only what this message adds.
   const quote = splitQuoted(full, index > 0)
   const body = quote ? quote.fresh : full

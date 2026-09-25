@@ -3,9 +3,9 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { HeyNotFoundError } from '../cli/errors'
 import type { HeyClient } from '../cli/client'
-import type { HeyRunner } from '../cli/runner'
+import type { HeyRunner, Priority } from '../cli/runner'
 import type { ScreenerEntry, WatchLine } from '../cli/schemas'
-import { PostingId, type TopicId } from '../ids'
+import { PostingId, TopicId } from '../ids'
 import type { PostingRow, Repo, ThreadView } from '../cache/repo'
 import { Watcher, type WatchStatus } from './watcher'
 
@@ -27,6 +27,8 @@ interface EngineEvents {
   change: [CacheChange]
   status: [SyncStatus]
   error: [Error]
+  /** New mail arrived (from the live watch). */
+  mail: [{ topicId: TopicId | null; boxKind: string }]
 }
 
 const DAY_MS = 86_400_000
@@ -157,7 +159,7 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
   }
 
   /** Returns the thread from the cache, fetching it first if missing or behind. */
-  async ensureThread(topicId: TopicId, entryCount: number | null = null): Promise<ThreadView | null> {
+  async ensureThread(topicId: TopicId, entryCount: number | null = null, priority: Priority = 'high'): Promise<ThreadView | null> {
     if (!this.repo.threadIsStale(topicId, entryCount)) return this.repo.thread(topicId)
     const inFlight = this.threadFetches.get(topicId)
     if (inFlight) return inFlight
@@ -170,8 +172,8 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
       // or when there is no posting to ask (a thread opened from search).
       const wanted = !posting || posting.has_attachments === 1
       const [entries, listed] = await Promise.all([
-        this.client.thread(topicId),
-        wanted ? this.client.attachments(topicId) : null,
+        this.client.thread(topicId, priority),
+        wanted ? this.client.attachments(topicId, priority) : null,
       ])
       const attachments =
         listed ?? (entries.some((e) => e.body.includes('📎')) ? await this.client.attachments(topicId) : [])
@@ -287,6 +289,8 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
           const posting = { ...line.posting, topic_id: line.posting.topic_id ?? line.thread_id ?? null }
           this.repo.upsertPostings([posting], line.box.id)
           this.emit('change', { kind: 'postings', boxId: line.box.id })
+          // New mail (or new messages in a thread), for whoever reads it next: the analyzer.
+          if (line.change === 'added' || line.new) this.emit('mail', { topicId: posting.topic_id == null ? null : TopicId(posting.topic_id), boxKind: line.box.kind })
         } else if (line.box) {
           // Some updates name the posting without its content: re-read that box.
           this.scheduleBoxRefresh(line.box.id)

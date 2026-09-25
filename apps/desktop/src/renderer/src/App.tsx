@@ -13,7 +13,7 @@ import { ShortcutHelp } from './components/ShortcutHelp'
 import { Tooltips } from './components/Tooltips'
 import { CommandBar } from './components/CommandBar'
 import { Settings } from './components/Settings'
-import { TodayDone, TodayList, todayLabel, todayThreads, type TodayData } from './components/Today'
+import { doneFor, TodayDone, TodayList, todayLabel, todayThreads, type TodayData } from './components/Today'
 import type { Command } from './commands/model'
 import { boxCommands, emailCommand, labelCommands } from './commands/sources'
 import { Composer, type ComposeRequest } from './components/Composer'
@@ -45,14 +45,14 @@ function Workspace({ status }: { status: AppStatus }) {
   const today = useLive(
     () => api.today(since),
     [since],
-    (e) => e.type === 'today' || e.type === 'action' || (e.type === 'change' && ['postings', 'todos', 'calendar', 'screener'].includes(e.change.kind)),
+    (e) => e.type === 'today' || e.type === 'action' || e.type === 'analysis' || (e.type === 'change' && ['postings', 'todos', 'calendar', 'screener'].includes(e.change.kind)),
   )
   const todayData = (today.data as TodayData | null) ?? null
 
   const postings = useLive(
     () => (activeBox ? api.postings(activeBox.id) : Promise.resolve([] as PostingRow[])),
     [activeBox?.id],
-    (e) => e.type === 'change' && e.change.kind === 'postings' && e.change.boxId === activeBox?.id,
+    (e) => (e.type === 'change' && e.change.kind === 'postings' && e.change.boxId === activeBox?.id) || e.type === 'analysis',
   )
 
   const [query, setQuery] = useState('')
@@ -138,6 +138,9 @@ function Workspace({ status }: { status: AppStatus }) {
     setTarget(null)
   }
   useShortcut('today', goToToday)
+  // e on Today: done with the open item; Today then puts up the next.
+  const doneWithOpen = onToday && target?.postingId != null ? doneFor(todayData, target.postingId) : null
+  useShortcut('done', () => void doneWithOpen?.().then(() => setTarget(null)), !!doneWithOpen)
   useShortcut('box1', () => goToBox(0))
   useShortcut('box2', () => goToBox(1))
   useShortcut('box3', () => goToBox(2))

@@ -19,6 +19,30 @@ describe('isDesigned', () => {
     expect(isDesigned(designed(`${table(`<action-text-attachment content-type="image" url="${proxied}"></action-text-attachment>`)}<action-text-attachment content-type="image" url="${proxied}"></action-text-attachment>`))).toBe(true)
   })
 
+  it('recognises designed mail laid out with divs instead of tables', () => {
+    const s = (css: string) => ` style="${css}"`
+    const img = `<action-text-attachment content-type="image" url="${proxied}"></action-text-attachment>`
+    const p = (text: string) => `<p${s('margin:0 0 16px;font-size:16px')}>${text}</p>`
+    const card =
+      `<div${s('background-color:#fff;font-family:Helvetica;padding:24px 12px')}>` +
+      `<div${s('background-color:#fff;border-radius:24px;max-width:700px;margin:0 auto')}>` +
+      `<div${s('padding:16px 24px')}>${img}</div>` +
+      `<span${s('display:none;font-size:0')}>Preheader</span>` +
+      `<h1${s('font-size:28px;text-align:center')}>€10.00 has been added</h1>` +
+      p('Hi,') + p('You’ve just received a deposit.') + p('Thanks') +
+      `<a${s('border:2px solid #000;border-radius:99px;padding:12px 32px')} href="https://example.com">Open</a>` +
+      `<div${s('padding:24px;color:#666')}>${p('© Example')}${p('Legal text')}${img}</div></div></div>`
+    expect(isDesigned(designed(card))).toBe(true)
+  })
+
+  it('does not call a styled reply with a width limit designed', () => {
+    const gmailish = designed(
+      `<div dir="ltr" style="max-width:600px">${'<div style="font-family:Arial">Line</div>'.repeat(12)}` +
+        `<div style="border-left:1px solid #ccc;padding-left:1ex">Earlier message…</div></div>`,
+    )
+    expect(isDesigned(gmailish)).toBe(false)
+  })
+
   it('treats HTML replies from mail apps as conversation, not design', () => {
     const outlookReply = designed(
       '<p class="MsoNormal" style="margin:0">Thanks, Friday works.</p><p class="MsoNormal" style="margin:0">Sam</p>' +

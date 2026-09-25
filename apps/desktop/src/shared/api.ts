@@ -21,9 +21,11 @@ import type {
   TodayView,
   ThreadItem,
   TodoItem,
+  ActionItem,
+  ComingUpItem,
 } from '@myhey/core'
 
-export type { OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId, TodayView, ThreadItem, TodoItem }
+export type { OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId, TodayView, ThreadItem, TodoItem, ActionItem, ComingUpItem }
 
 /** Everything Settings shows about AI. API keys themselves never leave the main process. */
 export interface AiStatus {
@@ -55,6 +57,20 @@ export interface AiStatus {
     calls: number
     byTask: Array<{ task: string; engine: string; model: string; calls: number; input: number; output: number; costUsd: number }>
   }
+}
+
+/** A thread's full analysis, for the details panel. */
+export interface ThreadAnalysisView {
+  summary: string
+  needsReply: boolean
+  replyReason: string | null
+  expectsReply: boolean
+  category: string
+  actionItems: Array<{ text: string; due: string | null }>
+  dates: Array<{ label: string; date: string; time: string | null }>
+  amounts: Array<{ label: string; amount: number; currency: string }>
+  analyzedAt: string
+  model: string
 }
 
 export type AiTestResult =
@@ -115,8 +131,12 @@ export interface Api {
   openAttachment(id: string): Promise<void>
   /** What needs you today; `since`: when you last looked (for "new since"). */
   today(since: string | null): Promise<TodayView & { screener: number }>
-  /** "Not now": hides a thread from Today until it changes (`activeAt`: its activity now). */
+  /** "Not now": hides a thread from Today until tomorrow, or until it changes (`activeAt`: its activity now). */
   hideFromToday(key: string, activeAt: string): Promise<void>
+  /** "Done" for a thread you dealt with elsewhere: no longer needs your reply, nor you theirs. */
+  markHandled(topicId: number): Promise<ActionRecord>
+  /** What the AI made of a thread: summary, needs reply, action items, dates, amounts. */
+  analysis(topicId: number): Promise<ThreadAnalysisView | null>
   aiStatus(): Promise<AiStatus>
   /** Replaces the AI settings; anything invalid is refused. */
   setAiSettings(settings: AiSettings): Promise<AiStatus>
@@ -128,7 +148,7 @@ export interface Api {
   testAi(engine: ProviderId | 'local'): Promise<AiTestResult>
 }
 
-export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
+export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'analysis', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
 export type ApiMethod = (typeof API_METHODS)[number]
 
 export type ApiEvent =
@@ -140,6 +160,8 @@ export type ApiEvent =
   | { type: 'ai' }
   /** Something was put off on Today. */
   | { type: 'today' }
+  /** A thread was analysed (its summary and needs-reply are in). */
+  | { type: 'analysis'; topicId: number }
 
 /** Content types the file endpoints serve as themselves; anything else is a download. */
 const INLINE_TYPES = /^(application\/pdf|image\/(png|jpe?g|gif|webp|avif|bmp|svg\+xml))$/

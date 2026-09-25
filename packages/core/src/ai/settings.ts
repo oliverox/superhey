@@ -9,9 +9,9 @@ import { CLOUD_MODELS, cloudModel, PROVIDER_IDS, PROVIDERS, type ProviderId, typ
 
 /** Everything the app asks a model to do, and how demanding it is. */
 export const AI_TASKS = {
-  summary: { label: 'Thread summaries', tier: 'cheap' },
-  classify: { label: 'Needs reply, sorting', tier: 'cheap' },
-  extract: { label: 'Dates, bookings, receipts', tier: 'cheap' },
+  // One call per thread: its summary, whether it needs you, action items, dates and amounts.
+  summary: { label: 'Understanding threads', tier: 'cheap' },
+  classify: { label: 'Sorting suggestions', tier: 'cheap' },
   draft: { label: 'Reply drafts in your voice', tier: 'quality' },
   agent: { label: 'Requests in the command bar', tier: 'quality' },
   insights: { label: 'Insights and weekly review', tier: 'quality' },
@@ -68,9 +68,18 @@ export function readAiSettings(raw: unknown): AiSettings {
   return parsed.success ? parsed.data : defaultAiSettings()
 }
 
-/** Settings saved before the provider list ({ claude, openai, preferredCloud }). */
+/**
+ * Settings saved in earlier shapes: before the provider list ({ claude, openai,
+ * preferredCloud }), and with the "extract" task (now part of understanding threads).
+ */
 function upgrade(raw: unknown): unknown {
-  if (!raw || typeof raw !== 'object' || 'providers' in raw) return raw
+  if (!raw || typeof raw !== 'object') return raw
+  const tasks = (raw as { tasks?: unknown }).tasks
+  if (tasks && typeof tasks === 'object' && 'extract' in tasks) {
+    const { extract: _e, ...rest } = tasks as Record<string, unknown>
+    raw = { ...raw, tasks: rest }
+  }
+  if ('providers' in (raw as object)) return raw
   const r = raw as Record<string, unknown>
   const providers: Record<string, unknown> = {}
   for (const id of ['claude', 'openai']) if (r[id] && typeof r[id] === 'object') providers[id] = r[id]

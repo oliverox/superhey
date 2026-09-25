@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import type { SQLInputValue } from 'node:sqlite'
 import type { BubbleWhen, HeyClient, ScreenerBox } from '../cli/client'
 import type { Repo } from '../cache/repo'
-import { PostingId } from '../ids'
+import { PostingId, TopicId } from '../ids'
 import type { SyncEngine } from '../sync/engine'
 
 /** Boxes a thread can be moved to. Bubble Up goes through the bubble actions instead. */
@@ -19,9 +19,14 @@ export type Action =
   | { type: 'screen'; clearanceId: number; decision: 'approve' | 'deny' | 'spam'; box?: ScreenerBox; name?: string }
   /** Completes (or reopens) a HEY to-do. */
   | { type: 'todo'; todoId: number; done: boolean }
+  /**
+   * You dealt with a thread (maybe outside HEY): it no longer needs your reply, nor you
+   * theirs. Local to the app. `restore` (undo only) puts the analysis back as it was.
+   */
+  | { type: 'handled'; topicId: number; restore?: string }
 
-/** Actions on a thread already in the cache (everything but Screener decisions and to-dos). */
-type PostingAction = Exclude<Action, { type: 'screen' | 'todo' }>
+/** Actions on a thread already in the cache (everything but Screener decisions, to-dos and "handled"). */
+type PostingAction = Exclude<Action, { type: 'screen' | 'todo' | 'handled' }>
 
 /** Who asked: the user, an automatic behaviour (seen-on-open), an undo, and later agents and rules. */
 export type ActionSource = 'user' | 'auto' | 'undo' | 'agent' | 'rule'
@@ -75,6 +80,7 @@ export class ActionRunner extends EventEmitter<{ action: [ActionRecord] }> {
   async run(action: Action, source: ActionSource = 'user'): Promise<ActionRecord> {
     if (action.type === 'screen') return this.screen(action, source)
     if (action.type === 'todo') return this.todo(action, source)
+    if (action.type === 'handled') return this.handled(action, source)
     const posting = this.repo.posting(PostingId(action.postingId))
     if (!posting) throw new Error(`thread ${action.postingId} is not in the cache`)
     const snapshot = this.repo.postingSnapshot(action.postingId)!
@@ -196,6 +202,29 @@ export class ActionRunner extends EventEmitter<{ action: [ActionRecord] }> {
       this.engine.notify({ kind: 'todos' })
       this.finish(id, 'failed', null, err instanceof Error ? err.message : String(err))
     }
+    return this.publish(id)
+  }
+
+  /** Marks a thread handled (undone by putting its analysis back). Nothing goes to HEY. */
+  private async handled(action: Extract<Action, { type: 'handled' }>, source: ActionSource): Promise<ActionRecord> {
+    const topicId = TopicId(action.topicId)
+    const before = this.repo.analysisJson(topicId)
+    if (before == null) throw new Error(`thread ${action.topicId} hasn't been read by the AI`)
+    const subject = (this.repo.db.prepare('SELECT subject FROM postings WHERE topic_id = ? LIMIT 1').get(topicId) as { subject?: string } | undefined)?.subject || '(no subject)'
+    const summary = action.restore != null ? `Back on Today: “${subject}”` : `Done: “${subject}”`
+    const inverse: Action[] | null = action.restore != null ? null : [{ type: 'handled', topicId: action.topicId, restore: before }]
+    const res = this.repo.db
+      .prepare(
+        `INSERT INTO actions (source, type, params_json, status, created_at, posting_id, summary, inverse_json)
+         VALUES (?, 'handled', ?, 'running', ?, 0, ?, ?)`,
+      )
+      .run(source, JSON.stringify({ type: 'handled', topicId: action.topicId }), new Date().toISOString(), summary, inverse ? JSON.stringify(inverse) : null)
+    const id = Number(res.lastInsertRowid)
+    if (action.restore != null) this.repo.restoreAnalysis(topicId, action.restore)
+    else this.repo.markHandled(topicId)
+    this.finish(id, 'done', true, null)
+    // The list's Reply tag and Today follow the analysis.
+    for (const boxId of this.repo.boxesOf(topicId)) this.engine.notify({ kind: 'postings', boxId })
     return this.publish(id)
   }
 

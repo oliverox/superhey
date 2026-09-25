@@ -38,12 +38,15 @@ const todo = (id: number, title: string, daysLate: number): TodoItem => ({ key: 
 function data(over: Partial<TodayData> = {}): TodayData {
   const d: TodayData = {
     generatedAt: '2026-09-25T08:00:00Z',
-    due: { todos: [todo(1, 'File the declaration', 3)], bubbled: [thread(2, 'Reflections on Growth', 40)] },
+    due: { todos: [todo(1, 'File the declaration', 3)], actions: [], bubbled: [thread(2, 'Reflections on Growth', 40)] },
+    needsReply: [],
     replyLater: [thread(3, 'Invitation to the field day', 9)],
     waiting: [{ ...thread(4, 'Quote for the flyers', 5), people: [{ name: 'Printer Ltd', email: 'print@example.com', avatar: { url: null, color: null, initials: 'PL' } }] }],
+    comingUp: [],
     events: [],
     newSince: { since: null, boxes: [] },
     toHandle: 4,
+    needsAnalysis: [],
     screener: 0,
     ...over,
   }
@@ -94,9 +97,74 @@ describe('TodayList', () => {
   })
 
   it('says you’re caught up when there’s nothing to handle', () => {
-    act(() => root.render(createElement(Today.TodayList, { today: data({ due: { todos: [], bubbled: [] }, replyLater: [], waiting: [], toHandle: 0 }), selectedId: null, onOpen: vi.fn(), onGoToBox: vi.fn() })))
+    act(() => root.render(createElement(Today.TodayList, { today: data({ due: { todos: [], actions: [], bubbled: [] }, replyLater: [], waiting: [], toHandle: 0 }), selectedId: null, onOpen: vi.fn(), onGoToBox: vi.fn() })))
     expect(text()).toContain('You’re caught up.')
     expect(host.querySelector('section')).toBeNull() // nothing new either
+  })
+})
+
+describe('what the AI found', () => {
+  it('lists deadlines from mail in Due, what needs your reply with why, and dates coming up', async () => {
+    const onOpen = vi.fn()
+    const today = data({
+      due: { todos: [], actions: [{ key: 'action:5:0', posting: posting(5, 'Reservation for Seaside Retreat', 'Airbnb'), text: 'Send the signed form', due: '2026-09-24', daysLate: 1 }], bubbled: [] },
+      needsReply: [{ ...thread(6, 'Early check-in?', 1), reason: 'guest asks about early check-in' }],
+      replyLater: [],
+      waiting: [],
+      comingUp: [
+        { key: 'date:7:0', posting: posting(7, 'Booking confirmed'), label: 'Check-in', date: '2099-01-02', time: '14:00', isDeadline: false },
+        { key: 'date:7:1', posting: posting(7, 'Booking confirmed'), label: 'Confirm numbers', date: '2099-01-03', time: null, isDeadline: true },
+      ],
+      toHandle: 2,
+    })
+    act(() => root.render(createElement(Today.TodayList, { today, selectedId: null, onOpen, onGoToBox: vi.fn() })))
+    expect([...host.querySelectorAll('section')].map((s) => s.getAttribute('aria-label'))).toEqual(['Due', 'Needs your reply', 'Coming up'])
+    expect(text()).toContain('Send the signed form1 day late · Reservation for Seaside Retreat')
+    expect(text()).toContain('Dana Novak · Guest asks about early check-in')
+    const coming = host.querySelector('section[aria-label="Coming up"]')!.textContent
+    expect(coming).toContain('14:00Check-inBooking confirmed')
+    expect(coming).toContain('Due: Confirm numbers')
+    await click([...host.querySelectorAll('section[aria-label="Coming up"] button')][0]!)
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 7 }))
+  })
+})
+
+describe('Done', () => {
+  const withEverything = () =>
+    data({
+      due: { todos: [], actions: [{ key: 'action:5:0', posting: posting(5, 'Form'), text: 'Send the form', due: '2026-09-24', daysLate: 1 }], bubbled: [thread(2, 'Newsletter', 40)] },
+      needsReply: [{ ...thread(6, 'Early check-in?', 1), reason: 'asks about check-in' }],
+      replyLater: [thread(3, 'Parked', 9)],
+      waiting: [thread(4, 'Quote', 5)],
+    })
+
+  it('means what it should for where the thread is listed', async () => {
+    const t = withEverything()
+    for (const id of [5, 6, 4]) {
+      calls.length = 0
+      await Today.doneFor(t, id)!()
+      expect(calls).toEqual([['markHandled', [id * 10]]]) // handled: you dealt with it, maybe outside HEY
+    }
+    calls.length = 0
+    await Today.doneFor(t, 2)!()
+    expect(calls).toEqual([['runAction', [{ type: 'unbubble', postingId: 2 }]]])
+    calls.length = 0
+    await Today.doneFor(t, 3)!()
+    expect(calls).toEqual([['runAction', [{ type: 'move', postingId: 3, to: 'imbox' }]]])
+    expect(Today.doneFor(t, 99)).toBeNull()
+  })
+
+  it('is on every thread row, beside Not now, and doesn’t open the thread', async () => {
+    const onOpen = vi.fn()
+    act(() => root.render(createElement(Today.TodayList, { today: withEverything(), selectedId: null, onOpen, onGoToBox: vi.fn() })))
+    const rowOf = (s: string) => [...host.querySelectorAll('[role=option]')].find((r) => r.textContent?.includes(s))!
+    const buttons = (r: Element) => [...r.querySelectorAll('button')].map((b) => b.textContent)
+    expect(buttons(rowOf('Early check-in?'))).toEqual(['Done', 'Not now'])
+    expect(buttons(rowOf('Send the form'))).toEqual(['Done'])
+    calls.length = 0
+    await click([...rowOf('Early check-in?').querySelectorAll('button')][0]!)
+    expect(calls).toEqual([['markHandled', [60]]])
+    expect(onOpen).not.toHaveBeenCalled()
   })
 })
 
@@ -113,7 +181,7 @@ describe('What’s new, and nothing left', () => {
   })
 
   it('says you’re caught up, and still shows what’s new', () => {
-    const today = data({ due: { todos: [], bubbled: [] }, replyLater: [], waiting: [], toHandle: 0, newSince: { since: null, boxes: [{ boxId: 1, kind: 'imbox', name: 'Imbox', count: 2 }] } })
+    const today = data({ due: { todos: [], actions: [], bubbled: [] }, replyLater: [], waiting: [], toHandle: 0, newSince: { since: null, boxes: [{ boxId: 1, kind: 'imbox', name: 'Imbox', count: 2 }] } })
     act(() => root.render(createElement(Today.TodayList, { today, selectedId: null, onOpen: vi.fn(), onGoToBox: vi.fn() })))
     expect(text()).toContain('You’re caught up.')
     expect(text()).toContain('New todayImbox 2')
@@ -137,6 +205,9 @@ describe('why and order', () => {
 
   it('walks the threads in the order listed (for j / k)', () => {
     expect(Today.todayThreads(data()).map((p) => p.id)).toEqual([2, 3, 4])
+    // Each thread once, even when it has several deadlines.
+    const twice = data({ due: { todos: [], actions: [{ key: 'a1', posting: posting(2, 'x'), text: 'a', due: '2026-09-24', daysLate: 1 }, { key: 'a2', posting: posting(2, 'x'), text: 'b', due: '2026-09-25', daysLate: 0 }], bubbled: [thread(2, 'x', 1)] } })
+    expect(Today.todayThreads(twice).map((p) => p.id)).toEqual([2, 3, 4])
     expect(Today.todayThreads(null)).toEqual([])
   })
 })

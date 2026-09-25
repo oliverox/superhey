@@ -9,6 +9,8 @@ import {
   AI_TASKS,
   AiClient,
   AiError,
+  ThreadAnalyzer,
+  ANALYSIS_VERSION,
   AiSettings,
   aiMode,
   checkKey,
@@ -33,7 +35,7 @@ import {
   TopicId,
   type Core,
 } from '@myhey/core'
-import { API_METHODS, type AiStatus, type AiTestResult, type Api, type ApiEvent, type ApiMethod, type AppStatus, type SetupProblem } from '../shared/api'
+import { API_METHODS, type AiStatus, type AiTestResult, type ThreadAnalysisView, type Api, type ApiEvent, type ApiMethod, type AppStatus, type SetupProblem } from '../shared/api'
 
 /** Where secrets (the Claude API key) are kept: the OS keychain in the app, none in browser dev mode. */
 export interface SecretStore {
@@ -73,6 +75,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
 
   private aiSettings: AiSettings
   private ai: AiClient | null = null
+  private analyzer: ThreadAnalyzer | null = null
   private get aiSettingsPath() {
     return join(dirname(this.opts.dbPath), 'ai-settings.json')
   }
@@ -92,6 +95,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
       core.outbox.on('outgoing', (record) => this.emit('event', { type: 'outgoing', record }))
       this.ai = new AiClient({ settings: () => this.aiSettings, apiKey: (p) => this.apiKey(p), repo: core.repo })
       this.ai.on('usage', () => this.emit('event', { type: 'ai' }))
+      this.startAnalysis(core, this.ai)
       await core.engine.start()
       this.update({ phase: 'ready', sync: core.engine.getStatus() })
       void this.backfill(core)
@@ -131,7 +135,17 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
   }
 
   async thread(topicId: number, entryCount: number | null) {
-    return this.need().engine.ensureThread(TopicId(int(topicId)), entryCount == null ? null : int(entryCount))
+    const id = TopicId(int(topicId))
+    const view = await this.need().engine.ensureThread(id, entryCount == null ? null : int(entryCount))
+    // A thread you open is worth understanding, whichever box it's in (a no-op when current).
+    this.analyzer?.enqueue(id, true)
+    return view
+  }
+
+  /** What the AI made of a thread (summary, action items, dates, amounts), or null. */
+  async analysis(topicId: number) {
+    // Stored as the model's validated answer (ThreadAnalysis) plus when and by which model.
+    return this.need().repo.analysis(TopicId(int(topicId))) as ThreadAnalysisView | null
   }
 
   async threadHtml(topicId: number) {
@@ -236,23 +250,38 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     // Your addresses tell which threads you wrote last; without them, that section is empty.
     const myEmails = await this.senders().then((s) => s.map((x) => x.email), () => [])
     const view = buildToday(core.repo, { now: new Date(), myEmails, since, hidden: this.hiddenOnToday() })
+    // What Today couldn't judge yet (have you been waiting on them?) gets read in the background.
+    for (const topicId of view.needsAnalysis) this.analyzer?.enqueue(topicId)
     return { ...view, screener: core.engine.screenerEntries().length }
   }
 
+  /** "Not now": off Today until tomorrow, or until the thread has something new. */
   async hideFromToday(key: unknown, activeAt: unknown) {
     if (typeof key !== 'string' || !/^thread:\d{1,20}$/.test(key)) throw new Error('bad key')
     if (typeof activeAt !== 'string' || activeAt.length > 40) throw new Error('bad activeAt')
     const repo = this.need().repo
-    // Keep only threads still in the cache, so the list doesn't grow forever.
-    const kept = Object.fromEntries(Object.entries(this.hiddenOnToday()).filter(([k]) => repo.posting(PostingId(Number(k.slice(7))))))
-    repo.setState('today:hidden', JSON.stringify({ ...kept, [key]: activeAt }))
+    const now = new Date()
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString()
+    // Keep only threads still in the cache and snoozes still running, so the list doesn't grow forever.
+    const kept = Object.fromEntries(
+      Object.entries(this.hiddenOnToday()).filter(([k, v]) => repo.posting(PostingId(Number(k.slice(7)))) && (typeof v === 'string' || v.until == null || Date.parse(v.until) > now.getTime())),
+    )
+    repo.setState('today:hidden', JSON.stringify({ ...kept, [key]: { at: activeAt, until: tomorrow } }))
     this.emit('event', { type: 'today' })
   }
 
-  private hiddenOnToday(): Record<string, string> {
+  /** You've dealt with a thread elsewhere: it no longer needs your reply, nor you theirs. An undoable action. */
+  async markHandled(topicId: unknown) {
+    const id = TopicId(int(topicId))
+    const record = await this.need().actions.run({ type: 'handled', topicId: id }, 'user')
+    this.emit('event', { type: 'analysis', topicId: id })
+    return record
+  }
+
+  private hiddenOnToday(): Record<string, string | { at: string; until: string | null }> {
     try {
       const v = JSON.parse(this.need().repo.getState('today:hidden') ?? '{}') as unknown
-      return v && typeof v === 'object' ? (v as Record<string, string>) : {}
+      return v && typeof v === 'object' ? (v as Record<string, string | { at: string; until: string | null }>) : {}
     } catch {
       return {}
     }
@@ -305,6 +334,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     if (!parsed.success) throw new Error(`Invalid AI settings: ${parsed.error.issues[0]?.message ?? 'unknown'}`)
     this.aiSettings = parsed.data
     writeJson(this.aiSettingsPath, parsed.data)
+    this.analyzer?.resume()
     this.emit('event', { type: 'ai' })
     return this.aiStatus()
   }
@@ -315,6 +345,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     const secrets = this.opts.secrets
     if (!secrets) throw new Error('Keys can’t be stored in browser dev mode.')
     secrets.set(PROVIDERS[id].secretName, key === null ? null : checkKey(id, key))
+    this.analyzer?.resume()
     this.emit('event', { type: 'ai' })
     return this.aiStatus()
   }
@@ -373,6 +404,25 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     return this.opts.secrets?.get(PROVIDERS[provider].secretName) ?? null
   }
 
+  /**
+   * Analyses new Imbox mail as it arrives, threads as you open them, and on start the last
+   * week's unread Imbox (up to 25). Paused while AI isn't set up; settings changes resume it.
+   */
+  private startAnalysis(core: Core, ai: AiClient) {
+    const analyzer = new ThreadAnalyzer({
+      repo: core.repo,
+      ai,
+      fetchThread: (topicId, entryCount, priority) => core.engine.ensureThread(topicId, entryCount, priority),
+      me: async () => ({ name: null, emails: await this.senders().then((s) => s.map((x) => x.email), () => []) }),
+    })
+    this.analyzer = analyzer
+    analyzer.on('analysis', (topicId) => this.emit('event', { type: 'analysis', topicId }))
+    analyzer.on('error', (err) => console.error('[analysis]', err.message))
+    core.engine.on('mail', ({ topicId, boxKind }) => topicId != null && boxKind === 'imbox' && analyzer.enqueue(topicId))
+    const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
+    for (const topicId of core.repo.unanalysedUnread('imbox', weekAgo, 25, ANALYSIS_VERSION)) analyzer.enqueue(topicId)
+  }
+
   private needAi(): AiClient {
     if (!this.ai) throw new Error('HEY is not connected yet')
     return this.ai
@@ -425,6 +475,8 @@ const BUBBLE_KINDS = ['now', 'tomorrow', 'weekend', 'next-week', 'on']
 function validateAction(input: unknown): Action {
   const a = input as Record<string, unknown>
   if (!a || typeof a !== 'object') throw new Error('bad action')
+  // "Handled" comes from the UI only as itself; putting an analysis back is undo's alone.
+  if (a.type === 'handled') return { type: 'handled', topicId: int(a.topicId) }
   if (a.type === 'todo') {
     if (typeof a.done !== 'boolean') throw new Error('bad action')
     return { type: 'todo', todoId: int(a.todoId), done: a.done }
