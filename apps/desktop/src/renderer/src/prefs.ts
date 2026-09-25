@@ -6,7 +6,7 @@ import { useSyncExternalStore } from 'react'
  */
 
 const MARK_SEEN_KEY = 'pref:mark-seen-on-open'
-const EVENT = 'myhey:prefs'
+const EVENT = 'superhey:prefs'
 
 /** Whether opening an email marks it seen (as HEY does), rather than leaving that to you. */
 export function markSeenOnOpen(): boolean {

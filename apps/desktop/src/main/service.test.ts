@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ActionRunner, openDb, PostingId, Repo, schemas as S, TopicId, type Core } from '@myhey/core'
+import { ActionRunner, openDb, PostingId, Repo, schemas as S, TopicId, type Core } from '@superhey/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiStatus, ApiEvent } from '../shared/api'
 import { AppService, type SecretStore } from './service'
@@ -45,7 +45,7 @@ const KEY = 'sk-ant-api03-' + 'a'.repeat(40) + 'WXYZ'
 
 let dir: string
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'myhey-service-'))
+  dir = mkdtempSync(join(tmpdir(), 'superhey-service-'))
 })
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 

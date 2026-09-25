@@ -24,7 +24,7 @@ import type {
   TodoItem,
   ActionItem,
   ComingUpItem,
-} from '@myhey/core'
+} from '@superhey/core'
 
 export type { OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, HeySearchPage, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId, TodayView, ThreadItem, TodoItem, ActionItem, ComingUpItem }
 
@@ -89,7 +89,7 @@ export interface AppStatus {
   sync: SyncStatus | null
   problem: SetupProblem | null
   backfill: { running: boolean; postings: number }
-  /** A test instance (MYHEY_TEST_* switches): nothing automatic, no sending, no Screener decisions. */
+  /** A test instance (SUPERHEY_TEST_* switches): nothing automatic, no sending, no Screener decisions. */
   testInstance: boolean
 }
 

@@ -10,15 +10,15 @@ import { join } from 'node:path'
 import { fileHeaders, type ApiEvent } from '../shared/api'
 import { AppService } from '../main/service'
 
-const port = Number(process.env.MYHEY_API_PORT ?? 5188)
-const token = process.env.MYHEY_TOKEN
+const port = Number(process.env.SUPERHEY_API_PORT ?? 5188)
+const token = process.env.SUPERHEY_TOKEN
 if (!token) {
-  console.error('MYHEY_TOKEN is required (pnpm dev:web sets it).')
+  console.error('SUPERHEY_TOKEN is required (pnpm dev:web sets it).')
   process.exit(1)
 }
 
 const service = new AppService({
-  dbPath: join(homedir(), '.myhey-dev', 'cache.db'),
+  dbPath: join(homedir(), '.superhey-dev', 'cache.db'),
   openFile: (path) =>
     new Promise((resolve, reject) => execFile('open', [path], (err) => (err ? reject(err) : resolve()))),
 })

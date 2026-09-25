@@ -16,7 +16,7 @@ importers:
       '@fontsource-variable/onest':
         specifier: ^5.3.1
         version: 5.3.1
-      '@myhey/core':
+      '@superhey/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@tailwindcss/vite':

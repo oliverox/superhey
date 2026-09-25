@@ -1,6 +1,6 @@
 // The search box's helpers: completing operators as you type, merging the cache's results
 // with HEY's, and finding the words to highlight.
-import { OPERATORS, type Operator } from '@myhey/core/search/query'
+import { OPERATORS, type Operator } from '@superhey/core/search/query'
 import type { PostingRow } from '@shared/api'
 
 /** What's being typed at the end of the query: an operator's value, or an operator's name. */

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
-import { OPERATORS, operatorValue, withOperator, type Operator } from '@myhey/core/search/query'
+import { OPERATORS, operatorValue, withOperator, type Operator } from '@superhey/core/search/query'
 import type { HeySearchPage, PostingRow } from '@shared/api'
 import { api, useLive } from '../api'
 import { accept, completing, mergeResults, OPERATOR_HELP, suggestions, type Suggestion } from '../mail/search'

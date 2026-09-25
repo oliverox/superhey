@@ -97,15 +97,15 @@ function Workspace({ status }: { status: AppStatus }) {
   // An undone or failed send comes back here for editing (see the toasts).
   useEffect(() => {
     const onRestore = (e: Event) => setComposing((e as CustomEvent<ComposeRequest>).detail)
-    window.addEventListener('myhey:compose', onRestore)
-    return () => window.removeEventListener('myhey:compose', onRestore)
+    window.addEventListener('superhey:compose', onRestore)
+    return () => window.removeEventListener('superhey:compose', onRestore)
   }, [])
   // A thread opened from inside the reader (a forward's original).
   const openInBoxRef = useRef<(p: PostingRow) => void>(() => {})
   useEffect(() => {
     const onOpen = (e: Event) => openInBoxRef.current((e as CustomEvent<PostingRow>).detail)
-    window.addEventListener('myhey:open-thread', onOpen)
-    return () => window.removeEventListener('myhey:open-thread', onOpen)
+    window.addEventListener('superhey:open-thread', onOpen)
+    return () => window.removeEventListener('superhey:open-thread', onOpen)
   }, [])
 
   const groups = useCollapsedGroups(activeBox?.id)

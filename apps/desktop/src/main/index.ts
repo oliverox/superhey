@@ -2,11 +2,22 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, protocol, shell } from 'electron'
 import { fileHeaders, type ApiEvent } from '../shared/api'
+import { moveOldDataFolder } from './dataFolder'
 import { keychainStore } from './secrets'
 import { AppService } from './service'
 
+// A separate data root (debugging, and trying the move from @myhey/desktop on a copy).
+if (process.env.SUPERHEY_APP_DATA) {
+  app.setPath('appData', process.env.SUPERHEY_APP_DATA)
+  app.setPath('userData', join(process.env.SUPERHEY_APP_DATA, app.getName()))
+}
 // A separate data folder lets a second instance run beside a normal one (debugging).
-if (process.env.MYHEY_USER_DATA) app.setPath('userData', process.env.MYHEY_USER_DATA)
+if (process.env.SUPERHEY_USER_DATA) app.setPath('userData', process.env.SUPERHEY_USER_DATA)
+// The app used to be "@myhey/desktop"; its data follows it to the SuperHey folder, once.
+else {
+  const moved = moveOldDataFolder(join(app.getPath('appData'), '@myhey', 'desktop'), app.getPath('userData'))
+  if (moved === 'moved') console.log(`[data] moved the old @myhey/desktop folder to ${app.getPath('userData')}`)
+}
 
 const service = new AppService({
   dbPath: join(app.getPath('userData'), 'cache.db'),
@@ -23,8 +34,8 @@ const service = new AppService({
   secrets: keychainStore(join(app.getPath('userData'), 'secrets')),
 })
 
-// myhey-file://attachment/<id> serves cached attachments to the renderer (thumbnails).
-const FILE_SCHEME = 'myhey-file'
+// superhey-file://attachment/<id> serves cached attachments to the renderer (thumbnails).
+const FILE_SCHEME = 'superhey-file'
 protocol.registerSchemesAsPrivileged([
   { scheme: FILE_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
 ])
