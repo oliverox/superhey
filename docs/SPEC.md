@@ -224,7 +224,17 @@ results; opening Today never sends the mailbox to a model.
   searches (Superhuman's Split Inbox, mapped onto HEY concepts).
 - List rows show sender, subject, one-line AI summary (updates on new messages), badges
   (needs reply, waiting, booking, receipt).
-- Hybrid search: FTS5 keyword + semantic, filters matching `hey search` refinements.
+- **Search (Gmail-style, whole mailbox; built):** words, `"phrases"`, `-excluded`, `a OR b` / `{a b}`,
+  and `from:` `to:` `subject:` `in:` `label:` `has:` (attachment, pdf, image, document, spreadsheet,
+  presentation, media, zip, invite) `is:unread/read` `after:` `before:` `newer_than:` `older_than:`.
+  Runs twice and merges by thread: at once on the cache (subjects, senders, previews, AI summaries,
+  bodies of threads read), and on `hey search` (the whole mailbox, bodies included, 10 a page, "More
+  results"). HEY's date ranges are narrowed to the exact days on what comes back; read state and
+  Reply Later / Set Aside / Bubble Up are cache-only. `from:`/`to:` match at word starts. The box
+  grows to the list's width while in use, completes operators (people for from:/to:, labels, file
+  kinds), lists them when empty, and has filter chips (From, date, box, attachment, Unread) that
+  edit the query text. ↓/Enter open the first result; j/k move through results.
+- Later: semantic search (embeddings) alongside.
 
 ### 5.4 Thread view
 - Summary at top (key points, decisions, action items). Action items → todo or event in

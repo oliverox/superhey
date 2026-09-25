@@ -3,7 +3,8 @@ import type { AppStatus, BoxRow, PostingRow } from '@shared/api'
 import { api, useLive } from './api'
 import { useAppStatus } from './hooks'
 import { Sidebar } from './components/Sidebar'
-import { PostingList, SearchResults } from './components/Lists'
+import { PostingList } from './components/Lists'
+import { SearchField, SearchFilters, SearchResults } from './components/Search'
 import { ActivityDrawer, Toasts } from './components/Activity'
 import { Reader, type ReaderTarget } from './components/Reader'
 import { SetupScreen, StartingScreen } from './components/Setup'
@@ -41,6 +42,7 @@ function Workspace({ status }: { status: AppStatus }) {
   // Today is where the app opens; a box replaces it until you come back (0).
   const [onToday, setOnToday] = useState(true)
   const activeBox = ordered.find((b) => b.id === boxId) ?? ordered[0] ?? null
+  const boxNames = useMemo(() => Object.fromEntries(ordered.map((b) => [b.id, b.name])), [ordered])
   const since = useLastLook(onToday)
   const today = useLive(
     () => api.today(since),
@@ -56,6 +58,10 @@ function Workspace({ status }: { status: AppStatus }) {
   )
 
   const [query, setQuery] = useState('')
+  const [searchFocused, setSearchFocused] = useState(false)
+  const [searchRows, setSearchRows] = useState<PostingRow[]>([])
+  const searching = !!query.trim()
+  const searchExpanded = searchFocused || !!query
   const [target, setTarget] = useState<ReaderTarget | null>(null)
   const waiting = useScreener()
   const [screening, setScreening] = useState(false)
@@ -89,7 +95,7 @@ function Workspace({ status }: { status: AppStatus }) {
     return () => window.removeEventListener('myhey:compose', onRestore)
   }, [])
 
-  const list = onToday ? todayThreads(todayData) : (postings.data ?? [])
+  const list = searching ? searchRows : onToday ? todayThreads(todayData) : (postings.data ?? [])
   const selectedIndex = target?.postingId != null ? list.findIndex((p) => p.id === target.postingId) : -1
 
   /** `markSeen: false` shows a thread without reading it (Today putting its first item up). */
@@ -120,8 +126,8 @@ function Workspace({ status }: { status: AppStatus }) {
     if (next) open(next)
     setActivePane('list')
   }
-  useShortcut('nextThread', () => step(1), !query)
-  useShortcut('prevThread', () => step(-1), !query)
+  useShortcut('nextThread', () => step(1))
+  useShortcut('prevThread', () => step(-1))
   useShortcut('search', () => searchRef.current?.focus())
   useShortcut('theme', toggleTheme)
   const showBox = (id: number) => {
@@ -189,8 +195,14 @@ function Workspace({ status }: { status: AppStatus }) {
       />
 
       <section className="pane flex flex-col bg-pane" data-pane="list" data-active={activePane === 'list'}>
-        <header className="drag flex h-[52px] shrink-0 items-center gap-3 border-b border-rule px-4">
-          <h1 className="text-[16px] font-semibold tracking-tight">
+        <header className="drag flex h-[52px] shrink-0 items-center border-b border-rule px-4">
+          {/* The title makes way while the search box is in use. */}
+          <h1
+            aria-hidden={searchExpanded}
+            className={`shrink-0 overflow-hidden text-[16px] font-semibold tracking-tight whitespace-nowrap transition-[max-width,opacity,margin] duration-200 ease-out ${
+              searchExpanded ? 'mr-0 max-w-0 opacity-0' : 'mr-3 max-w-[70%] opacity-100'
+            }`}
+          >
             {screening ? (
               <span className="flex items-center gap-2">
                 <button onClick={leaveScreener} aria-label="Back to the Imbox" title="Back (Esc)" className="no-drag -ml-1 rounded-ui px-1 text-ink-faint hover:bg-pane-sunk hover:text-ink">
@@ -208,21 +220,18 @@ function Workspace({ status }: { status: AppStatus }) {
               (activeBox?.name ?? '')
             )}
           </h1>
-          <div className="no-drag ml-auto flex h-7 w-44 items-center rounded-ui bg-pane-sunk px-2 text-ink-faint focus-within:ring-1 focus-within:ring-rule-strong">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden className="shrink-0">
-              <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
-              <path d="m10.5 10.5 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            <input
-              ref={searchRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search"
-              aria-label="Search mail"
-              className="ml-1.5 w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-faint"
-            />
-            {!query && <kbd className="text-[11px] text-ink-faint">/</kbd>}
-          </div>
+          <SearchField
+            value={query}
+            onChange={setQuery}
+            inputRef={searchRef}
+            expanded={searchExpanded}
+            onFocusChange={setSearchFocused}
+            onLeave={() => {
+              searchRef.current?.blur()
+              setActivePane('list')
+              if (searchRows[0]) open(searchRows[0])
+            }}
+          />
         </header>
         {screening ? (
           <ScreenerList
@@ -242,14 +251,18 @@ function Workspace({ status }: { status: AppStatus }) {
               })
             }
           />
-        ) : query ? (
-          <SearchResults
-            query={query}
-            onOpen={(hit) =>
-              setTarget({ postingId: null, topicId: hit.topicId, entryCount: null, subject: hit.subject ?? '', appUrl: null, isBundle: false })
-            }
-            activeTopicId={target?.topicId ?? null}
-          />
+        ) : searching ? (
+          <>
+            <SearchFilters
+              text={query}
+              onChange={setQuery}
+              onFrom={() => {
+                setQuery((q) => `${q.trimEnd()} from:`)
+                searchRef.current?.focus()
+              }}
+            />
+            <SearchResults text={query} selectedId={target?.postingId ?? null} onOpen={open} onRows={setSearchRows} boxNames={boxNames} />
+          </>
         ) : onToday ? (
           <>
             <ScreenerBanner count={waiting.length} onOpen={openScreener} />

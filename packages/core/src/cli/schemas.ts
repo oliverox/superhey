@@ -137,6 +137,35 @@ export const SavedAttachment = z.looseObject({
   path: z.string(),
 })
 
+/** One thread `hey search` found: its box item, subject and the messages that matched. */
+export const SearchResult = z.looseObject({
+  id: z.number(),
+  topic_id: z.number(),
+  subject: z.string().default(''),
+  updated_at: utc,
+  messages: z
+    .array(
+      z.looseObject({
+        id: z.number(),
+        created_at: nullish(utc),
+        summary: nullish(z.string()),
+        alternative_sender_name: nullish(z.string()),
+        app_url: nullish(z.string()),
+        creator: nullish(
+          z.looseObject({
+            name: nullish(z.string()),
+            email_address: nullish(z.string()),
+            avatar_url: nullish(z.string()),
+            avatar_background_color: nullish(z.string()),
+            initials: nullish(z.string()),
+          }),
+        ),
+      }),
+    )
+    .default([]),
+})
+export type SearchResult = z.infer<typeof SearchResult>
+
 export const Bundle = z.looseObject({
   id: z.number(),
   postings: z.array(Posting).default([]),

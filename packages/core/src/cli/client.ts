@@ -77,6 +77,11 @@ export class HeyClient {
     return splitThreadHtml(await this.runner.text(['thread', 'read', String(topicId), '--html'], priority))
   }
 
+  /** HEY's own search over the whole mailbox: one page (of 10) of threads, newest first. */
+  search(args: string[], priority: Priority = 'high') {
+    return this.data(['search', ...args], z.array(S.SearchResult), priority)
+  }
+
   /** The unread threads a bundle row groups (HEY shows them only inside the bundle). */
   async bundle(id: PostingId): Promise<S.Posting[]> {
     return (await this.data(['bundle', 'view', String(id), '--all'], S.Bundle)).postings

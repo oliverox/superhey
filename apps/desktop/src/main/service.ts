@@ -34,6 +34,11 @@ import {
   PostingId,
   TopicId,
   type Core,
+  highlightTerms,
+  isEmptyQuery,
+  localBounds,
+  parseQuery,
+  searchHey,
 } from '@myhey/core'
 import { API_METHODS, type AiStatus, type AiTestResult, type ThreadAnalysisView, type Api, type ApiEvent, type ApiMethod, type AppStatus, type SetupProblem } from '../shared/api'
 
@@ -152,9 +157,27 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     return this.need().engine.ensureThreadHtml(TopicId(int(topicId)))
   }
 
-  async search(query: string) {
-    if (typeof query !== 'string') throw new Error('query must be a string')
-    return this.need().repo.search(query.slice(0, 200))
+  /** Search, the cache's side: at once, whatever the query. */
+  async search(text: unknown) {
+    const q = parseQuery(searchText(text))
+    return {
+      rows: isEmptyQuery(q) ? [] : this.need().repo.searchThreads(q, localBounds(q)),
+      highlight: highlightTerms(q),
+      problems: q.problems,
+    }
+  }
+
+  /** Search, HEY's side: the whole mailbox, one page of 10 at a time. */
+  async searchHey(text: unknown, page: unknown = 1) {
+    const n = int(page)
+    if (n < 1 || n > 100) throw new Error('page must be 1–100')
+    const core = this.need()
+    return searchHey(core.client, core.repo, parseQuery(searchText(text)), n)
+  }
+
+  /** People to suggest for from: and to:. */
+  async searchPeople(text: unknown) {
+    return this.need().repo.correspondents(searchText(text).slice(0, 100), 6)
   }
 
   async events(from: string, to: string) {
@@ -466,6 +489,11 @@ function toProblem(err: unknown): SetupProblem {
 function int(v: unknown): number {
   if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) throw new Error(`expected a positive integer, got ${String(v)}`)
   return v
+}
+
+function searchText(text: unknown): string {
+  if (typeof text !== 'string') throw new Error('search must be text')
+  return text.slice(0, 500)
 }
 
 const MOVE_TARGETS: MoveTarget[] = ['imbox', 'feedbox', 'trailbox', 'laterbox', 'asidebox']
