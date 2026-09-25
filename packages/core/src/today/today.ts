@@ -146,13 +146,15 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
     seen,
   ).map((i) => ({ ...i, people: repo.otherPeople(i.posting.id, input.myEmails) }))
 
-  // Coming up: dates from mail in the next week (not claiming threads: a date isn't a task).
+  // Coming up: your dates from mail in the next week (not claiming threads: a date isn't a
+  // task). Not from newsletters or promotions, and not what's already over today.
   const comingUp: ComingUpItem[] = []
+  const nowHm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   for (const { posting, a } of analysed) {
-    if (!shown(posting)) continue
+    if (!shown(posting) || a.category === 'newsletter' || a.category === 'promotion') continue
     const found = new Set<string>()
     const add = (label: string, date: string, time: string | null, isDeadline: boolean) => {
-      if (date < today || date > inAWeek || found.has(`${date}|${label.toLowerCase()}`)) return
+      if (date < today || date > inAWeek || (date === today && time != null && time < nowHm) || found.has(`${date}|${label.toLowerCase()}`)) return
       found.add(`${date}|${label.toLowerCase()}`)
       comingUp.push({ key: `date:${posting.id}:${comingUp.length}`, posting, label, date, time, isDeadline })
     }

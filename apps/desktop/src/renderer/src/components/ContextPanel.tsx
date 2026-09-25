@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { AttachmentRow, PostingRow, ThreadView } from '@shared/api'
 import { api, useLive } from '../api'
-import { shortDate } from '../format'
+import { dayName, shortDate } from '../format'
 import { dedupe, shortName, type Addr } from '../mail/people'
 import { extension, formatBytes, visibleAttachments } from './Attachments'
 import { AddressRow } from './People'
@@ -115,12 +115,6 @@ function FileRow({ file }: { file: AttachmentRow }) {
   )
 }
 
-const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
-/** "Fri 26 Sep" for a YYYY-MM-DD (a calendar day, wherever you are). */
-function day(ymd: string) {
-  const [y, m, d] = ymd.split('-').map(Number) as [number, number, number]
-  return dayFormat.format(new Date(y, m - 1, d))
-}
 function money(amount: number, currency: string) {
   try {
     return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount)
@@ -156,16 +150,16 @@ export function Understanding({ topicId }: { topicId: number }) {
                 <span aria-hidden className="mt-[3px] size-[11px] shrink-0 rounded-[3px] border-[1.5px] border-rule-strong" />
                 <span className="min-w-0 flex-1 text-ink">
                   {item.text}
-                  {item.due && <span className={`ml-1.5 whitespace-nowrap ${isPast(item.due) ? 'text-danger' : 'text-ink-faint'}`}>{day(item.due)}</span>}
+                  {item.due && <span className={`ml-1.5 whitespace-nowrap ${isPast(item.due) ? 'text-danger' : 'text-ink-faint'}`}>{dayName(item.due)}</span>}
                 </span>
               </li>
             ))}
           </ul>
         )}
         {(a.dates.length > 0 || a.amounts.length > 0) && (
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12.5px]">
+          <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-[12.5px]">
             {a.dates.map((d, i) => (
-              <Fact key={`d${i}`} label={d.label} value={`${day(d.date)}${d.time ? `, ${d.time}` : ''}`} />
+              <Fact key={`d${i}`} label={d.label} value={`${dayName(d.date)}${d.time ? `, ${d.time}` : ''}`} />
             ))}
             {a.amounts.map((m, i) => (
               <Fact key={`m${i}`} label={m.label} value={money(m.amount, m.currency)} />
@@ -180,8 +174,9 @@ export function Understanding({ topicId }: { topicId: number }) {
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <>
-      <dt className="text-ink-faint">{label}</dt>
-      <dd className="text-right text-ink tabular-nums">{value}</dd>
+      {/* The label wraps; the value (a date, a sum) stays on one line. */}
+      <dt className="min-w-0 text-ink-faint">{label}</dt>
+      <dd className="text-right whitespace-nowrap text-ink tabular-nums">{value}</dd>
     </>
   )
 }

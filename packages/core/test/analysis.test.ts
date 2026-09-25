@@ -1,6 +1,6 @@
 import { MockLanguageModelV4 } from 'ai/test'
 import { describe, expect, it, vi } from 'vitest'
-import { ANALYSIS_VERSION, analysisPrompt, scrub, ThreadAnalyzer, type ThreadAnalysis } from '../src/ai/analysis'
+import { ANALYSIS_VERSION, analysisPrompt, clipWords, scrub, ThreadAnalyzer, type ThreadAnalysis } from '../src/ai/analysis'
 import { AiClient } from '../src/ai/client'
 import { readAiSettings, type AiSettings } from '../src/ai/settings'
 import { openDb } from '../src/cache/db'
@@ -31,8 +31,8 @@ describe('analysisPrompt', () => {
         { id: 2, from: { name: 'Oliver', email: 'me@hey.example', isMe: true }, createdAt: '2026-09-24T10:00:00Z', to: [], cc: [], bodyMd: 'Yes! 12:30?', isMine: true, attachments: [] },
       ],
     })
-    const p = analysisPrompt(t, ME, '2026-09-25')
-    expect(p).toContain('Today is 2026-09-25. The user is Oliver (me@hey.example).')
+    const p = analysisPrompt(t, ME, '2026-09-25', 'Europe/Lisbon')
+    expect(p).toContain('Today is 2026-09-25. The user is Oliver (me@hey.example), in the Europe/Lisbon time zone.')
     expect(p).toContain('<thread subject="Lunch on Friday?">')
     expect(p).toContain('<message from="Alice Example (alice@example.com)" date="2026-09-24T09:00:00Z">\nAre you free for lunch on Friday?\n</message>')
     expect(p).toContain('<message from="you" date="2026-09-24T10:00:00Z">\nYes! 12:30?\n</message>')
@@ -214,5 +214,15 @@ describe('instructions versions', () => {
     const a = repo.analysis(TopicId(900)) as unknown as ThreadAnalysis
     expect(a.summary).toBe('Your one-time password: ••••')
     expect(a.actionItems[0]!.text).toBe('Enter code ••••')
+  })
+})
+
+describe('clipWords', () => {
+  it('cuts at a word with an ellipsis, never mid-word (as a real summary was)', () => {
+    const s = 'Madagascar Office round-table on peace scheduled for September 26, with a broader media cycle; Office of Public Discourse acknowledged receipt'
+    const c = clipWords(s, 140)
+    expect(c.length).toBeLessThanOrEqual(140)
+    expect(c).toBe('Madagascar Office round-table on peace scheduled for September 26, with a broader media cycle; Office of Public Discourse acknowledged…')
+    expect(clipWords('short', 140)).toBe('short')
   })
 })

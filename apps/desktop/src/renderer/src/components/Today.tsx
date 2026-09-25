@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ActionItem, ComingUpItem, PostingRow, ThreadItem, TodayView, TodoItem } from '@shared/api'
 import { api } from '../api'
+import { dayName } from '../format'
 import { stripSubjectPrefixes } from '../mail/forwarded'
 import { withShortcut } from '../shortcuts'
 import { Avatar } from './Avatar'
@@ -96,13 +97,14 @@ export function TodayList({
       {needsReply.length > 0 && <Section title="Needs your reply" count={needsReply.length}>{(limit) => needsReply.slice(0, limit).map((i) => row(i, why.needsReply(i)))}</Section>}
       {replyLater.length > 0 && <Section title="Reply Later" count={replyLater.length}>{(limit) => replyLater.slice(0, limit).map((i) => row(i, why.replyLater(i)))}</Section>}
       {waiting.length > 0 && <Section title="Waiting on others" count={waiting.length}>{(limit) => waiting.slice(0, limit).map((i) => row(i, why.waiting(i)))}</Section>}
-      {comingUp.length > 0 && <ComingUp items={comingUp} selectedId={selectedId} onOpen={onOpen} />}
+      {/* The state first, then what's ahead. */}
       {today.toHandle === 0 && (
-        <div className="px-5 pt-10 pb-4 text-center">
+        <div className="px-5 pt-8 pb-4 text-center">
           <p className="font-app text-[16px] font-medium text-ink">You’re caught up.</p>
           <p className="mt-1 text-[12.5px] text-ink-faint">Nothing due, nothing waiting on your reply, nobody to chase.</p>
         </div>
       )}
+      {comingUp.length > 0 && <ComingUp items={comingUp} selectedId={selectedId} onOpen={onOpen} />}
       {fresh.length > 0 && (
         <section aria-label="New">
           <h2 className="eyebrow px-5 pt-5 pb-1.5">{today.newSince.since ? 'New since you last looked' : 'New today'}</h2>
@@ -211,16 +213,6 @@ function RowActions({ onDone, onNotNow }: { onDone?: () => void; onNotNow?: () =
   )
 }
 
-const shortDay = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric' })
-/** "Sun 27" for a YYYY-MM-DD; "Today" and "Tomorrow" when it is. */
-function dayLabel(ymd: string) {
-  const [y, m, d] = ymd.split('-').map(Number) as [number, number, number]
-  const date = new Date(y, m - 1, d)
-  const now = new Date()
-  const days = Math.round((date.getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86_400_000)
-  return days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : shortDay.format(date)
-}
-
 /** Dates found in mail over the next week, each a click from its thread. Information, not tasks. */
 function ComingUp({ items, selectedId, onOpen }: { items: ComingUpItem[]; selectedId: number | null; onOpen: (p: PostingRow) => void }) {
   return (
@@ -234,8 +226,8 @@ function ComingUp({ items, selectedId, onOpen }: { items: ComingUpItem[]; select
               aria-current={c.posting.id === selectedId || undefined}
               className={`mx-2 flex w-[calc(100%-1rem)] items-baseline gap-3 rounded-ui py-1.5 pr-3 pl-4 text-left ${c.posting.id === selectedId ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
             >
-              <span className="w-[68px] shrink-0 text-[12px] text-ink-faint tabular-nums">
-                {dayLabel(c.date)}
+              <span className="w-[76px] shrink-0 text-[12px] text-ink-faint tabular-nums">
+                {dayName(c.date)}
                 {c.time && <span className="block">{c.time}</span>}
               </span>
               <span className="min-w-0 flex-1">

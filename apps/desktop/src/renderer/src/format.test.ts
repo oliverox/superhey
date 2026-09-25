@@ -17,3 +17,13 @@ describe('dayAndTime', () => {
     expect(dayAndTime(at(2026, 7, 13), now).time).toMatch(/9:05/)
   })
 })
+
+describe('dayName', () => {
+  it('says Today and Tomorrow, else the weekday and date, as Today’s header does', async () => {
+    const { dayName } = await import('./format')
+    const now = new Date(2026, 8, 25, 17, 30)
+    expect(dayName('2026-09-25', now)).toBe('Today')
+    expect(dayName('2026-09-26', now)).toBe('Tomorrow')
+    expect(dayName('2026-10-01', now)).toBe(new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(2026, 9, 1)))
+  })
+})

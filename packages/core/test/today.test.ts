@@ -188,6 +188,21 @@ describe('Today', () => {
     expect(ids(buildToday(repo, input({ hidden })).replyLater)).toEqual([40])
   })
 
+  it('keeps Coming up to your own dates: no newsletters or promotions, nothing already over today', () => {
+    const { repo, put } = setup()
+    put('imbox', { id: 90, topic_id: 990, active_at: daysAgo(1) })
+    put('imbox', { id: 91, topic_id: 991, active_at: daysAgo(1) })
+    put('imbox', { id: 92, topic_id: 992, active_at: daysAgo(1) })
+    analyse(repo, 990, daysAgo(1), { category: 'booking', dates: [
+      { label: 'Morning call', date: '2026-09-25', time: '10:00' }, // NOW is 12:00: over
+      { label: 'Evening call', date: '2026-09-25', time: '18:00' },
+      { label: 'All-day thing', date: '2026-09-25', time: null },
+    ] })
+    analyse(repo, 991, daysAgo(1), { category: 'promotion', dates: [{ label: 'Livestream', date: '2026-09-26', time: null }] })
+    analyse(repo, 992, daysAgo(1), { category: 'newsletter', dates: [{ label: 'Webinar', date: '2026-09-27', time: null }] })
+    expect(buildToday(repo, input()).comingUp.map((c) => c.label)).toEqual(['All-day thing', 'Evening call'])
+  })
+
   it('snoozes with "not now" until the time comes, or the thread changes', () => {
     const { repo, put } = setup()
     put('laterbox', { id: 41, topic_id: 941, active_at: daysAgo(4), seen: true })
