@@ -137,7 +137,8 @@ describe('SyncEngine bundles', () => {
     const stripe = { id: 60, name: 'Stripe', email_address: 'notifications@stripe.com' }
     const { engine, repo } = setup([['bundle view 1', ok({ id: 1, contact: stripe, postings: [] })]])
     repo.upsertPostings([
-      S.Posting.parse(posting({ id: 1, kind: 'bundle', topic_id: null, creator: stripe, seen: true, name: 'Action required • Payout' })),
+      // As HEY sends it: the bundle row shares the thread ID and time of its newest email.
+      S.Posting.parse(posting({ id: 1, kind: 'bundle', topic_id: 901, creator: stripe, seen: true, name: 'Action required • Payout', active_at: '2026-09-25T06:09:00Z' })),
       S.Posting.parse(posting({ id: 2, kind: 'topic', topic_id: 901, creator: stripe, seen: true, name: 'Action required', active_at: '2026-09-25T06:09:00Z' })),
       S.Posting.parse(posting({ id: 3, kind: 'topic', topic_id: 902, creator: stripe, seen: true, name: 'Payout', active_at: '2026-09-20T00:00:00Z' })),
       S.Posting.parse(posting({ id: 4, kind: 'topic', topic_id: 903, name: 'Someone else' })),

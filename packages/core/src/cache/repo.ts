@@ -290,7 +290,8 @@ export class Repo {
     return this.all<Record<string, unknown>>(
       `SELECT * FROM postings p
        WHERE p.box_id = ? AND p.sender_email = ? AND p.is_bundle = 0 AND p.topic_id IS NOT NULL
-         AND p.id = (SELECT q.id FROM postings q WHERE q.topic_id = p.topic_id ORDER BY q.active_at DESC LIMIT 1)
+         -- A bundle row can carry the thread ID of one of its emails; it never stands for it.
+         AND p.id = (SELECT q.id FROM postings q WHERE q.topic_id = p.topic_id AND q.is_bundle = 0 ORDER BY q.active_at DESC, q.id DESC LIMIT 1)
        ORDER BY p.active_at DESC LIMIT ?`,
       boxId,
       email.toLowerCase(),
