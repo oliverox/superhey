@@ -3,7 +3,7 @@ import type { AppStatus, BoxRow, PostingRow } from '@shared/api'
 import { api, useLive } from './api'
 import { useAppStatus } from './hooks'
 import { Sidebar } from './components/Sidebar'
-import { PostingList } from './components/Lists'
+import { groupOf, PostingList, useCollapsedGroups } from './components/Lists'
 import { SearchField, SearchFilters, SearchResults } from './components/Search'
 import { ActivityDrawer, Toasts } from './components/Activity'
 import { Reader, type ReaderTarget } from './components/Reader'
@@ -95,7 +95,10 @@ function Workspace({ status }: { status: AppStatus }) {
     return () => window.removeEventListener('myhey:compose', onRestore)
   }, [])
 
-  const list = searching ? searchRows : onToday ? todayThreads(todayData) : (postings.data ?? [])
+  const groups = useCollapsedGroups(activeBox?.id)
+  // j/k move through what's showing: rows in folded groups are skipped.
+  const boxRows = useMemo(() => (postings.data ?? []).filter((p) => !groups.collapsed.has(groupOf(p))), [postings.data, groups.collapsed])
+  const list = searching ? searchRows : onToday ? todayThreads(todayData) : boxRows
   const selectedIndex = target?.postingId != null ? list.findIndex((p) => p.id === target.postingId) : -1
 
   /** `markSeen: false` shows a thread without reading it (Today putting its first item up). */
@@ -277,10 +280,12 @@ function Workspace({ status }: { status: AppStatus }) {
           {activeBox?.kind === 'imbox' && <ScreenerBanner count={waiting.length} onOpen={openScreener} />}
           <PostingList
             key={activeBox?.id}
-            postings={list}
+            postings={postings.data ?? []}
             loading={postings.loading && !postings.data}
             selectedId={target?.postingId ?? null}
             onOpen={open}
+            collapsed={groups.collapsed}
+            onToggleGroup={groups.toggle}
           />
           </>
         )}
