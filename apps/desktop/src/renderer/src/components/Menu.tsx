@@ -120,7 +120,7 @@ export function MenuItem({
         </span>
       )}
       <span className="min-w-0 flex-1 truncate">{children}</span>
-      {hint && <span className="shrink-0 text-[11.5px] text-ink-faint">{hint}</span>}
+      {hint && <span className="shrink-0 text-[12px] text-ink-faint">{hint}</span>}
     </button>
   )
 }

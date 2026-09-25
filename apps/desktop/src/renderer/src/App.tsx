@@ -203,7 +203,7 @@ function Workspace({ status }: { status: AppStatus }) {
           {/* The title makes way while the search box is in use. */}
           <h1
             aria-hidden={searchExpanded}
-            className={`shrink-0 overflow-hidden text-[16px] font-semibold tracking-tight whitespace-nowrap transition-[max-width,opacity,margin] duration-200 ease-out ${
+            className={`shrink-0 overflow-hidden text-[17px] font-semibold tracking-tight whitespace-nowrap transition-[max-width,opacity,margin] duration-200 ease-out ${
               searchExpanded ? 'mr-0 max-w-0 opacity-0' : 'mr-3 max-w-[70%] opacity-100'
             }`}
           >
@@ -218,7 +218,7 @@ function Workspace({ status }: { status: AppStatus }) {
               'Search'
             ) : onToday ? (
               <span className="flex items-baseline gap-2">
-                Today <span className="text-[12.5px] font-normal text-ink-faint">{todayLabel()}</span>
+                Today <span className="text-[13px] font-normal text-ink-faint">{todayLabel()}</span>
               </span>
             ) : (
               (activeBox?.name ?? '')

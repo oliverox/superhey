@@ -6,7 +6,7 @@ export function StartingScreen() {
   return (
     <div className="drag flex h-full flex-col items-center justify-center bg-bg">
       <p className="rise font-app text-[20px] font-semibold tracking-tight text-ink-soft">Opening your mail…</p>
-      <p className="rise mt-2 text-[12.5px] text-ink-faint" style={{ animationDelay: '120ms' }}>
+      <p className="rise mt-2 text-[13px] text-ink-faint" style={{ animationDelay: '120ms' }}>
         Syncing with HEY through the CLI
       </p>
     </div>
@@ -36,10 +36,10 @@ export function SetupScreen({ problem }: { problem: SetupProblem }) {
   return (
     <div className="drag flex h-full items-center justify-center bg-bg p-8">
       <div className="no-drag rise w-full max-w-[460px] rounded-ui-lg border border-rule bg-pane p-9">
-        <h1 className="font-app text-[24px] leading-tight font-semibold tracking-tight">{copy.title}</h1>
+        <h1 className="font-app text-[26px] leading-tight font-semibold tracking-tight">{copy.title}</h1>
         <p className="mt-3 leading-relaxed text-ink-soft">{copy.body}</p>
         {copy.command && (
-          <code className="mt-5 block rounded-ui bg-pane-sunk px-4 py-3 font-mono text-[12.5px] select-text">{copy.command}</code>
+          <code className="mt-5 block rounded-ui bg-pane-sunk px-4 py-3 font-mono text-[13px] select-text">{copy.command}</code>
         )}
         <p className="mt-4 text-[12px] break-words text-ink-faint select-text">{problem.message}</p>
         <button

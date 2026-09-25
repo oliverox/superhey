@@ -58,17 +58,17 @@ export function PostingList({ postings, loading, selectedId, onOpen, search }: L
                   </span>
                   {p.hasAttachments && <Paperclip />}
                   {(p.entryCount ?? 0) > 1 && <span className="shrink-0 text-[11px] text-ink-faint">{p.entryCount}</span>}
-                  <span className="ml-auto shrink-0 pl-1 text-[11.5px] text-ink-faint">{shortDate(p.activeAt)}</span>
+                  <span className="ml-auto shrink-0 pl-1 text-[12px] text-ink-faint">{shortDate(p.activeAt)}</span>
                 </div>
-                <div className="mt-0.5 flex min-w-0 items-baseline gap-1.5 text-[12.5px] text-ink-faint">
-                  {search?.boxNames[p.boxId] && <span className="shrink-0 text-[11.5px] font-medium text-ink-faint">{search.boxNames[p.boxId]}</span>}
+                <div className="mt-0.5 flex min-w-0 items-baseline gap-1.5 text-[13px] text-ink-faint">
+                  {search?.boxNames[p.boxId] && <span className="shrink-0 text-[12px] font-medium text-ink-faint">{search.boxNames[p.boxId]}</span>}
                   {p.labels.map((label) => (
-                    <span key={label} className="shrink-0 rounded-[4px] border border-rule-strong px-1 text-[10.5px] leading-[15px] font-medium text-ink-soft">
+                    <span key={label} className="shrink-0 rounded-[4px] border border-rule-strong px-1 text-[11px] leading-[15px] font-medium text-ink-soft">
                       {label}
                     </span>
                   ))}
                   {p.ai?.needsReply && (
-                    <span className="shrink-0 text-[11.5px] font-semibold text-accent" title={p.ai.replyReason ? `Needs your reply: ${p.ai.replyReason}` : 'Needs your reply'}>
+                    <span className="shrink-0 text-[12px] font-semibold text-accent" title={p.ai.replyReason ? `Needs your reply: ${p.ai.replyReason}` : 'Needs your reply'}>
                       Reply
                     </span>
                   )}

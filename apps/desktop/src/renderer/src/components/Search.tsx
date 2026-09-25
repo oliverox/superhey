@@ -144,7 +144,7 @@ export function SearchField({
           aria-label={value.trim() ? 'Suggestions' : 'Search with'}
           className="absolute top-full right-0 left-0 z-50 mt-1.5 max-h-[340px] overflow-y-auto rounded-ui-lg border border-rule-strong bg-pane p-1 text-[13px] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.28)]"
         >
-          {!value.trim() && <li className="px-2.5 pt-1 pb-1.5 text-[11.5px] font-medium text-ink-faint">Search with</li>}
+          {!value.trim() && <li className="px-2.5 pt-1 pb-1.5 text-[12px] font-medium text-ink-faint">Search with</li>}
           {items.map((s, i) => (
             <li
               key={s.insert + s.label}
@@ -157,7 +157,7 @@ export function SearchField({
               className={`flex cursor-default items-baseline gap-3 rounded-ui px-2.5 py-1.5 ${i === active ? 'bg-pane-alt' : ''}`}
             >
               <span className="min-w-0 truncate text-ink">{s.label}</span>
-              {s.hint && <span className="ml-auto shrink-0 truncate text-[11.5px] text-ink-faint">{s.hint}</span>}
+              {s.hint && <span className="ml-auto shrink-0 truncate text-[12px] text-ink-faint">{s.hint}</span>}
             </li>
           ))}
         </ul>
@@ -411,7 +411,7 @@ export function SearchResults({
                   type="button"
                   disabled={hey.loading}
                   onClick={() => fetchPage(heyText, hey.page + 1)}
-                  className="w-full rounded-ui border border-rule-strong py-1.5 text-[12.5px] font-medium text-ink-soft hover:bg-pane-sunk hover:text-ink disabled:opacity-60"
+                  className="w-full rounded-ui border border-rule-strong py-1.5 text-[13px] font-medium text-ink-soft hover:bg-pane-sunk hover:text-ink disabled:opacity-60"
                 >
                   {hey.loading ? 'Loading…' : 'More results'}
                 </button>

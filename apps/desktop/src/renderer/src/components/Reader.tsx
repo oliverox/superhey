@@ -63,7 +63,7 @@ export function Reader({ target, active, onOpenThread, onLeaveBox }: ReaderProps
         <div className="drag h-[52px] shrink-0" />
         <div className="flex flex-1 flex-col items-center justify-center text-ink-faint">
           <p className="font-app text-[17px] font-medium text-ink-soft">Pick a thread to read.</p>
-          <p className="mt-2 text-[12.5px]">
+          <p className="mt-2 text-[13px]">
             <kbd>j</kbd> / <kbd>k</kbd> to move · <kbd>/</kbd> to search · <kbd>1</kbd>–<kbd>6</kbd> to switch boxes
           </p>
         </div>
@@ -289,7 +289,7 @@ function Message({
             <span className="min-w-0 flex-1 truncate font-semibold">
               {entry.from?.isMe ? 'You' : entry.from ? displayName(entry.from) : 'Unknown'}
             </span>
-            {entry.attachments.length > 0 && <span className="shrink-0 text-[11.5px] text-ink-faint">📎 {entry.attachments.length}</span>}
+            {entry.attachments.length > 0 && <span className="shrink-0 text-[12px] text-ink-faint">📎 {entry.attachments.length}</span>}
             {time}
           </span>
           {preview && <span className="mt-0.5 block truncate text-[13px] text-ink-faint">{preview}</span>}
@@ -314,13 +314,13 @@ function Message({
         <div className="flex items-baseline gap-2">
           <div className="flex min-w-0 flex-1 items-baseline gap-2">
             {entry.from ? <PersonChip person={entry.from} className="font-semibold" /> : <span className="font-semibold">Unknown</span>}
-            <RecipientsButton to={entry.to} cc={entry.cc} className="text-[12.5px]" />
+            <RecipientsButton to={entry.to} cc={entry.cc} className="text-[13px]" />
           </div>
           {designed && (
             <button
               onClick={toggle}
               title={showOriginal ? 'Show as plain text in the app’s style' : 'Show as the sender designed it'}
-              className="shrink-0 self-center rounded-ui px-1.5 py-0.5 text-[11.5px] font-medium text-ink-faint hover:bg-pane-sunk hover:text-ink"
+              className="shrink-0 self-center rounded-ui px-1.5 py-0.5 text-[12px] font-medium text-ink-faint hover:bg-pane-sunk hover:text-ink"
             >
               {showOriginal ? 'Simplified' : 'Original'}
             </button>
@@ -424,13 +424,13 @@ function ForwardedLine({ header, threadSubject }: { header: ForwardedHeader; thr
   const date = parseForwardedDate(header.date)
   const subject = header.subject && !sameSubject(header.subject, threadSubject) ? stripSubjectPrefixes(header.subject) : null
   return (
-    <div className="mt-1 flex min-w-0 items-baseline gap-1.5 text-[12.5px] text-ink-faint">
+    <div className="mt-1 flex min-w-0 items-baseline gap-1.5 text-[13px] text-ink-faint">
       <span className="shrink-0">Forwarded from</span>
       {header.from && <PersonChip person={header.from} className="font-medium text-ink-soft" />}
       {date ? (
         <>
           <span aria-hidden>·</span>
-          <time dateTime={date.toISOString()} title={longDate(date.toISOString())} className="shrink-0 text-[11.5px]">
+          <time dateTime={date.toISOString()} title={longDate(date.toISOString())} className="shrink-0 text-[12px]">
             {(({ day, time }) => `${day}, ${time}`)(dayAndTime(date.toISOString()))}
           </time>
         </>

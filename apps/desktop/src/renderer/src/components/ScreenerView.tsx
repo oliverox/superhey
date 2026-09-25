@@ -96,7 +96,7 @@ export function ScreenerList({
 
   return (
     <div className="scroll min-h-0 flex-1">
-      <p className="px-5 pt-4 pb-2 text-[12.5px] leading-snug text-ink-faint">These people are emailing you for the first time. Decide whether you want to hear from them.</p>
+      <p className="px-5 pt-4 pb-2 text-[13px] leading-snug text-ink-faint">These people are emailing you for the first time. Decide whether you want to hear from them.</p>
       <ul>
         {items.map((item) => {
           const active = item.id === selected?.id
@@ -109,7 +109,7 @@ export function ScreenerList({
                     <span className="truncate font-semibold text-ink">{item.name ?? item.email}</span>
                     {item.name && <span className="truncate text-[12px] text-ink-faint">{item.email}</span>}
                   </span>
-                  <span className="mt-0.5 block truncate text-[12.5px] text-ink-soft">
+                  <span className="mt-0.5 block truncate text-[13px] text-ink-soft">
                     {item.subject ?? '(no subject)'}
                     {item.summary && <span className="text-ink-faint"> – {item.summary}</span>}
                   </span>
@@ -200,7 +200,7 @@ function DecisionButton({
     tone === 'accent' ? 'bg-accent-wash text-accent hover:bg-accent hover:text-accent-ink' : tone === 'danger' ? 'bg-danger/10 text-danger hover:bg-danger hover:text-white' : 'bg-pane-sunk text-ink-soft hover:text-ink'
   const shape = joined === 'left' ? 'rounded-l-ui rounded-r-none' : joined === 'right' ? 'rounded-r-ui rounded-l-none border-l border-pane px-2' : 'rounded-ui'
   return (
-    <button ref={buttonRef} onClick={onClick} disabled={disabled} title={title} className={`px-3 py-1 text-[12.5px] font-semibold transition-colors disabled:opacity-50 ${colors} ${shape}`}>
+    <button ref={buttonRef} onClick={onClick} disabled={disabled} title={title} className={`px-3 py-1 text-[13px] font-semibold transition-colors disabled:opacity-50 ${colors} ${shape}`}>
       {children}
     </button>
   )

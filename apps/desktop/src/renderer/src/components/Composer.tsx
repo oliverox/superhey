@@ -147,7 +147,7 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
         variant === 'dialog' ? 'border-rule-strong shadow-[0_24px_64px_-24px_rgba(0,0,0,0.45)]' : 'border-rule-strong shadow-[0_8px_24px_-16px_rgba(0,0,0,0.3)]'
       }`}
     >
-      <header className="flex items-center gap-2 border-b border-rule bg-pane px-4 py-2 text-[12.5px]">
+      <header className="flex items-center gap-2 border-b border-rule bg-pane px-4 py-2 text-[13px]">
         <span className="font-semibold text-ink">{TITLES[request.kind]}</span>
         {request.context && <span className="min-w-0 truncate text-ink-faint">{request.context}</span>}
         {!showCopies && (
@@ -201,7 +201,7 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
         aria-label="Message"
         // Grows with the text (up to most of the window) instead of a resize grip; starts at
         // about 7 lines inline, 12 in the dialog.
-        className={`block max-h-[60vh] w-full resize-none [field-sizing:content] bg-transparent ${variant === 'dialog' ? 'min-h-[19.5em]' : 'min-h-[11.5em]'} px-4 py-3 font-body text-[14.5px] leading-relaxed text-ink outline-none placeholder:text-ink-faint`}
+        className={`block max-h-[60vh] w-full resize-none [field-sizing:content] bg-transparent ${variant === 'dialog' ? 'min-h-[19.5em]' : 'min-h-[11.5em]'} px-4 py-3 font-body text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-faint`}
       />
 
       {attach.length > 0 && (

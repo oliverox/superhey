@@ -8,6 +8,16 @@
  *              is, or as chosen (<html data-scheme>: auto, light, dark).
  *   omarchy  — Omarchy / Hyprland: tiled panes with gaps, square corners, monospace,
  *              Tokyo Night palette, accent border on the active pane.
+ *
+ * Type scale (px), the only sizes components use (a test holds them to it):
+ *   11  keycaps, count badges, small caps labels (.eyebrow)   — never for sentences
+ *   12  timestamps, hints, tooltips
+ *   13  secondary lines, buttons, fields
+ *   14  body UI text (--text)
+ *   15  email text (--read-size), dialog titles, composer
+ *   17  pane headings
+ *   20  loading screen
+ *   26  email subject, setup title
  */
 
 :root,
@@ -49,7 +59,7 @@
   --avatar-r: 9999px;
   --gap: 0px;
   --pane-border: 0px;
-  --text: 13.5px;
+  --text: 14px;
   --read-size: 15px;
   --measure: 33.5em;
   color-scheme: light;
@@ -147,8 +157,8 @@
   --avatar-r: 0px;
   --gap: 10px;
   --pane-border: 2px;
-  --text: 12.5px;
-  --read-size: 13px;
+  --text: 13px;
+  --read-size: 14px;
   --measure: 43em;
   color-scheme: dark;
 }
@@ -294,7 +304,7 @@ body {
 }
 
 .eyebrow {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -331,7 +341,7 @@ kbd {
 kbd.sidebar-key {
   min-width: 18px;
   padding: 0 4px;
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 15px;
   color: var(--side-faint);
   background: transparent;
@@ -390,7 +400,7 @@ button:hover > kbd.sidebar-key {
   .btn-primary {
     height: 30px;
     padding: 0 12px;
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: 500;
     border-radius: var(--r);
     white-space: nowrap;
@@ -438,7 +448,7 @@ button:hover > kbd.sidebar-key {
 .command-bar kbd {
   min-width: 18px;
   padding: 0 4px;
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 15px;
 }
 
@@ -452,7 +462,7 @@ button:hover > kbd.sidebar-key {
   max-width: 280px;
   padding: 4px 8px;
   font-family: var(--font-ui);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 16px;
   color: var(--tip-ink);
@@ -481,7 +491,7 @@ button:hover > kbd.sidebar-key {
 kbd.tooltip-key {
   min-width: 16px;
   padding: 0 4px;
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 14px;
   color: var(--tip-ink);
   background: transparent;

@@ -65,7 +65,7 @@ export function BundleView({ bundleId, sender, onLeaveBox }: { bundleId: number;
         {face && <Avatar avatar={face} size={44} seed={list[0]?.senderEmail ?? sender} />}
         <div className="min-w-0 flex-1">
           <h1 className="truncate font-app text-[26px] leading-tight font-semibold tracking-[-0.02em]">{sender}</h1>
-          <p className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-ink-faint">
+          <p className="mt-0.5 flex items-center gap-1.5 text-[13px] text-ink-faint">
             {members.loading && !members.data ? (
               'Loading…'
             ) : (

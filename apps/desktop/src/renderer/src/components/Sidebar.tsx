@@ -38,7 +38,7 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
               }`}
             >
               <span className="font-medium">Today</span>
-              {!!today.count && <span className="ml-2 text-[11.5px] text-side-faint tabular-nums">{today.count}</span>}
+              {!!today.count && <span className="ml-2 text-[12px] text-side-faint tabular-nums">{today.count}</span>}
               <kbd className={`sidebar-key ml-auto ${today.active ? 'is-selected' : ''}`} title="Press 0">
                 0
               </kbd>
@@ -57,7 +57,7 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
                 >
                   <span className="font-medium">{box.name}</span>
                   {box.kind === 'imbox' && box.unseen > 0 && (
-                    <span className="ml-2 rounded-full bg-new px-1.5 text-[10.5px] leading-[17px] font-semibold text-accent-ink tabular-nums">
+                    <span className="ml-2 rounded-full bg-new px-1.5 text-[11px] leading-[17px] font-semibold text-accent-ink tabular-nums">
                       {box.unseen}
                     </span>
                   )}
@@ -73,7 +73,7 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
 
       <Agenda />
 
-      <footer className="shrink-0 border-t border-side-rule px-4 py-3 text-[11.5px] text-side-faint">
+      <footer className="shrink-0 border-t border-side-rule px-4 py-3 text-[12px] text-side-faint">
         <div className="mb-2.5 flex items-center gap-1">
           <button onClick={onOpenActivity} className="flex items-center gap-2 rounded-ui px-1 py-1 text-left text-[12px] text-side-soft hover:text-side-ink">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden>
@@ -116,11 +116,11 @@ function Agenda() {
         <section key={label} className="mb-5">
           <h2 className="eyebrow mb-2 !text-side-faint">{label}</h2>
           {items.length === 0 ? (
-            <p className="text-[12.5px] text-side-faint">Nothing scheduled</p>
+            <p className="text-[13px] text-side-faint">Nothing scheduled</p>
           ) : (
             <ul className="space-y-2">
               {items.map((e) => (
-                <li key={e.key} className="flex gap-2.5 text-[12.5px] leading-snug">
+                <li key={e.key} className="flex gap-2.5 text-[13px] leading-snug">
                   <span className="mt-[3px] h-3 w-[2px] shrink-0 bg-accent" />
                   <span className="min-w-0">
                     <span className="block truncate text-side-ink">{e.title}</span>
@@ -146,7 +146,7 @@ function ThemeSwitch({ theme, onTheme }: { theme: Theme; onTheme: (t: Theme) => 
           aria-label={t.label}
           aria-checked={theme === t.id}
           onClick={() => onTheme(t.id)}
-          className={`flex-1 rounded-ui py-1 text-[11.5px] font-medium transition-colors ${
+          className={`flex-1 rounded-ui py-1 text-[12px] font-medium transition-colors ${
             theme === t.id ? 'bg-side-sel text-side-ink shadow-sm' : 'text-side-faint hover:text-side-soft'
           }`}
         >
