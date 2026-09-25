@@ -62,7 +62,7 @@ function Toast({ record: r, onClose }: { record: ActionRecord; onClose: () => vo
   return (
     <div
       role="status"
-      className={`rise pointer-events-auto flex max-w-[560px] items-center gap-3 rounded-ui-lg px-4 py-2.5 text-[13px] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.4)] ${
+      className={`toast-in pointer-events-auto flex max-w-[560px] items-center gap-3 rounded-ui-lg px-4 py-2.5 text-[13px] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.4)] ${
         failed ? 'bg-danger text-white' : 'bg-ink text-pane'
       }`}
     >
@@ -109,7 +109,7 @@ export function ActivityDrawer({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-ink/20" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <aside aria-label="Activity" className="rise flex h-full w-[400px] flex-col border-l border-rule-strong bg-pane shadow-[-16px_0_40px_-24px_rgba(0,0,0,0.35)]">
+      <aside aria-label="Activity" className="drawer-in flex h-full w-[400px] flex-col border-l border-rule-strong bg-pane shadow-[-16px_0_40px_-24px_rgba(0,0,0,0.35)]">
         <header className="drag flex h-[52px] shrink-0 items-center border-b border-rule px-5">
           <h2 className="text-[15px] font-semibold">Activity</h2>
           <button onClick={onClose} aria-label="Close activity" className="no-drag ml-auto rounded-ui px-2 py-1 text-ink-faint hover:bg-pane-sunk hover:text-ink">

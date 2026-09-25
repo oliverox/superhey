@@ -45,6 +45,9 @@
   --danger: #d4343a;
   /* Working and on: a connected provider, a passed test. */
   --ok: #1a9d55;
+  /* Attention: what the sender flags as needing you ("Action required"). */
+  --attn: #8a5300;
+  --attn-wash: #fff1d6;
   --selection: #edf0ff;
   /* Tooltips: the sidebar's graphite. */
   --tip-bg: #17191e;
@@ -86,6 +89,8 @@
     --new: #7b91ff;
     --danger: #ff6b6b;
     --ok: #4cc47f;
+    --attn: #f2b857;
+    --attn-wash: #33260f;
     --selection: #1c2240;
     --tip-bg: #262a31;
     --tip-ink: #eceef2;
@@ -112,6 +117,8 @@
   --new: #7b91ff;
   --danger: #ff6b6b;
   --ok: #4cc47f;
+  --attn: #f2b857;
+  --attn-wash: #33260f;
   --selection: #1c2240;
   --tip-bg: #262a31;
   --tip-ink: #eceef2;
@@ -143,6 +150,8 @@
   --new: #ff9e64;
   --danger: #f7768e;
   --ok: #9ece6a;
+  --attn: #e0af68;
+  --attn-wash: #2f2716;
   --selection: #283457;
   --tip-bg: #24283b;
   --tip-ink: #c0caf5;
@@ -189,6 +198,8 @@
   --color-new: var(--new);
   --color-danger: var(--danger);
   --color-ok: var(--ok);
+  --color-attn: var(--attn);
+  --color-attn-wash: var(--attn-wash);
   --color-selection: var(--selection);
 }
 
@@ -635,6 +646,19 @@ mark {
   padding: 0 1px;
 }
 
+/*
+ * Motion: it explains what happened (a panel opening, a row leaving), never decorates.
+ * Short and consistent: three durations, one easing in, one out. Reduced motion and the
+ * Omarchy theme (instant by design) turn it all off at the end of this block.
+ */
+:root {
+  --dur-1: 120ms; /* hovers, selection, menus */
+  --dur-2: 180ms; /* rows, messages, toasts */
+  --dur-3: 220ms; /* panels, drawers */
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+}
+
 @keyframes rise {
   from {
     opacity: 0;
@@ -645,12 +669,81 @@ mark {
     transform: none;
   }
 }
+/* Arriving content: a thread, new mail, a dialog. */
 .rise {
-  animation: rise 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: rise var(--dur-3) var(--ease-out) both;
 }
-/* Omarchy is instant: no easing flourishes. */
-[data-theme='omarchy'] .rise {
-  animation: none;
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* Menus, popovers, suggestions: quick in (they leave at once). */
+.pop-in {
+  transform-origin: top;
+  animation: pop-in var(--dur-1) var(--ease-out) both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* Revealed in place: an expanded message, quoted history. */
+.fade-in {
+  animation: fade-in var(--dur-2) var(--ease-out) both;
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.drawer-in {
+  animation: drawer-in var(--dur-3) var(--ease-out) both;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.toast-in {
+  animation: toast-in var(--dur-2) var(--ease-out) both;
+}
+
+/* A list row leaving its box: it folds shut and the list closes the gap (see LeavingRow). */
+.row-leave {
+  overflow: hidden;
+  transition:
+    height var(--dur-2) var(--ease-in),
+    padding var(--dur-2) var(--ease-in),
+    opacity var(--dur-1) var(--ease-in);
+}
+
+/* The details panel's slot opens and closes; the reading column eases along. */
+.panel-slot {
+  overflow: hidden;
+  transition: width var(--dur-3) var(--ease-out);
 }
 
 @keyframes pulse-dot {
@@ -666,11 +759,26 @@ mark {
   animation: pulse-dot 1.6s ease-in-out infinite;
 }
 
+/* Off for reduced motion, and in Omarchy (instant by design). The list's width while dragging never animates. */
 @media (prefers-reduced-motion: reduce) {
-  .rise,
-  .pulse {
-    animation: none;
+  *,
+  ::before,
+  ::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
   }
+}
+[data-theme='omarchy'] *,
+[data-theme='omarchy'] ::before,
+[data-theme='omarchy'] ::after {
+  animation-duration: 1ms !important;
+  animation-delay: 0ms !important;
+  transition-duration: 1ms !important;
+}
+[data-theme='omarchy'] .pulse {
+  animation-duration: 1.6s !important;
 }
 
 .scroll {

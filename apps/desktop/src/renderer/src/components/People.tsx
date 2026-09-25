@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { dedupe, displayName, formatAddressList, hasRealName, summarizeRecipients, type Addr } from '../mail/people'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { dedupe, displayName, formatAddressList, hasRealName, recipientSummaries, type Addr } from '../mail/people'
 
 // Copying works in Electron and browsers; the textarea fallback covers contexts where the
 // async clipboard API is refused (e.g. an unfocused window).
@@ -182,8 +182,8 @@ export function PersonChip({ person, className = '' }: { person: Addr; className
 
 /** "to you, Barender and 3 others". Hover or click lists everyone, each copyable. */
 export function RecipientsButton({ to, cc, className = '' }: { to: Addr[]; cc: Addr[]; className?: string }) {
-  const summary = summarizeRecipients(to, cc)
-  if (!summary) return null
+  const summaries = recipientSummaries(to, cc)
+  if (!summaries.length) return null
   const everyone = dedupe([...to, ...cc])
   const meFirst = (list: Addr[]) => [...list.filter((p) => p.isMe), ...list.filter((p) => !p.isMe)]
   const groups: Array<[string, Addr[]]> = [
@@ -196,7 +196,7 @@ export function RecipientsButton({ to, cc, className = '' }: { to: Addr[]; cc: A
       label="Recipients"
       className={`shrink ${className}`}
       triggerClassName="min-w-0 max-w-full truncate rounded-[3px] text-left text-ink-faint hover:text-ink-soft"
-      trigger={summary}
+      trigger={<FitText variants={summaries} />}
     >
       <div className="scroll max-h-[320px]">
         {groups.map(([label, list]) =>
@@ -217,6 +217,41 @@ export function RecipientsButton({ to, cc, className = '' }: { to: Addr[]; cc: A
         </div>
       )}
     </HoverCard>
+  )
+}
+
+/**
+ * The longest of `variants` that fits its truncating parent without being cut ("to you,
+ * Dana and 3 others" → "to you +4"); the last is shown cut if nothing fits. Rechecked when
+ * the row changes size.
+ */
+export function FitText({ variants }: { variants: string[] }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const [i, setI] = useState(0)
+  const key = variants.join('|')
+  // New text, or a new width: start again from the longest.
+  useLayoutEffect(() => setI(0), [key])
+  useLayoutEffect(() => {
+    const box = ref.current?.parentElement
+    if (box && i < variants.length - 1 && box.scrollWidth > box.clientWidth + 1) setI(i + 1)
+  })
+  useEffect(() => {
+    const row = ref.current?.parentElement?.parentElement?.parentElement
+    if (!row || typeof ResizeObserver === 'undefined') return
+    let width = row.clientWidth
+    const ro = new ResizeObserver(() => {
+      if (row.clientWidth !== width) {
+        width = row.clientWidth
+        setI(0)
+      }
+    })
+    ro.observe(row)
+    return () => ro.disconnect()
+  }, [])
+  return (
+    <span ref={ref} title={i > 0 ? variants[0] : undefined}>
+      {variants[Math.min(i, variants.length - 1)]}
+    </span>
   )
 }
 

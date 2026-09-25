@@ -142,7 +142,7 @@ export function SearchField({
           id="search-suggestions"
           role="listbox"
           aria-label={value.trim() ? 'Suggestions' : 'Search with'}
-          className="absolute top-full right-0 left-0 z-50 mt-1.5 max-h-[340px] overflow-y-auto rounded-ui-lg border border-rule-strong bg-pane p-1 text-[13px] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.28)]"
+          className="pop-in absolute top-full right-0 left-0 z-50 mt-1.5 max-h-[340px] overflow-y-auto rounded-ui-lg border border-rule-strong bg-pane p-1 text-[13px] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.28)]"
         >
           {!value.trim() && <li className="px-2.5 pt-1 pb-1.5 text-[12px] font-medium text-ink-faint">Search with</li>}
           {items.map((s, i) => (

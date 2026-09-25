@@ -3,14 +3,16 @@ import Markdown, { type Components } from 'react-markdown'
 import type { EntryRow, PostingRow, ThreadView } from '@shared/api'
 import { api, useLive } from '../api'
 import { dayAndTime, longDate } from '../format'
-import { type ForwardedHeader, parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes, unwrapHardBreaks } from '../mail/forwarded'
+import { listTags, parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes, tagKind, type ForwardedHeader, unwrapHardBreaks } from '../mail/forwarded'
 import { displayName } from '../mail/people'
 import { isDesigned } from '../mail/html'
 import { splitQuoted, type QuotedSplit } from '../mail/quoted'
+import { repeatedSignatures } from '../mail/signature'
 import { AttachmentStrip, stripAttachmentLines, visibleAttachments } from './Attachments'
 import { ActionBar } from './ActionBar'
 import { BundleView } from './BundleView'
 import { ContextPanel } from './ContextPanel'
+import { usePresence } from '../motion'
 import { useShortcut, withShortcut } from '../shortcuts'
 import { HtmlBody } from './HtmlBody'
 import { PersonChip, RecipientsButton } from './People'
@@ -121,6 +123,23 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
         <div className="scroll min-h-0 min-w-0 flex-1 [container-type:inline-size]">
           <article className="reading-column mx-auto px-10 pt-9 pb-24">
             {/* A bundle draws its own heading (the sender, with their avatar). */}
+          {!target.isBundle && listTags(subject).tags.some((t) => tagKind(t, target.sender ?? null) !== 'sender') && (
+            <div className="rise mb-2 flex flex-wrap gap-1.5" aria-label="Subject tags">
+              {listTags(subject)
+                .tags.filter((t) => tagKind(t, target.sender ?? null) !== 'sender')
+                .map((tag) =>
+                  tagKind(tag, target.sender ?? null) === 'action' ? (
+                    <span key={tag} className="rounded-[4px] bg-attn-wash px-1.5 text-[12px] leading-[20px] font-semibold text-attn">
+                      {tag}
+                    </span>
+                  ) : (
+                    <span key={tag} title="Mailing list" className="rounded-[4px] border border-dashed border-rule-strong px-1.5 text-[12px] leading-[18px] font-medium text-ink-faint">
+                      {tag}
+                    </span>
+                  ),
+                )}
+            </div>
+          )}
           {!target.isBundle && <h1 className="rise font-app text-[26px] leading-[1.2] font-semibold tracking-[-0.02em] text-balance">{title}</h1>}
 
             {target.isBundle ? (
@@ -148,9 +167,20 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
             )}
           </article>
         </div>
-        {showPanel && <ContextPanel thread={thread.data!} onOpenThread={onOpenThread} />}
+        <PanelSlot show={showPanel}>{thread.data && <ContextPanel thread={thread.data} onOpenThread={onOpenThread} />}</PanelSlot>
       </div>
     </main>
+  )
+}
+
+/** The details panel's place: it opens to the panel's width and closes to nothing. */
+function PanelSlot({ show, children }: { show: boolean; children: React.ReactNode }) {
+  const { mounted, shown } = usePresence(show)
+  if (!mounted) return null
+  return (
+    <div className="panel-slot flex shrink-0 justify-end" style={{ width: shown ? 296 : 0 }}>
+      {children}
+    </div>
   )
 }
 
@@ -185,6 +215,17 @@ export function Conversation({
   useShortcut('expandAll', expandAll, keys && multiple)
   useShortcut('collapseAll', () => setOpen(new Set()), keys && multiple)
   const allOpen = multiple && entries.every((e) => open.has(e.id))
+  // Signatures the same person repeats under their messages fold away (forwards keep theirs).
+  const signatures = useMemo(
+    () =>
+      repeatedSignatures(
+        entries.flatMap((e, i) => {
+          const { body, forwarded } = messageParts(e, i)
+          return forwarded ? [] : [{ id: e.id, sender: e.from?.email ?? null, text: body }]
+        }),
+      ),
+    [entries],
+  )
   const openCount = entries.filter((e) => open.has(e.id)).length
 
   const earlier = entries.slice(0, -1)
@@ -246,6 +287,7 @@ export function Conversation({
               expanded={open.has(entry.id)}
               onExpand={() => expand(entry.id)}
               onCollapse={multiple ? () => collapse(entry.id) : undefined}
+              signatureAt={signatures.get(entry.id)}
             entryHtml={htmlByEntry[entry.id]}
               index={i}
             />
@@ -264,6 +306,7 @@ function Message({
   onCollapse,
   entryHtml,
   index,
+  signatureAt,
 }: {
   entry: EntryRow
   subject: string
@@ -273,6 +316,8 @@ function Message({
   onCollapse?: () => void
   entryHtml?: string
   index: number
+  /** Where a signature repeated across the thread starts in the body (folded). */
+  signatureAt?: number
 }) {
   const { designed, showOriginal, toggle } = useDesignedView(entryHtml)
   // Everyone's messages sit on the same paper; the header says who wrote it.
@@ -342,7 +387,7 @@ function Message({
         {forwarded && <ForwardedLine header={forwarded.header} threadSubject={subject} />}
       </header>
 
-      <MessageCard entry={entry} index={index} entryHtml={entryHtml} showOriginal={showOriginal} surface={surface} />
+      <MessageCard entry={entry} index={index} entryHtml={entryHtml} showOriginal={showOriginal} surface={surface} signatureAt={signatureAt} />
     </li>
   )
 }
@@ -368,6 +413,7 @@ export function MessageCard({
   entryHtml,
   showOriginal,
   surface = 'bg-pane',
+  signatureAt,
 }: {
   entry: EntryRow
   /** Position in its thread; a reply's quoted history is only folded after the first. */
@@ -375,6 +421,7 @@ export function MessageCard({
   entryHtml?: string
   showOriginal: boolean
   surface?: string
+  signatureAt?: number
 }) {
   const { quote, body, forwarded } = messageParts(entry, index)
   return showOriginal ? (
@@ -397,6 +444,11 @@ export function MessageCard({
             <>
               {forwarded.before && <Markdown components={mdComponents}>{forwarded.before}</Markdown>}
               <Markdown components={mdComponents}>{forwarded.after}</Markdown>
+            </>
+          ) : signatureAt != null ? (
+            <>
+              <Markdown components={mdComponents}>{body.slice(0, signatureAt)}</Markdown>
+              <SignatureFold text={body.slice(signatureAt)} />
             </>
           ) : (
             <Markdown components={mdComponents}>{body}</Markdown>
@@ -451,6 +503,28 @@ function ForwardedLine({ header, threadSubject }: { header: ForwardedHeader; thr
 }
 
 /** The trimmed conversation history, one click away. */
+/** A signature the thread repeats, folded to a quiet "Signature" toggle. */
+function SignatureFold({ text }: { text: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="mb-2">
+      <button
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        title={open ? 'Hide signature' : 'Show signature (the same under each of their messages)'}
+        className="rounded-[3px] text-[12px] font-medium text-ink-faint hover:text-ink-soft"
+      >
+        {open ? 'Hide signature' : 'Signature…'}
+      </button>
+      {open && (
+        <div className="fade-in mt-1.5 text-ink-soft">
+          <Markdown components={mdComponents}>{text}</Markdown>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function QuotedHistory({ quote }: { quote: QuotedSplit }) {
   const [open, setOpen] = useState(false)
   const label = `${open ? 'Hide' : 'Show'} quoted text${quote.quotedName ? ` from ${quote.quotedName}` : ''}`
@@ -472,7 +546,7 @@ function QuotedHistory({ quote }: { quote: QuotedSplit }) {
         </svg>
       </button>
       {open && (
-        <div className="mt-3 border-l-2 border-rule-strong pl-4 text-ink-soft">
+        <div className="fade-in mt-3 border-l-2 border-rule-strong pl-4 text-ink-soft">
           <Markdown components={mdComponents}>{quote.quoted}</Markdown>
         </div>
       )}

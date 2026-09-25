@@ -1,7 +1,8 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { DUR, motionOff } from '../motion'
 import type { PostingRow } from '@shared/api'
 import { shortDate } from '../format'
-import { stripSubjectPrefixes } from '../mail/forwarded'
+import { listTags, stripSubjectPrefixes, tagKind, tagMatchesLabel } from '../mail/forwarded'
 import { splitMatches } from '../mail/search'
 import { Avatar } from './Avatar'
 
@@ -61,6 +62,8 @@ export function useCollapsedGroups(boxId: number | null | undefined) {
 
 export function PostingList({ postings, loading, selectedId, onOpen, search, collapsed, onToggleGroup }: ListProps) {
   const listRef = useRef<HTMLUListElement>(null)
+  // Rows that just left the box stay a moment, folding shut, so the list closes the gap.
+  const { rows: shown, leaving } = useLeavingRows(postings, !search)
 
   useEffect(() => {
     listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
@@ -71,13 +74,15 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
   const mark = (text: string) => (search ? <Highlighted text={text} terms={search.highlight} /> : text)
   const counts = new Map<string, number>()
   if (!search) for (const p of postings) counts.set(groupOf(p), (counts.get(groupOf(p)) ?? 0) + 1)
+  const rows = shown
 
   return (
     <ul ref={listRef} role="listbox" aria-label="Threads" className="scroll min-h-0 flex-1">
-      {postings.map((p, i) => {
+      {rows.map((p, i) => {
         const group = groupOf(p)
-        const showHeader = !search && (i === 0 || groupOf(postings[i - 1]!) !== group)
+        const showHeader = !search && (i === 0 || groupOf(rows[i - 1]!) !== group)
         const selected = p.id === selectedId
+        const gone = leaving.has(p.id)
         const folded = !search && !!collapsed?.has(group)
         return (
           <Fragment key={p.id}>
@@ -103,12 +108,14 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
               </li>
             )}
             {!folded && <li
-              role="option"
-              aria-selected={selected}
-              onClick={() => onOpen(p)}
-              className={`rise relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2.5 pr-3 pl-4 ${
-                selected ? 'bg-selection' : 'hover:bg-pane-sunk'
-              }`}
+              ref={gone ? foldShut : undefined}
+              role={gone ? undefined : 'option'}
+              aria-hidden={gone || undefined}
+              aria-selected={gone ? undefined : selected}
+              onClick={gone ? undefined : () => onOpen(p)}
+              className={`relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2.5 pr-3 pl-4 transition-colors duration-(--dur-1) ${
+                gone ? 'row-leave pointer-events-none' : 'rise'
+              } ${selected && !gone ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
               style={{ animationDelay: `${Math.min(i, 12) * 18}ms` }}
             >
               {!p.seen && <span className="absolute top-1/2 left-[5px] size-1.5 -translate-y-1/2 rounded-full bg-new" aria-label="Unseen" />}
@@ -124,6 +131,7 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
                 </div>
                 <div className="mt-0.5 flex min-w-0 items-baseline gap-1.5 text-[13px] text-ink-faint">
                   {search?.boxNames[p.boxId] && <span className="shrink-0 text-[12px] font-medium text-ink-faint">{search.boxNames[p.boxId]}</span>}
+                  {!p.isBundle && <SubjectTags subject={p.subject} sender={senderLabel(p)} labels={p.labels} />}
                   {p.labels.map((label) => (
                     <span key={label} className="shrink-0 rounded-[4px] border border-rule-strong px-1 text-[11px] leading-[15px] font-medium text-ink-soft">
                       {label}
@@ -147,6 +155,80 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
       })}
       {search?.footer && <li>{search.footer}</li>}
     </ul>
+  )
+}
+
+/** Folds a leaving row shut: from its height to nothing (the .row-leave transition). */
+function foldShut(el: HTMLLIElement | null) {
+  if (!el || el.dataset.leaving) return
+  el.dataset.leaving = '1'
+  el.style.height = `${el.offsetHeight}px`
+  void el.offsetHeight // commit the start height before changing it
+  Object.assign(el.style, { height: '0px', paddingTop: '0px', paddingBottom: '0px', opacity: '0' })
+}
+
+/** How many rows may leave at once and still animate; more is a different list, redrawn. */
+const LEAVE_AT_ONCE = 5
+
+/**
+ * The rows to draw: `rows`, plus any that just left, kept where they were (after the row
+ * that preceded them) until they've folded shut.
+ */
+export function useLeavingRows(rows: PostingRow[], enabled: boolean) {
+  const prev = useRef(rows)
+  const [leaving, setLeaving] = useState<Map<number, { row: PostingRow; after: number | null }>>(() => new Map())
+  useLayoutEffect(() => {
+    const before = prev.current
+    prev.current = rows
+    if (!enabled || motionOff()) return
+    const now = new Set(rows.map((r) => r.id))
+    const gone = before.filter((r) => !now.has(r.id))
+    if (!gone.length || gone.length > LEAVE_AT_ONCE) return
+    const entries = gone.map((row) => {
+      const at = before.indexOf(row)
+      const after = before.slice(0, at).reverse().find((r) => now.has(r.id))?.id ?? null
+      return [row.id, { row, after }] as const
+    })
+    setLeaving((m) => new Map([...m, ...entries]))
+    const t = setTimeout(() => setLeaving((m) => new Map([...m].filter(([id]) => !entries.some(([gid]) => gid === id)))), DUR.base + 60)
+    return () => clearTimeout(t)
+  }, [rows, enabled])
+
+  if (!leaving.size) return { rows, leaving }
+  const out: PostingRow[] = []
+  const place = (after: number | null) => {
+    for (const { row, after: a } of leaving.values()) if (a === after && !rows.some((r) => r.id === row.id)) out.push(row)
+  }
+  place(null)
+  for (const r of rows) {
+    out.push(r)
+    place(r.id)
+  }
+  return { rows: out, leaving }
+}
+
+/**
+ * The tags a subject carried: what the sender flags as needing you ("Action required") in
+ * amber, ahead of everything else on the line; a mailing list's name quietly outlined. Tags
+ * that only repeat the sender, or a HEY label, aren't shown.
+ */
+export function SubjectTags({ subject, sender, labels }: { subject: string; sender: string | null; labels: string[] }) {
+  const tags = listTags(subject).tags.filter((t) => !tagMatchesLabel(t, labels))
+  const action = tags.filter((t) => tagKind(t, sender) === 'action')
+  const lists = tags.filter((t) => tagKind(t, sender) === 'list')
+  return (
+    <>
+      {action.map((tag) => (
+        <span key={`a:${tag}`} className="shrink-0 rounded-[4px] bg-attn-wash px-1.5 text-[11px] leading-[16px] font-semibold text-attn">
+          {tag}
+        </span>
+      ))}
+      {lists.map((tag) => (
+        <span key={`l:${tag}`} title="Mailing list" className="shrink-0 rounded-[4px] border border-dashed border-rule-strong px-1 text-[11px] leading-[15px] font-medium text-ink-faint">
+          {tag}
+        </span>
+      ))}
+    </>
   )
 }
 

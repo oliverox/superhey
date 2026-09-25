@@ -63,7 +63,7 @@ export function Menu({
           role="menu"
           aria-label={label}
           onKeyDown={(e) => moveFocus(e, menu.current)}
-          className={`absolute top-full z-50 mt-1.5 min-w-[200px] rounded-ui-lg border border-rule-strong bg-pane p-1 text-[13px] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.28)] ${
+          className={`pop-in absolute top-full z-50 mt-1.5 min-w-[200px] rounded-ui-lg border border-rule-strong bg-pane p-1 text-[13px] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.28)] ${
             align === 'right' ? 'right-0' : 'left-0'
           }`}
         >

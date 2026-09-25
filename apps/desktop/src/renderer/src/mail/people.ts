@@ -45,6 +45,26 @@ export function summarizeRecipients(to: Addr[], cc: Addr[]): string {
   return `to ${shown.join(', ')} and ${rest} ${rest === 1 ? 'other' : 'others'}`
 }
 
+/**
+ * The recipient summary from longest to shortest, for when space is tight:
+ * "to you, Barender and 3 others" → "to you and 4 others" → "to you +4".
+ * The first is summarizeRecipients; the last always fits a narrow column.
+ */
+export function recipientSummaries(to: Addr[], cc: Addr[]): string[] {
+  const full = summarizeRecipients(to, cc)
+  if (!full) return []
+  const all = dedupe([...to, ...cc])
+  const ordered = [...all.filter((p) => p.isMe), ...all.filter((p) => !p.isMe)]
+  const first = shortName(ordered[0]!)
+  const rest = ordered.length - 1
+  const out = [full]
+  if (rest > 0) {
+    out.push(`to ${first} and ${rest} ${rest === 1 ? 'other' : 'others'}`)
+    out.push(`to ${first} +${rest}`)
+  }
+  return [...new Set(out)]
+}
+
 export function dedupe(list: Addr[]): Addr[] {
   const seen = new Set<string>()
   return list.filter((p) => {
