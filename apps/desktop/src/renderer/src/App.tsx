@@ -33,6 +33,10 @@ export function App() {
 const BOX_ORDER = ['imbox', 'feedbox', 'trailbox', 'laterbox', 'asidebox', 'bubblebox']
 
 function Workspace({ status }: { status: AppStatus }) {
+  // A test instance says so in the title bar and the Dock's window list too.
+  useEffect(() => {
+    document.title = status.testInstance ? 'SuperHey — TEST INSTANCE' : 'SuperHey'
+  }, [status.testInstance])
   const boxes = useLive(() => api.boxes(), [], (e) => e.type === 'change')
   const ordered = useMemo(
     () => [...(boxes.data ?? [])].sort((a, b) => BOX_ORDER.indexOf(a.kind) - BOX_ORDER.indexOf(b.kind)),
