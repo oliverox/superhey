@@ -15,9 +15,36 @@ import type {
   SearchHit,
   SyncStatus,
   ThreadView,
+  AiSettings,
+  AiTask,
 } from '@myhey/core'
 
-export type { OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, SyncStatus, ThreadView }
+export type { OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, SyncStatus, ThreadView, AiSettings, AiTask }
+
+/** Everything Settings shows about AI. The API key itself never leaves the main process. */
+export interface AiStatus {
+  settings: AiSettings
+  mode: 'claude' | 'local' | 'mixed' | 'off'
+  claude: {
+    /** "sk-ant-…abcd" when a key is stored. */
+    keyHint: string | null
+    /** Whether a key can be stored safely here (the OS keychain is available). */
+    canStoreKey: boolean
+  }
+  tasks: Array<{ id: AiTask; label: string; tier: 'cheap' | 'quality'; runsOn: { engine: 'claude' | 'local'; model: string } | { engine: null; reason: string } }>
+  models: Array<{ id: string; name: string; price: { input: number; output: number } }>
+  month: {
+    since: string
+    spentUsd: number
+    budgetUsd: number | null
+    calls: number
+    byTask: Array<{ task: string; engine: string; model: string; calls: number; input: number; output: number; costUsd: number }>
+  }
+}
+
+export type AiTestResult =
+  | { ok: true; engine: 'claude' | 'local'; model: string; ms: number; reply: string; costUsd: number }
+  | { ok: false; code: string; message: string }
 
 export type SetupProblem =
   | { code: 'binary'; message: string }
@@ -71,9 +98,18 @@ export interface Api {
   saveDraft(message: OutgoingMessage): Promise<number | null>
   /** Downloads if needed, then opens the file in the system's default app. */
   openAttachment(id: string): Promise<void>
+  aiStatus(): Promise<AiStatus>
+  /** Replaces the AI settings; anything invalid is refused. */
+  setAiSettings(settings: AiSettings): Promise<AiStatus>
+  /** Stores (or with null, forgets) the Claude API key in the keychain. */
+  setClaudeKey(key: string | null): Promise<AiStatus>
+  /** The models a local server offers (Ollama, LM Studio). */
+  localModels(baseUrl: string): Promise<string[]>
+  /** A tiny real call to check an engine works; counted in the usage meter. */
+  testAi(engine: 'claude' | 'local'): Promise<AiTestResult>
 }
 
-export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener'] as const satisfies ReadonlyArray<keyof Api>
+export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'aiStatus', 'setAiSettings', 'setClaudeKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
 export type ApiMethod = (typeof API_METHODS)[number]
 
 export type ApiEvent =
@@ -81,6 +117,8 @@ export type ApiEvent =
   | { type: 'status'; status: AppStatus }
   | { type: 'action'; action: ActionRecord }
   | { type: 'outgoing'; record: OutgoingRecord }
+  /** AI settings or usage changed. */
+  | { type: 'ai' }
 
 /** Content types the file endpoints serve as themselves; anything else is a download. */
 const INLINE_TYPES = /^(application\/pdf|image\/(png|jpe?g|gif|webp|avif|bmp|svg\+xml))$/

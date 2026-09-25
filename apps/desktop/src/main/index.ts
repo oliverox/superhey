@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, protocol, shell } from 'electron'
 import { fileHeaders, type ApiEvent } from '../shared/api'
+import { keychainStore } from './secrets'
 import { AppService } from './service'
 
 // A separate data folder lets a second instance run beside a normal one (debugging).
@@ -19,6 +20,7 @@ const service = new AppService({
     const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     return res.canceled ? [] : res.filePaths
   },
+  secrets: keychainStore(join(app.getPath('userData'), 'secrets')),
 })
 
 // myhey-file://attachment/<id> serves cached attachments to the renderer (thumbnails).

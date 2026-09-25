@@ -1,9 +1,19 @@
 // The app's backend: boots the core and implements the UI API. No Electron imports, so the
 // dev web server can host it too.
 import { EventEmitter } from 'node:events'
-import { statSync } from 'node:fs'
-import { isAbsolute } from 'node:path'
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { dirname, isAbsolute, join } from 'node:path'
 import {
+  AI_TASK_IDS,
+  AI_TASKS,
+  AiClient,
+  AiError,
+  AiSettings,
+  aiMode,
+  CLAUDE_MODELS,
+  listLocalModels,
+  readAiSettings,
+  route,
   createCore,
   type Action,
   type MoveTarget,
@@ -15,7 +25,16 @@ import {
   TopicId,
   type Core,
 } from '@myhey/core'
-import { API_METHODS, type Api, type ApiEvent, type ApiMethod, type AppStatus, type SetupProblem } from '../shared/api'
+import { API_METHODS, type AiStatus, type AiTestResult, type Api, type ApiEvent, type ApiMethod, type AppStatus, type SetupProblem } from '../shared/api'
+
+/** Where secrets (the Claude API key) are kept: the OS keychain in the app, none in browser dev mode. */
+export interface SecretStore {
+  available(): boolean
+  get(name: string): string | null
+  set(name: string, value: string | null): void
+}
+
+const CLAUDE_KEY = 'anthropic-api-key'
 
 const BACKFILL_DELAY_MS = 1_000
 
@@ -36,9 +55,20 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
       openFile: (path: string) => Promise<void>
       /** The system file picker; absent where there isn't one (browser dev mode). */
       pickFiles?: () => Promise<string[]>
+      /** Absent in browser dev mode: no key can be stored there. */
+      secrets?: SecretStore
+      /** Tests pass a core that doesn't need the HEY CLI. */
+      createCore?: typeof createCore
     },
   ) {
     super()
+    this.aiSettings = readAiSettings(readJson(this.aiSettingsPath))
+  }
+
+  private aiSettings: AiSettings
+  private ai: AiClient | null = null
+  private get aiSettingsPath() {
+    return join(dirname(this.opts.dbPath), 'ai-settings.json')
   }
 
   async boot(): Promise<AppStatus> {
@@ -46,7 +76,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     this.core = null
     this.update({ phase: 'starting', problem: null })
     try {
-      const core = await createCore({ ...this.opts, sendingDisabled: process.env.MYHEY_TEST_NO_SEND === '1' })
+      const core = await (this.opts.createCore ?? createCore)({ ...this.opts, sendingDisabled: process.env.MYHEY_TEST_NO_SEND === '1' })
       this.core = core
       this.update({ cli: core.cli })
       core.engine.on('change', (change) => this.emit('event', { type: 'change', change }))
@@ -54,6 +84,8 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
       core.engine.on('error', (err) => console.error('[sync]', err.message))
       core.actions.on('action', (action) => this.emit('event', { type: 'action', action }))
       core.outbox.on('outgoing', (record) => this.emit('event', { type: 'outgoing', record }))
+      this.ai = new AiClient({ settings: () => this.aiSettings, apiKey: () => this.opts.secrets?.get(CLAUDE_KEY) ?? null, repo: core.repo })
+      this.ai.on('usage', () => this.emit('event', { type: 'ai' }))
       await core.engine.start()
       this.update({ phase: 'ready', sync: core.engine.getStatus() })
       void this.backfill(core)
@@ -190,6 +222,76 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     return this.need().outbox.saveDraft(validateMessage(message, false, true))
   }
 
+  // AI
+
+  async aiStatus(): Promise<AiStatus> {
+    const s = this.aiSettings
+    const key = this.opts.secrets?.get(CLAUDE_KEY) ?? null
+    const ai = this.needAi()
+    const since = ai.monthStart()
+    const byTask = this.need().repo.aiUsageSince(since)
+    return {
+      settings: s,
+      mode: aiMode(s, !!key),
+      claude: { keyHint: key ? `${key.slice(0, 7)}…${key.slice(-4)}` : null, canStoreKey: this.opts.secrets?.available() ?? false },
+      tasks: AI_TASK_IDS.map((id) => {
+        const r = route(s, id, !!key)
+        return { id, label: AI_TASKS[id].label, tier: AI_TASKS[id].tier, runsOn: r.engine ? { engine: r.engine, model: r.model } : { engine: null, reason: r.reason } }
+      }),
+      models: CLAUDE_MODELS.map((m) => ({ id: m.id, name: m.name, price: { input: m.price.input, output: m.price.output } })),
+      month: {
+        since,
+        spentUsd: ai.spentThisMonth(),
+        budgetUsd: s.monthlyBudgetUsd,
+        calls: byTask.reduce((n, t) => n + t.calls, 0),
+        byTask,
+      },
+    }
+  }
+
+  async setAiSettings(input: unknown) {
+    const parsed = AiSettings.safeParse(input)
+    if (!parsed.success) throw new Error(`Invalid AI settings: ${parsed.error.issues[0]?.message ?? 'unknown'}`)
+    this.aiSettings = parsed.data
+    writeJson(this.aiSettingsPath, parsed.data)
+    this.emit('event', { type: 'ai' })
+    return this.aiStatus()
+  }
+
+  async setClaudeKey(key: unknown) {
+    const secrets = this.opts.secrets
+    if (!secrets) throw new Error('Keys can’t be stored in browser dev mode.')
+    if (key === null) secrets.set(CLAUDE_KEY, null)
+    else {
+      const k = typeof key === 'string' ? key.trim() : ''
+      if (!/^sk-ant-[A-Za-z0-9_-]{20,300}$/.test(k)) throw new Error('That doesn’t look like a Claude API key (they start with “sk-ant-”).')
+      secrets.set(CLAUDE_KEY, k)
+    }
+    this.emit('event', { type: 'ai' })
+    return this.aiStatus()
+  }
+
+  async localModels(baseUrl: unknown) {
+    if (typeof baseUrl !== 'string' || !/^https?:\/\/[^\s]{1,300}$/.test(baseUrl)) throw new Error('Enter an http:// or https:// address.')
+    return listLocalModels(baseUrl)
+  }
+
+  async testAi(engine: unknown): Promise<AiTestResult> {
+    if (engine !== 'claude' && engine !== 'local') throw new Error('bad engine')
+    try {
+      const r = await this.needAi().run({
+        task: engine === 'claude' ? 'test-claude' : 'test-local',
+        system: 'You are checking a connection. Reply with exactly: OK',
+        prompt: 'Connection test.',
+        maxOutputTokens: 16,
+        signal: AbortSignal.timeout(engine === 'local' ? 60_000 : 30_000),
+      })
+      return { ok: true, engine: r.engine, model: r.model, ms: r.ms, reply: r.output.trim().slice(0, 80), costUsd: r.usage.costUsd }
+    } catch (e) {
+      return { ok: false, code: e instanceof AiError ? e.code : 'failed', message: e instanceof Error ? e.message : String(e) }
+    }
+  }
+
   /** Whether a message is still in its undo window. */
   hasPendingSends(): boolean {
     return this.core?.outbox.hasPending() ?? false
@@ -218,6 +320,11 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
   }
 
   // Internals
+
+  private needAi(): AiClient {
+    if (!this.ai) throw new Error('HEY is not connected yet')
+    return this.ai
+  }
 
   private need(): Core {
     if (!this.core) throw new Error('HEY is not connected yet')
@@ -348,4 +455,17 @@ function validateMessage(input: unknown, needsSubject: boolean, isDraft = false)
     threadId: m.threadId == null ? undefined : TopicId(int(m.threadId)),
     from: typeof m.from === 'string' && m.from ? m.from : undefined,
   }
+}
+
+function readJson(path: string): unknown {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'))
+  } catch {
+    return undefined // none yet, or unreadable: the defaults apply
+  }
+}
+
+function writeJson(path: string, value: unknown) {
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, JSON.stringify(value, null, 2))
 }
