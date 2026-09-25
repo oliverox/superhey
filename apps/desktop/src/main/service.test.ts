@@ -181,6 +181,14 @@ describe('Search in the service', () => {
     await expect(s.searchPeople(7)).rejects.toThrow(/text/)
   })
 
+  it('looks up a forward’s original, and checks what it’s given', async () => {
+    const { s } = await service()
+    expect(await s.forwardedOriginal('nobody@example.org', 'Fwd: Plans', null, null)).toBeNull()
+    await expect(s.forwardedOriginal('not an address', 'Plans', null, null)).rejects.toThrow(/bad forward/)
+    await expect(s.forwardedOriginal('a@example.org', 42, null, null)).rejects.toThrow(/bad forward/)
+    await expect(s.forwardedOriginal('a@example.org', 'Plans', 'yesterday', null)).rejects.toThrow(/ISO/)
+  })
+
   it('doesn’t ask HEY what only the cache knows', async () => {
     const { s } = await service()
     expect(await s.searchHey('is:unread invoice', 1)).toMatchObject({ rows: [], unsupported: true })

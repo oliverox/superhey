@@ -100,6 +100,13 @@ function Workspace({ status }: { status: AppStatus }) {
     window.addEventListener('myhey:compose', onRestore)
     return () => window.removeEventListener('myhey:compose', onRestore)
   }, [])
+  // A thread opened from inside the reader (a forward's original).
+  const openInBoxRef = useRef<(p: PostingRow) => void>(() => {})
+  useEffect(() => {
+    const onOpen = (e: Event) => openInBoxRef.current((e as CustomEvent<PostingRow>).detail)
+    window.addEventListener('myhey:open-thread', onOpen)
+    return () => window.removeEventListener('myhey:open-thread', onOpen)
+  }, [])
 
   const groups = useCollapsedGroups(activeBox?.id)
   // j/k move through what's showing: rows in folded groups are skipped.
@@ -152,6 +159,16 @@ function Workspace({ status }: { status: AppStatus }) {
     setQuery('')
     setBoxId(id)
   }
+  /** Opens a thread from outside its list (the command bar, a forward's original): into its box when it's one of the six, so the list shows it selected. */
+  const openInBox = (p: PostingRow) => {
+    if (ordered.some((b) => b.id === p.boxId)) showBox(p.boxId)
+    else {
+      setScreening(false)
+      setQuery('')
+    }
+    open(p)
+  }
+  openInBoxRef.current = openInBox
   const goToBox = (i: number) => ordered[i] && showBox(ordered[i]!.id)
   const goToToday = () => {
     setOnToday(true)
@@ -331,15 +348,7 @@ function Workspace({ status }: { status: AppStatus }) {
           postingId={target?.postingId ?? null}
           onClose={() => setShowCommands(false)}
           goToBox={showBox}
-          openEmail={(p) => {
-            // Into its box when it's one of the six, so the list shows it selected.
-            if (ordered.some((b) => b.id === p.boxId)) showBox(p.boxId)
-            else {
-              setScreening(false)
-              setQuery('')
-            }
-            open(p)
-          }}
+          openEmail={openInBox}
           openActivity={() => setShowActivity(true)}
         />
       )}

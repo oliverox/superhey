@@ -180,3 +180,19 @@ describe('matching people', () => {
     expect(repo.correspondents('adam w').map((c) => c.email)).toEqual(['news@tailwindcss.com'])
   })
 })
+
+describe('the original of a forward', () => {
+  it('finds the email you forwarded: same sender and subject, closest in time, not the forward itself', () => {
+    const { repo, put } = setup()
+    const ext = { id: 30, name: 'External Affairs', email_address: 'externalaffaires@example.org', contactable_type: 'Person' }
+    put('imbox', { id: 20, topic_id: 120, name: 'Point d’avancement – 1ere TABLE RONDE', creator: ext, contacts: [ext, me], active_at: '2026-09-08T11:28:47Z', seen: true })
+    put('imbox', { id: 21, topic_id: 121, name: 'Point d’avancement – 1ere TABLE RONDE', creator: ext, contacts: [ext, me], active_at: '2025-09-08T11:28:47Z', seen: true })
+    put('imbox', { id: 22, topic_id: 122, name: 'Fwd: Point d’avancement – 1ere TABLE RONDE', creator: me, contacts: [me, alice], active_at: '2026-09-21T10:25:00Z', seen: true })
+    const found = repo.forwardedOriginal('ExternalAffaires@example.org', 'Fwd: [mada] Point d’avancement –  1ere TABLE RONDE', '2026-09-08T11:28:00Z', TopicId(122))
+    expect(found?.topicId).toBe(120)
+    expect(repo.forwardedOriginal('externalaffaires@example.org', 'Something else', null, null)).toBeNull()
+    expect(repo.forwardedOriginal('nobody@example.org', 'Point d’avancement – 1ere TABLE RONDE', null, null)).toBeNull()
+    // No date in the forward: the latest.
+    expect(repo.forwardedOriginal('externalaffaires@example.org', 'Point d’avancement – 1ere TABLE RONDE', null, null)?.topicId).toBe(120)
+  })
+})

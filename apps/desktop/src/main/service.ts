@@ -176,6 +176,13 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     return searchHey(core.client, core.repo, parseQuery(searchText(text)), n)
   }
 
+  /** The thread a forwarded email came from, when it's in the cache. */
+  async forwardedOriginal(fromEmail: unknown, subject: unknown, at: unknown, exceptTopic: unknown) {
+    if (typeof fromEmail !== 'string' || !fromEmail.includes('@') || typeof subject !== 'string') throw new Error('bad forward')
+    if (at !== null && (typeof at !== 'string' || Number.isNaN(Date.parse(at)))) throw new Error('at must be an ISO date or null')
+    return this.need().repo.forwardedOriginal(fromEmail.slice(0, 320), subject.slice(0, 500), at, exceptTopic == null ? null : TopicId(int(exceptTopic)))
+  }
+
   /** People to suggest for from: and to:. */
   async searchPeople(text: unknown) {
     return this.need().repo.correspondents(searchText(text).slice(0, 100), 6)
