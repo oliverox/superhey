@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import { CLAUDE_MODELS } from './models'
+import { CLOUD_MODELS, CLOUD_PROVIDERS, cloudModel, PROVIDER_NAME, type CloudProvider } from './models'
 
 /**
  * AI settings: which engines are set up, which one each task uses, and the monthly budget.
- * The Claude API key is not here: it lives in the OS keychain, held by the main process.
+ * API keys are not here: they live in the OS keychain, held by the main process.
  */
 
 /** Everything the app asks a model to do, and how demanding it is. */
@@ -18,25 +18,30 @@ export const AI_TASKS = {
 
 export type AiTask = keyof typeof AI_TASKS
 export type Tier = 'cheap' | 'quality'
+export type Engine = CloudProvider | 'local'
 export const AI_TASK_IDS = Object.keys(AI_TASKS) as AiTask[]
 
-/** Which Claude model each tier uses unless a task says otherwise. */
-export const DEFAULT_CLAUDE_MODEL: Record<Tier, string> = {
-  cheap: 'claude-haiku-4-5-20251001',
-  quality: 'claude-sonnet-5',
+/** Which model each provider uses for each tier unless a task says otherwise. */
+export const DEFAULT_MODEL: Record<CloudProvider, Record<Tier, string>> = {
+  claude: { cheap: 'claude-haiku-4-5-20251001', quality: 'claude-sonnet-5' },
+  openai: { cheap: 'gpt-6-luna', quality: 'gpt-6-sol' },
 }
-
-const claudeModelId = z.enum(CLAUDE_MODELS.map((m) => m.id) as [string, ...string[]])
 
 const TaskSettings = z.object({
   enabled: z.boolean().default(true),
-  /** `auto` follows the mode: in mixed mode, cheap tasks go local and the rest to Claude. */
-  engine: z.enum(['auto', 'claude', 'local']).default('auto'),
-  claudeModel: claudeModelId.optional(),
+  /** `auto` follows the setup: with a local model too, quick tasks go local and the rest to the cloud. */
+  engine: z.enum(['auto', 'claude', 'openai', 'local']).default('auto'),
+  /** A cloud model for this task (used when the task runs on that model's provider). */
+  model: z.enum(CLOUD_MODELS.map((m) => m.id) as [string, ...string[]]).optional(),
 })
 
+const Cloud = z.object({ enabled: z.boolean().default(true) })
+
 export const AiSettings = z.object({
-  claude: z.object({ enabled: z.boolean().default(true) }).default({ enabled: true }),
+  claude: Cloud.default({ enabled: true }),
+  openai: Cloud.default({ enabled: true }),
+  /** Which cloud runs automatic tasks when both have keys. */
+  preferredCloud: z.enum(['claude', 'openai']).default('claude'),
   local: z
     .object({
       enabled: z.boolean().default(false),
@@ -46,7 +51,7 @@ export const AiSettings = z.object({
     })
     .default({ enabled: false, baseUrl: 'http://localhost:11434/v1', model: '' }),
   tasks: z.partialRecord(z.enum(AI_TASK_IDS as [AiTask, ...AiTask[]]), TaskSettings).default({}),
-  /** A hard stop on Claude spending per calendar month, in USD; null for none. */
+  /** A hard stop on cloud spending (Claude and OpenAI together) per calendar month, in USD; null for none. */
   monthlyBudgetUsd: z.number().min(0).max(10_000).nullable().default(5),
 })
 export type AiSettings = z.infer<typeof AiSettings>
@@ -63,39 +68,59 @@ export function taskSettings(s: AiSettings, task: AiTask) {
   return TaskSettings.parse(s.tasks[task] ?? {})
 }
 
+/** Which providers have a key stored. */
+export type KeysStored = Record<CloudProvider, boolean>
+
 export type Route =
-  | { engine: 'claude'; model: string }
+  | { engine: CloudProvider; model: string }
   | { engine: 'local'; model: string; baseUrl: string }
   | { engine: null; reason: string }
 
+export type TestTask = `test-${Engine}`
+
+/** The cloud providers that can run now (a key stored and turned on), preferred first. */
+export function readyClouds(s: AiSettings, keys: KeysStored): CloudProvider[] {
+  const ready = CLOUD_PROVIDERS.filter((p) => keys[p] && s[p].enabled)
+  return ready.sort((a, b) => Number(b === s.preferredCloud) - Number(a === s.preferredCloud))
+}
+
 /**
- * Which engine and model a task runs on. `hasKey`: whether a Claude key is stored. Claude
- * counts as set up with a key and enabled; local with a model chosen and enabled.
+ * Which engine and model a task runs on. A cloud counts as set up with a key stored and
+ * turned on; the local model with a model chosen and turned on.
  */
-export function route(s: AiSettings, task: AiTask | 'test-claude' | 'test-local', hasKey: boolean): Route {
-  const claudeReady = hasKey && s.claude.enabled
+export function route(s: AiSettings, task: AiTask | TestTask, keys: KeysStored): Route {
+  const clouds = readyClouds(s, keys)
   const localReady = s.local.enabled && !!s.local.model
-  const claude = (tier: Tier, model?: string): Route => ({ engine: 'claude', model: model ?? DEFAULT_CLAUDE_MODEL[tier] })
   const local: Route = { engine: 'local', model: s.local.model, baseUrl: s.local.baseUrl }
+  const cloud = (p: CloudProvider, tier: Tier, model?: string): Route => ({
+    engine: p,
+    // A task's model only counts on its own provider's cloud.
+    model: model && cloudModel(model)?.provider === p ? model : DEFAULT_MODEL[p][tier],
+  })
 
   // The connection tests in Settings name their engine.
-  if (task === 'test-claude') return claudeReady ? claude('cheap') : { engine: null, reason: 'Add a Claude API key first.' }
   if (task === 'test-local') return localReady ? local : { engine: null, reason: 'Choose a local model first.' }
+  if (task === 'test-claude' || task === 'test-openai') {
+    const p = task === 'test-claude' ? 'claude' : 'openai'
+    return clouds.includes(p) ? cloud(p, 'cheap') : { engine: null, reason: `Add an ${p === 'claude' ? 'Anthropic' : 'OpenAI'} API key first.` }
+  }
 
   const t = taskSettings(s, task)
   const tier = AI_TASKS[task].tier
   if (!t.enabled) return { engine: null, reason: `${AI_TASKS[task].label} are turned off.` }
-  if (t.engine === 'claude') return claudeReady ? claude(tier, t.claudeModel) : { engine: null, reason: 'This task uses Claude, which isn’t set up.' }
   if (t.engine === 'local') return localReady ? local : { engine: null, reason: 'This task uses the local model, which isn’t set up.' }
-  if (claudeReady && localReady) return tier === 'cheap' ? local : claude(tier, t.claudeModel)
-  if (claudeReady) return claude(tier, t.claudeModel)
+  if (t.engine !== 'auto') return clouds.includes(t.engine) ? cloud(t.engine, tier, t.model) : { engine: null, reason: `This task uses ${PROVIDER_NAME[t.engine]}, which isn’t set up.` }
+  const first = clouds[0]
+  if (first && localReady) return tier === 'cheap' ? local : cloud(first, tier, t.model)
+  if (first) return cloud(first, tier, t.model)
   if (localReady) return local
-  return { engine: null, reason: 'Set up Claude or a local model in Settings.' }
+  return { engine: null, reason: 'Set up Claude, OpenAI or a local model in Settings.' }
 }
 
-/** Claude, local, both, or neither: how Settings describes the setup. */
-export function aiMode(s: AiSettings, hasKey: boolean): 'claude' | 'local' | 'mixed' | 'off' {
-  const c = hasKey && s.claude.enabled
-  const l = s.local.enabled && !!s.local.model
-  return c && l ? 'mixed' : c ? 'claude' : l ? 'local' : 'off'
+/**
+ * How Settings describes the setup: which cloud runs automatic tasks (if any), and whether
+ * a local model takes the quick ones.
+ */
+export function aiMode(s: AiSettings, keys: KeysStored): { cloud: CloudProvider | null; local: boolean } {
+  return { cloud: readyClouds(s, keys)[0] ?? null, local: s.local.enabled && !!s.local.model }
 }

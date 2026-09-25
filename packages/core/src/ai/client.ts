@@ -1,11 +1,12 @@
 import { EventEmitter } from 'node:events'
 import { createAnthropic } from '@ai-sdk/anthropic'
+import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { APICallError, generateText, Output, type LanguageModel } from 'ai'
 import type { z } from 'zod'
 import type { Repo } from '../cache/repo'
-import { costOf, maxCostOf } from './models'
-import { route, type AiSettings, type AiTask, type Route } from './settings'
+import { costOf, maxCostOf, PROVIDER_NAME, type CloudProvider } from './models'
+import { route, type AiSettings, type AiTask, type Route, type TestTask } from './settings'
 
 export type AiErrorCode = 'not-set-up' | 'budget' | 'auth' | 'unreachable' | 'rate-limited' | 'failed'
 
@@ -21,7 +22,7 @@ export class AiError extends Error {
 }
 
 export interface AiRequest<S extends z.ZodType | undefined = undefined> {
-  task: AiTask | 'test-claude' | 'test-local'
+  task: AiTask | TestTask
   /** Instructions. Email content never goes here: it goes in `prompt`, as data. */
   system: string
   prompt: string
@@ -33,18 +34,18 @@ export interface AiRequest<S extends z.ZodType | undefined = undefined> {
 
 export interface AiResult<T> {
   output: T
-  engine: 'claude' | 'local'
+  engine: CloudProvider | 'local'
   model: string
   usage: { input: number; output: number; costUsd: number }
   ms: number
 }
 
-type Resolved = Extract<Route, { engine: 'claude' | 'local' }>
+type Resolved = Exclude<Route, { engine: null }>
 
 export interface AiClientOptions {
   settings: () => AiSettings
-  /** The Claude API key, read from the keychain when needed; null when none is stored. */
-  apiKey: () => string | null
+  /** A provider's API key, read from the keychain when needed; null when none is stored. */
+  apiKey: (provider: CloudProvider) => string | null
   repo: Repo
   now?: () => Date
   /** Builds the model for a route; tests pass fakes. */
@@ -53,7 +54,7 @@ export interface AiClientOptions {
 
 /**
  * Every model call in the app goes through here: it picks the engine for the task, stops a
- * Claude call that could cross the monthly budget, runs it, and logs what it used.
+ * cloud call that could cross the monthly budget, runs it, and logs what it used.
  */
 export class AiClient extends EventEmitter<{ usage: [] }> {
   constructor(private readonly opts: AiClientOptions) {
@@ -76,12 +77,13 @@ export class AiClient extends EventEmitter<{ usage: [] }> {
 
   async run<S extends z.ZodType | undefined = undefined>(req: AiRequest<S>): Promise<AiResult<S extends z.ZodType ? z.infer<S> : string>> {
     const settings = this.opts.settings()
-    const key = this.opts.apiKey()
-    const r = route(settings, req.task, !!key)
+    const keys = { claude: this.opts.apiKey('claude'), openai: this.opts.apiKey('openai') }
+    const r = route(settings, req.task, { claude: !!keys.claude, openai: !!keys.openai })
     if (!r.engine) throw new AiError('not-set-up', r.reason)
+    const key = r.engine === 'local' ? null : keys[r.engine]
 
     const maxOutputTokens = req.maxOutputTokens ?? 1024
-    if (r.engine === 'claude' && settings.monthlyBudgetUsd != null) {
+    if (r.engine !== 'local' && settings.monthlyBudgetUsd != null) {
       const spent = this.spentThisMonth()
       const ceiling = maxCostOf(r.model, req.system.length + req.prompt.length, maxOutputTokens)
       if (spent + ceiling > settings.monthlyBudgetUsd) {
@@ -113,7 +115,7 @@ export class AiClient extends EventEmitter<{ usage: [] }> {
       cacheWrite: u.inputTokenDetails?.cacheWriteTokens ?? 0,
       output: u.outputTokens ?? 0,
     }
-    const costUsd = r.engine === 'claude' ? costOf(r.model, tokens) : 0
+    const costUsd = r.engine === 'local' ? 0 : costOf(r.model, tokens)
     this.opts.repo.recordAiUsage({ at: this.now().toISOString(), task: req.task, engine: r.engine, model: r.model, ...tokens, costUsd })
     this.emit('usage')
 
@@ -128,8 +130,9 @@ export class AiClient extends EventEmitter<{ usage: [] }> {
 }
 
 function defaultModel(r: Resolved, apiKey: string | null): LanguageModel {
+  if (r.engine === 'local') return createOpenAICompatible({ name: 'local', baseURL: r.baseUrl, supportsStructuredOutputs: true })(r.model)
   if (r.engine === 'claude') return createAnthropic({ apiKey: apiKey ?? undefined })(r.model)
-  return createOpenAICompatible({ name: 'local', baseURL: r.baseUrl, supportsStructuredOutputs: true })(r.model)
+  return createOpenAI({ apiKey: apiKey ?? undefined })(r.model)
 }
 
 /** A provider's failure, said plainly. */
@@ -138,10 +141,11 @@ function explain(e: unknown, r: Resolved): AiError {
   const inner = (e as { lastError?: unknown }).lastError ?? e // retries wrap the last failure
   const status = APICallError.isInstance(inner) ? inner.statusCode : undefined
   const text = inner instanceof Error ? inner.message : String(inner)
-  if (r.engine === 'claude') {
-    if (status === 401 || status === 403) return new AiError('auth', 'Claude didn’t accept the API key.')
-    if (status === 429) return new AiError('rate-limited', 'Claude is rate-limiting this key. Try again in a minute.')
-    if (status === 404) return new AiError('failed', `Claude doesn’t offer the model “${r.model}” to this key.`)
+  if (r.engine !== 'local') {
+    const who = PROVIDER_NAME[r.engine]
+    if (status === 401 || status === 403) return new AiError('auth', `${who} didn’t accept the API key.`)
+    if (status === 429) return new AiError('rate-limited', `${who} is rate-limiting this key. Try again in a minute.`)
+    if (status === 404) return new AiError('failed', `${who} doesn’t offer the model “${r.model}” to this key.`)
   } else if (/ECONNREFUSED|fetch failed|ENOTFOUND|Cannot connect/i.test(text) || (APICallError.isInstance(inner) && status == null)) {
     return new AiError('unreachable', `Can’t reach the local model at ${r.baseUrl}. Is Ollama or LM Studio running?`)
   } else if (status === 404) {

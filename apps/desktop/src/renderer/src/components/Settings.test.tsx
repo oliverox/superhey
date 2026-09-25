@@ -2,7 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AiSettings, AiStatus, AiTestResult, ApiEvent } from '@shared/api'
+import type { AiSettings, AiStatus, AiTestResult, ApiEvent, CloudProvider } from '@shared/api'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -10,31 +10,47 @@ import type { AiSettings, AiStatus, AiTestResult, ApiEvent } from '@shared/api'
 function fakeBackend() {
   const listeners = new Set<(e: ApiEvent) => void>()
   const state = {
-    settings: { claude: { enabled: true }, local: { enabled: false, baseUrl: 'http://localhost:11434/v1', model: '' }, tasks: {}, monthlyBudgetUsd: 5 } as AiSettings,
-    key: null as string | null,
+    settings: {
+      claude: { enabled: true },
+      openai: { enabled: true },
+      preferredCloud: 'claude',
+      local: { enabled: false, baseUrl: 'http://localhost:11434/v1', model: '' },
+      tasks: {},
+      monthlyBudgetUsd: 5,
+    } as AiSettings,
+    keys: { claude: null, openai: null } as Record<CloudProvider, string | null>,
     spent: 0.42,
     localModels: ['llama3.2', 'qwen3:8b'] as string[] | Error,
     test: { ok: true, engine: 'claude', model: 'claude-haiku-4-5-20251001', ms: 812, reply: 'OK', costUsd: 0.0001 } as AiTestResult,
   }
+  const DEFAULTS = { claude: { cheap: 'claude-haiku-4-5-20251001', quality: 'claude-sonnet-5' }, openai: { cheap: 'gpt-6-luna', quality: 'gpt-6-sol' } } as const
   const status = (): AiStatus => {
-    const claude = !!state.key && state.settings.claude.enabled
-    const local = state.settings.local.enabled && !!state.settings.local.model
+    const s = state.settings
+    const ready = (['claude', 'openai'] as const).filter((p) => state.keys[p] && s[p].enabled).sort((a) => (a === s.preferredCloud ? -1 : 1))
+    const cloud = ready[0] ?? null
+    const local = s.local.enabled && !!s.local.model
+    const runsOn = (tier: 'cheap' | 'quality') =>
+      cloud ? { engine: cloud, model: DEFAULTS[cloud][tier] } : local ? { engine: 'local' as const, model: s.local.model } : { engine: null, reason: 'Set up Claude, OpenAI or a local model in Settings.' }
+    const hint = (k: string | null) => (k ? `${k.slice(0, k.startsWith('sk-ant-') ? 7 : 3)}…${k.slice(-4)}` : null)
     return {
-      settings: structuredClone(state.settings),
-      mode: claude && local ? 'mixed' : claude ? 'claude' : local ? 'local' : 'off',
-      claude: { keyHint: state.key ? `${state.key.slice(0, 7)}…${state.key.slice(-4)}` : null, canStoreKey: true },
+      settings: structuredClone(s),
+      mode: { cloud, local },
+      keys: { claude: { hint: hint(state.keys.claude) }, openai: { hint: hint(state.keys.openai) } },
+      canStoreKey: true,
       tasks: [
-        { id: 'summary', label: 'Thread summaries', tier: 'cheap', runsOn: claude ? { engine: 'claude', model: 'claude-haiku-4-5-20251001' } : { engine: null, reason: 'Set up Claude or a local model in Settings.' } },
-        { id: 'draft', label: 'Reply drafts in your voice', tier: 'quality', runsOn: claude ? { engine: 'claude', model: 'claude-sonnet-5' } : { engine: null, reason: 'Set up Claude or a local model in Settings.' } },
+        { id: 'summary', label: 'Thread summaries', tier: 'cheap', runsOn: runsOn('cheap') },
+        { id: 'draft', label: 'Reply drafts in your voice', tier: 'quality', runsOn: runsOn('quality') },
       ],
       models: [
-        { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', price: { input: 1, output: 5 } },
-        { id: 'claude-sonnet-5', name: 'Claude Sonnet 5', price: { input: 2, output: 10 } },
+        { id: 'claude-haiku-4-5-20251001', provider: 'claude', name: 'Claude Haiku 4.5', price: { input: 1, output: 5 } },
+        { id: 'claude-sonnet-5', provider: 'claude', name: 'Claude Sonnet 5', price: { input: 2, output: 10 } },
+        { id: 'gpt-6-luna', provider: 'openai', name: 'GPT-6 Luna', price: { input: 0.1, output: 0.5 } },
+        { id: 'gpt-6-sol', provider: 'openai', name: 'GPT-6 Sol', price: { input: 2, output: 10 } },
       ],
       month: {
         since: new Date(2026, 8, 1).toISOString(),
         spentUsd: state.spent,
-        budgetUsd: state.settings.monthlyBudgetUsd,
+        budgetUsd: s.monthlyBudgetUsd,
         calls: 3,
         byTask: [{ task: 'summary', engine: 'claude', model: 'claude-haiku-4-5-20251001', calls: 3, input: 12_300, output: 812, costUsd: 0.42 }],
       },
@@ -45,9 +61,10 @@ function fakeBackend() {
   const methods: Record<string, (...a: never[]) => unknown> = {
     aiStatus: () => status(),
     setAiSettings: (s: AiSettings) => ((state.settings = s), changed(), status()),
-    setClaudeKey: (k: string | null) => {
-      if (k !== null && !k.startsWith('sk-ant-')) throw new Error('That doesn’t look like a Claude API key (they start with “sk-ant-”).')
-      state.key = k
+    setApiKey: (provider: CloudProvider, k: string | null) => {
+      if (k !== null && provider === 'claude' && !k.startsWith('sk-ant-')) throw new Error('That doesn’t look like an Anthropic API key (they start with “sk-ant-”).')
+      if (k !== null && provider === 'openai' && (!k.startsWith('sk-') || k.startsWith('sk-ant-'))) throw new Error('That doesn’t look like an OpenAI API key (they start with “sk-”).')
+      state.keys[provider] = k
       changed()
       return status()
     },
@@ -135,14 +152,14 @@ async function key(el: Element, k: string) {
 describe('Settings: Claude', () => {
   it('asks for a key when none is stored, saves it, then shows only a hint', async () => {
     await open()
-    expect(text()).toContain('AI is off until you add a Claude key')
+    expect(text()).toContain('AI is off until you add an API key')
     const input = byLabel<HTMLInputElement>('Claude API key')
     expect(input.type).toBe('password')
     expect(button('Save').disabled).toBe(true)
     await typeInto(input, 'sk-ant-api03-secretsecretsecret-WXYZ')
     await click(button('Save'))
-    expect(backend.called('setClaudeKey')).toEqual([['sk-ant-api03-secretsecretsecret-WXYZ']])
-    expect(byLabel('Stored key').textContent).toBe('sk-ant-…WXYZ')
+    expect(backend.called('setApiKey')).toEqual([['claude', 'sk-ant-api03-secretsecretsecret-WXYZ']])
+    expect(byLabel('Stored Claude key').textContent).toBe('sk-ant-…WXYZ')
     expect(host.querySelector('[aria-label="Claude API key"]')).toBeNull()
     expect(text()).not.toContain('secretsecret')
     expect(text()).toContain('Everything runs on Claude.')
@@ -152,12 +169,12 @@ describe('Settings: Claude', () => {
     await open()
     await typeInto(byLabel<HTMLInputElement>('Claude API key'), 'sk-proj-nope')
     await click(button('Save'))
-    expect(text()).toContain('doesn’t look like a Claude API key')
+    expect(text()).toContain('doesn’t look like an Anthropic API key')
     expect(byLabel<HTMLInputElement>('Claude API key').value).toBe('sk-proj-nope')
   })
 
   it('replaces or removes a stored key, and turns Claude off without forgetting it', async () => {
-    backend.state.key = 'sk-ant-api03-old-old-old-old-ABCD'
+    backend.state.keys.claude = 'sk-ant-api03-old-old-old-old-ABCD'
     await open()
     await click(button('Replace'))
     expect(document.activeElement).toBe(byLabel('Claude API key'))
@@ -165,18 +182,61 @@ describe('Settings: Claude', () => {
     await click(sw('Use Claude'))
     expect(backend.called('setAiSettings').at(-1)![0]).toMatchObject({ claude: { enabled: false } })
     await click(button('Remove'))
-    expect(backend.called('setClaudeKey').at(-1)).toEqual([null])
+    expect(backend.called('setApiKey').at(-1)).toEqual(['claude', null])
     expect(byLabel('Claude API key')).not.toBeNull()
   })
 
   it('tests the connection and says how it went', async () => {
-    backend.state.key = 'sk-ant-api03-old-old-old-old-ABCD'
+    backend.state.keys.claude = 'sk-ant-api03-old-old-old-old-ABCD'
     await open()
     await click(button('Test connection'))
     expect(text()).toContain('claude-haiku-4-5-20251001 answered in 0.8 s · $0.0001')
     backend.state.test = { ok: false, code: 'auth', message: 'Claude didn’t accept the API key. Check it in Settings.' }
     await click(button('Test connection'))
     expect(text()).toContain('Claude didn’t accept the API key')
+  })
+})
+
+describe('Settings: OpenAI', () => {
+  it('takes its own key, beside Claude’s, and runs everything on it when it’s the only one', async () => {
+    await open()
+    await typeInto(byLabel<HTMLInputElement>('OpenAI API key'), 'sk-proj-abcdefabcdefabcdef-QRST')
+    const saves = [...host.querySelectorAll('button')].filter((b) => b.textContent === 'Save')
+    expect(saves).toHaveLength(2) // one per provider
+    await click(saves[1]!)
+    expect(backend.called('setApiKey')).toEqual([['openai', 'sk-proj-abcdefabcdefabcdef-QRST']])
+    expect(byLabel('Stored OpenAI key').textContent).toBe('sk-…QRST')
+    expect(byLabel('Claude API key')).not.toBeNull() // Claude still asks for its own
+    expect(text()).toContain('Everything runs on OpenAI.')
+    expect(text()).toContain('GPT-6 Luna') // what summaries run on
+  })
+
+  it('refuses an Anthropic key pasted into OpenAI’s field', async () => {
+    await open()
+    await typeInto(byLabel<HTMLInputElement>('OpenAI API key'), 'sk-ant-api03-wrongplace-wrongplace')
+    await click([...host.querySelectorAll('button')].filter((b) => b.textContent === 'Save')[1]!)
+    expect(text()).toContain('doesn’t look like an OpenAI API key')
+    expect(backend.state.keys.openai).toBeNull()
+  })
+
+  it('with both keys, asks which cloud runs automatic tasks, and offers that cloud’s models', async () => {
+    backend.state.keys = { claude: 'sk-ant-api03-old-old-old-old-ABCD', openai: 'sk-proj-old-old-old-old-EFGH' }
+    await open()
+    const models = () => [...byLabel<HTMLSelectElement>('Reply drafts in your voice: model').options].map((o) => o.textContent)
+    expect(models()).toEqual(['Default', 'Haiku 4.5 · $1/$5', 'Sonnet 5 · $2/$10'])
+    await typeInto(byLabel<HTMLSelectElement>('Cloud for automatic tasks'), 'openai')
+    expect(backend.called('setAiSettings').at(-1)![0]).toMatchObject({ preferredCloud: 'openai' })
+    expect(text()).toContain('Everything runs on OpenAI.')
+    expect(models()).toEqual(['Default', 'GPT-6 Luna · $0.1/$0.5', 'GPT-6 Sol · $2/$10'])
+    // A task pinned to Claude keeps offering Claude's models.
+    await typeInto(byLabel<HTMLSelectElement>('Thread summaries: engine'), 'claude')
+    expect([...byLabel<HTMLSelectElement>('Thread summaries: model').options].map((o) => o.value)).toEqual(['', 'claude-haiku-4-5-20251001', 'claude-sonnet-5'])
+  })
+
+  it('hides the chooser with only one cloud', async () => {
+    backend.state.keys.claude = 'sk-ant-api03-old-old-old-old-ABCD'
+    await open()
+    expect(host.querySelector('[aria-label="Cloud for automatic tasks"]')).toBeNull()
   })
 })
 
@@ -215,13 +275,13 @@ describe('Settings: local model', () => {
 
 describe('Settings: tasks, budget and usage', () => {
   it('pins a task to an engine or model, or turns it off', async () => {
-    backend.state.key = 'sk-ant-api03-old-old-old-old-ABCD'
+    backend.state.keys.claude = 'sk-ant-api03-old-old-old-old-ABCD'
     await open()
     expect(text()).toContain('Haiku 4.5') // what summaries run on
     await typeInto(byLabel<HTMLSelectElement>('Reply drafts in your voice: engine'), 'local')
     expect(backend.called('setAiSettings').at(-1)![0]).toMatchObject({ tasks: { draft: { engine: 'local', enabled: true } } })
-    await typeInto(byLabel<HTMLSelectElement>('Thread summaries: Claude model'), 'claude-sonnet-5')
-    expect(backend.called('setAiSettings').at(-1)![0]).toMatchObject({ tasks: { summary: { claudeModel: 'claude-sonnet-5' } } })
+    await typeInto(byLabel<HTMLSelectElement>('Thread summaries: model'), 'claude-sonnet-5')
+    expect(backend.called('setAiSettings').at(-1)![0]).toMatchObject({ tasks: { summary: { model: 'claude-sonnet-5' } } })
     await click(sw('Thread summaries: on'))
     expect(backend.called('setAiSettings').at(-1)![0]).toMatchObject({ tasks: { summary: { enabled: false } } })
   })

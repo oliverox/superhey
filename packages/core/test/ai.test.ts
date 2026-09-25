@@ -11,51 +11,86 @@ import { Repo } from '../src/cache/repo'
 const settings = (over: Record<string, unknown> = {}): AiSettings => readAiSettings(over)
 const withLocal = { local: { enabled: true, model: 'llama3.2', baseUrl: 'http://localhost:11434/v1' } }
 
+const CLAUDE = { claude: true, openai: false }
+const OPENAI = { claude: false, openai: true }
+const BOTH = { claude: true, openai: true }
+const NONE = { claude: false, openai: false }
+
 describe('AI settings', () => {
-  it('defaults to Claude on, local off, a $5 budget, every task on', () => {
+  it('defaults to both clouds on (once they have keys), Claude preferred, local off, a $5 budget', () => {
     const s = settings()
-    expect(s).toMatchObject({ claude: { enabled: true }, local: { enabled: false }, monthlyBudgetUsd: 5, tasks: {} })
+    expect(s).toMatchObject({ claude: { enabled: true }, openai: { enabled: true }, preferredCloud: 'claude', local: { enabled: false }, monthlyBudgetUsd: 5, tasks: {} })
   })
 
   it('falls back to the defaults for settings that do not parse', () => {
     expect(readAiSettings({ monthlyBudgetUsd: -3 }).monthlyBudgetUsd).toBe(5)
     expect(readAiSettings({ local: { baseUrl: 'file:///etc/passwd' } }).local.baseUrl).toBe('http://localhost:11434/v1')
+    expect(readAiSettings({ preferredCloud: 'gemini' }).preferredCloud).toBe('claude')
     expect(readAiSettings('nonsense')).toEqual(settings())
   })
 
-  it('describes the mode from what is set up', () => {
-    expect(aiMode(settings(), false)).toBe('off')
-    expect(aiMode(settings(), true)).toBe('claude')
-    expect(aiMode(settings(withLocal), false)).toBe('local')
-    expect(aiMode(settings(withLocal), true)).toBe('mixed')
-    expect(aiMode(settings({ ...withLocal, claude: { enabled: false } }), true)).toBe('local')
+  it('describes the setup: which cloud runs automatic tasks, and whether a local model helps', () => {
+    expect(aiMode(settings(), NONE)).toEqual({ cloud: null, local: false })
+    expect(aiMode(settings(), CLAUDE)).toEqual({ cloud: 'claude', local: false })
+    expect(aiMode(settings(), OPENAI)).toEqual({ cloud: 'openai', local: false })
+    expect(aiMode(settings(), BOTH)).toEqual({ cloud: 'claude', local: false })
+    expect(aiMode(settings({ preferredCloud: 'openai' }), BOTH)).toEqual({ cloud: 'openai', local: false })
+    expect(aiMode(settings({ ...withLocal, claude: { enabled: false } }), CLAUDE)).toEqual({ cloud: null, local: true })
+    expect(aiMode(settings(withLocal), OPENAI)).toEqual({ cloud: 'openai', local: true })
   })
 })
 
 describe('routing', () => {
-  it('uses Claude alone with Haiku for quick tasks and Sonnet for the rest', () => {
-    expect(route(settings(), 'summary', true)).toEqual({ engine: 'claude', model: 'claude-haiku-4-5-20251001' })
-    expect(route(settings(), 'draft', true)).toEqual({ engine: 'claude', model: 'claude-sonnet-5' })
+  it('uses the quick model of a cloud for quick tasks and its main model for the rest', () => {
+    expect(route(settings(), 'summary', CLAUDE)).toEqual({ engine: 'claude', model: 'claude-haiku-4-5-20251001' })
+    expect(route(settings(), 'draft', CLAUDE)).toEqual({ engine: 'claude', model: 'claude-sonnet-5' })
+    expect(route(settings(), 'summary', OPENAI)).toEqual({ engine: 'openai', model: 'gpt-6-luna' })
+    expect(route(settings(), 'draft', OPENAI)).toEqual({ engine: 'openai', model: 'gpt-6-sol' })
   })
 
-  it('in mixed mode, sends quick tasks to the local model and the rest to Claude', () => {
+  it('with both clouds, uses the preferred one, or the other when it is turned off', () => {
+    expect(route(settings(), 'draft', BOTH).engine).toBe('claude')
+    expect(route(settings({ preferredCloud: 'openai' }), 'draft', BOTH).engine).toBe('openai')
+    expect(route(settings({ claude: { enabled: false } }), 'draft', BOTH).engine).toBe('openai')
+  })
+
+  it('with a local model too, sends quick tasks local and the rest to the cloud', () => {
     const s = settings(withLocal)
-    expect(route(s, 'classify', true)).toMatchObject({ engine: 'local', model: 'llama3.2' })
-    expect(route(s, 'agent', true)).toMatchObject({ engine: 'claude', model: 'claude-sonnet-5' })
+    expect(route(s, 'classify', OPENAI)).toMatchObject({ engine: 'local', model: 'llama3.2' })
+    expect(route(s, 'agent', OPENAI)).toMatchObject({ engine: 'openai', model: 'gpt-6-sol' })
   })
 
-  it('honours a task set to an engine or model, or turned off', () => {
-    const s = settings({ ...withLocal, tasks: { summary: { engine: 'claude', claudeModel: 'claude-opus-5-5' }, draft: { engine: 'local' }, insights: { enabled: false } } })
-    expect(route(s, 'summary', true)).toEqual({ engine: 'claude', model: 'claude-opus-5-5' })
-    expect(route(s, 'draft', true)).toMatchObject({ engine: 'local' })
-    expect(route(s, 'insights', true)).toMatchObject({ engine: null, reason: expect.stringMatching(/turned off/) })
+  it('honours a task pinned to an engine or model, or turned off', () => {
+    const s = settings({
+      ...withLocal,
+      tasks: { summary: { engine: 'claude', model: 'claude-opus-5-5' }, extract: { engine: 'openai', model: 'gpt-6-astra' }, draft: { engine: 'local' }, insights: { enabled: false } },
+    })
+    expect(route(s, 'summary', BOTH)).toEqual({ engine: 'claude', model: 'claude-opus-5-5' })
+    expect(route(s, 'extract', BOTH)).toEqual({ engine: 'openai', model: 'gpt-6-astra' })
+    expect(route(s, 'draft', BOTH)).toMatchObject({ engine: 'local' })
+    expect(route(s, 'insights', BOTH)).toMatchObject({ engine: null, reason: expect.stringMatching(/turned off/) })
     // A task pinned to an engine that isn't set up says so rather than quietly switching.
-    expect(route(s, 'summary', false)).toMatchObject({ engine: null, reason: expect.stringMatching(/Claude/) })
+    expect(route(s, 'summary', OPENAI)).toMatchObject({ engine: null, reason: expect.stringMatching(/Claude/) })
+  })
+
+  it('uses a task’s model only on its own provider', () => {
+    // An OpenAI model chosen for a task that runs on Claude (automatically) falls back to Claude's default.
+    const s = settings({ tasks: { draft: { model: 'gpt-6-astra' } } })
+    expect(route(s, 'draft', CLAUDE)).toEqual({ engine: 'claude', model: 'claude-sonnet-5' })
+    expect(route(s, 'draft', OPENAI)).toEqual({ engine: 'openai', model: 'gpt-6-astra' })
   })
 
   it('says what to set up when nothing is', () => {
-    expect(route(settings(), 'summary', false)).toMatchObject({ engine: null, reason: expect.stringMatching(/Settings/) })
-    expect(route(settings({ local: { enabled: true, model: '' } }), 'summary', false).engine).toBeNull()
+    expect(route(settings(), 'summary', NONE)).toMatchObject({ engine: null, reason: expect.stringMatching(/Settings/) })
+    expect(route(settings({ local: { enabled: true, model: '' } }), 'summary', NONE).engine).toBeNull()
+  })
+
+  it('routes the connection tests to the engine they name', () => {
+    expect(route(settings(withLocal), 'test-openai', BOTH)).toEqual({ engine: 'openai', model: 'gpt-6-luna' })
+    expect(route(settings(withLocal), 'test-claude', BOTH)).toEqual({ engine: 'claude', model: 'claude-haiku-4-5-20251001' })
+    expect(route(settings(withLocal), 'test-local', BOTH)).toMatchObject({ engine: 'local' })
+    expect(route(settings(), 'test-openai', CLAUDE)).toEqual({ engine: null, reason: 'Add an OpenAI API key first.' })
+    expect(route(settings(), 'test-claude', OPENAI)).toEqual({ engine: null, reason: 'Add an Anthropic API key first.' })
   })
 })
 
@@ -67,6 +102,13 @@ describe('cost', () => {
     expect(costOf('claude-sonnet-5', { input: 1_000_000, cacheRead: 500_000, cacheWrite: 500_000, output: 0 })).toBeCloseTo(0.1 + 1.25)
     expect(costOf('claude-haiku-4-5-20251001', { input: 1000, cacheRead: 0, cacheWrite: 0, output: 1000 })).toBeCloseTo(0.006)
     expect(costOf('llama3.2', { input: 1e6, cacheRead: 0, cacheWrite: 0, output: 1e6 })).toBe(0)
+  })
+
+  it('prices OpenAI models too, with no extra charge to write its cache', () => {
+    // GPT-6 Luna: $0.10 in, $0.01 cached, $0.50 out, per million.
+    expect(costOf('gpt-6-luna', { input: 1_000_000, cacheRead: 0, cacheWrite: 0, output: 1_000_000 })).toBeCloseTo(0.6)
+    expect(costOf('gpt-6-luna', { input: 1_000_000, cacheRead: 1_000_000, cacheWrite: 0, output: 0 })).toBeCloseTo(0.01)
+    expect(costOf('gpt-6-astra', { input: 0, cacheRead: 0, cacheWrite: 0, output: 1_000_000 })).toBeCloseTo(50)
   })
 
   it('bounds a call from above before it is made', () => {
@@ -95,12 +137,13 @@ function fake(opts: { text?: string; input?: number; output?: number; cacheRead?
   return { model, calls }
 }
 
-function client(opts: { settings?: AiSettings; key?: string | null; model?: MockLanguageModelV4; now?: Date } = {}) {
+/** `key`: the Claude key (default one); `openaiKey`: OpenAI's (default none). */
+function client(opts: { settings?: AiSettings; key?: string | null; openaiKey?: string | null; model?: MockLanguageModelV4; now?: Date } = {}) {
   const repo = new Repo(openDb(':memory:'))
   const used: Array<{ engine: string; model: string; key: string | null }> = []
   const ai = new AiClient({
     settings: () => opts.settings ?? settings(),
-    apiKey: () => (opts.key === undefined ? 'sk-ant-test' : opts.key),
+    apiKey: (provider) => (provider === 'claude' ? (opts.key === undefined ? 'sk-ant-test' : opts.key) : (opts.openaiKey ?? null)),
     repo,
     now: () => opts.now ?? new Date('2026-09-25T12:00:00'),
     model: (r, key) => {
@@ -125,6 +168,28 @@ describe('AiClient', () => {
       { task: 'summary', engine: 'claude', model: 'claude-haiku-4-5-20251001', calls: 1, input: 2000, output: 100, costUsd: expect.closeTo(0.0025, 6) },
     ])
     expect(onUsage).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs on OpenAI with its own key, priced at its rates, and within the same budget', async () => {
+    const { model } = fake({ input: 1000, output: 100 })
+    const { ai, repo, used } = client({ key: null, openaiKey: 'sk-proj-test', model, settings: settings({ monthlyBudgetUsd: 1 }) })
+    const r = await ai.run({ task: 'draft', system: 's', prompt: 'p' })
+    expect(r).toMatchObject({ engine: 'openai', model: 'gpt-6-sol' })
+    expect(r.usage.costUsd).toBeCloseTo(0.002 + 0.001)
+    expect(used).toEqual([{ engine: 'openai', model: 'gpt-6-sol', key: 'sk-proj-test' }])
+    // Spending on either cloud counts against the one budget.
+    repo.recordAiUsage({ at: new Date(2026, 8, 20).toISOString(), task: 'draft', engine: 'claude', model: 'claude-sonnet-5', input: 0, cacheRead: 0, cacheWrite: 0, output: 0, costUsd: 0.999 })
+    await expect(ai.run({ task: 'draft', system: 's', prompt: 'x'.repeat(2000) })).rejects.toMatchObject({ code: 'budget' })
+  })
+
+  it('gives each cloud only its own key', async () => {
+    const { ai, used } = client({ key: 'sk-ant-A', openaiKey: 'sk-proj-B', settings: settings({ tasks: { extract: { engine: 'openai' } } }) })
+    await ai.run({ task: 'summary', system: 's', prompt: 'p' })
+    await ai.run({ task: 'extract', system: 's', prompt: 'p' })
+    expect(used).toEqual([
+      { engine: 'claude', model: 'claude-haiku-4-5-20251001', key: 'sk-ant-A' },
+      { engine: 'openai', model: 'gpt-6-luna', key: 'sk-proj-B' },
+    ])
   })
 
   it('keeps email out of the instructions: system and prompt stay separate', async () => {
@@ -186,10 +251,12 @@ describe('AiClient', () => {
     await expect(ai.run({ task: 'summary', system: 's', prompt: 'p' })).rejects.toMatchObject({ code: 'not-set-up', message: expect.stringMatching(/Settings/) })
   })
 
-  it('says plainly when Claude rejects the key, and when the local server is down', async () => {
+  it('says plainly when a cloud rejects the key, and when the local server is down', async () => {
     const reject = new APICallError({ message: 'invalid x-api-key', url: 'https://api.anthropic.com/v1/messages', requestBodyValues: {}, statusCode: 401, isRetryable: false })
     const { ai } = client({ model: fake({ error: reject }).model })
-    await expect(ai.run({ task: 'summary', system: 's', prompt: 'p' })).rejects.toMatchObject({ code: 'auth', message: expect.stringMatching(/API key/) })
+    await expect(ai.run({ task: 'summary', system: 's', prompt: 'p' })).rejects.toMatchObject({ code: 'auth', message: 'Claude didn’t accept the API key.' })
+    const openai = client({ key: null, openaiKey: 'sk-proj-x', model: fake({ error: reject }).model })
+    await expect(openai.ai.run({ task: 'summary', system: 's', prompt: 'p' })).rejects.toMatchObject({ code: 'auth', message: 'OpenAI didn’t accept the API key.' })
 
     const down = Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } })
     const local = client({ settings: settings(withLocal), key: null, model: fake({ error: down }).model })
@@ -198,10 +265,11 @@ describe('AiClient', () => {
   })
 
   it('runs the connection tests on the engine they name', async () => {
-    const { ai, used } = client({ settings: settings(withLocal) })
+    const { ai, used } = client({ settings: settings(withLocal), openaiKey: 'sk-proj-x' })
     await ai.run({ task: 'test-local', system: 's', prompt: 'p' })
     await ai.run({ task: 'test-claude', system: 's', prompt: 'p' })
-    expect(used.map((u) => u.engine)).toEqual(['local', 'claude'])
+    await ai.run({ task: 'test-openai', system: 's', prompt: 'p' })
+    expect(used.map((u) => u.engine)).toEqual(['local', 'claude', 'openai'])
   })
 })
 

@@ -10,7 +10,9 @@ import {
   AiError,
   AiSettings,
   aiMode,
-  CLAUDE_MODELS,
+  CLOUD_MODELS,
+  CLOUD_PROVIDERS,
+  type CloudProvider,
   listLocalModels,
   readAiSettings,
   route,
@@ -34,7 +36,12 @@ export interface SecretStore {
   set(name: string, value: string | null): void
 }
 
-const CLAUDE_KEY = 'anthropic-api-key'
+/** Where each provider's key is kept, and what one looks like. */
+const KEYS: Record<CloudProvider, { name: string; pattern: RegExp; hint: string }> = {
+  claude: { name: 'anthropic-api-key', pattern: /^sk-ant-[A-Za-z0-9_-]{20,300}$/, hint: 'That doesn’t look like an Anthropic API key (they start with “sk-ant-”).' },
+  // OpenAI keys start "sk-" (project keys "sk-proj-"); an Anthropic key here is a mistake.
+  openai: { name: 'openai-api-key', pattern: /^sk-(?!ant-)[A-Za-z0-9_-]{20,300}$/, hint: 'That doesn’t look like an OpenAI API key (they start with “sk-”).' },
+}
 
 const BACKFILL_DELAY_MS = 1_000
 
@@ -84,7 +91,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
       core.engine.on('error', (err) => console.error('[sync]', err.message))
       core.actions.on('action', (action) => this.emit('event', { type: 'action', action }))
       core.outbox.on('outgoing', (record) => this.emit('event', { type: 'outgoing', record }))
-      this.ai = new AiClient({ settings: () => this.aiSettings, apiKey: () => this.opts.secrets?.get(CLAUDE_KEY) ?? null, repo: core.repo })
+      this.ai = new AiClient({ settings: () => this.aiSettings, apiKey: (p) => this.apiKey(p), repo: core.repo })
       this.ai.on('usage', () => this.emit('event', { type: 'ai' }))
       await core.engine.start()
       this.update({ phase: 'ready', sync: core.engine.getStatus() })
@@ -226,19 +233,22 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
 
   async aiStatus(): Promise<AiStatus> {
     const s = this.aiSettings
-    const key = this.opts.secrets?.get(CLAUDE_KEY) ?? null
+    const stored = { claude: this.apiKey('claude'), openai: this.apiKey('openai') }
+    const has = { claude: !!stored.claude, openai: !!stored.openai }
     const ai = this.needAi()
     const since = ai.monthStart()
     const byTask = this.need().repo.aiUsageSince(since)
+    const hint = (k: string | null) => (k ? `${k.slice(0, k.startsWith('sk-ant-') ? 7 : 3)}…${k.slice(-4)}` : null)
     return {
       settings: s,
-      mode: aiMode(s, !!key),
-      claude: { keyHint: key ? `${key.slice(0, 7)}…${key.slice(-4)}` : null, canStoreKey: this.opts.secrets?.available() ?? false },
+      mode: aiMode(s, has),
+      keys: { claude: { hint: hint(stored.claude) }, openai: { hint: hint(stored.openai) } },
+      canStoreKey: this.opts.secrets?.available() ?? false,
       tasks: AI_TASK_IDS.map((id) => {
-        const r = route(s, id, !!key)
+        const r = route(s, id, has)
         return { id, label: AI_TASKS[id].label, tier: AI_TASKS[id].tier, runsOn: r.engine ? { engine: r.engine, model: r.model } : { engine: null, reason: r.reason } }
       }),
-      models: CLAUDE_MODELS.map((m) => ({ id: m.id, name: m.name, price: { input: m.price.input, output: m.price.output } })),
+      models: CLOUD_MODELS.map((m) => ({ id: m.id, provider: m.provider, name: m.name, price: { input: m.price.input, output: m.price.output } })),
       month: {
         since,
         spentUsd: ai.spentThisMonth(),
@@ -258,14 +268,16 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     return this.aiStatus()
   }
 
-  async setClaudeKey(key: unknown) {
+  async setApiKey(provider: unknown, key: unknown) {
+    if (!CLOUD_PROVIDERS.includes(provider as CloudProvider)) throw new Error('bad provider')
+    const spec = KEYS[provider as CloudProvider]
     const secrets = this.opts.secrets
     if (!secrets) throw new Error('Keys can’t be stored in browser dev mode.')
-    if (key === null) secrets.set(CLAUDE_KEY, null)
+    if (key === null) secrets.set(spec.name, null)
     else {
       const k = typeof key === 'string' ? key.trim() : ''
-      if (!/^sk-ant-[A-Za-z0-9_-]{20,300}$/.test(k)) throw new Error('That doesn’t look like a Claude API key (they start with “sk-ant-”).')
-      secrets.set(CLAUDE_KEY, k)
+      if (!spec.pattern.test(k)) throw new Error(spec.hint)
+      secrets.set(spec.name, k)
     }
     this.emit('event', { type: 'ai' })
     return this.aiStatus()
@@ -277,10 +289,10 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
   }
 
   async testAi(engine: unknown): Promise<AiTestResult> {
-    if (engine !== 'claude' && engine !== 'local') throw new Error('bad engine')
+    if (engine !== 'claude' && engine !== 'openai' && engine !== 'local') throw new Error('bad engine')
     try {
       const r = await this.needAi().run({
-        task: engine === 'claude' ? 'test-claude' : 'test-local',
+        task: `test-${engine}`,
         system: 'You are checking a connection. Reply with exactly: OK',
         prompt: 'Connection test.',
         maxOutputTokens: 16,
@@ -320,6 +332,10 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
   }
 
   // Internals
+
+  private apiKey(provider: CloudProvider): string | null {
+    return this.opts.secrets?.get(KEYS[provider].name) ?? null
+  }
 
   private needAi(): AiClient {
     if (!this.ai) throw new Error('HEY is not connected yet')
