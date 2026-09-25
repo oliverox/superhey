@@ -110,6 +110,11 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     return this.need().repo.events(from, to)
   }
 
+  async findPostings(query: string, limit = 8) {
+    if (typeof query !== 'string') throw new Error('query must be a string')
+    return this.need().repo.findPostings(query.slice(0, 200), Math.min(int(limit), 50))
+  }
+
   async senderThreads(email: string, excludeTopicId: number | null) {
     if (typeof email !== 'string' || email.length > 320) throw new Error('bad email')
     return this.need().repo.postingsFromSender(email, excludeTopicId == null ? null : TopicId(int(excludeTopicId)), 5)

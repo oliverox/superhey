@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { AppStatus, PostingRow } from '@shared/api'
+import type { AppStatus, BoxRow, PostingRow } from '@shared/api'
 import { api, useLive } from './api'
 import { useAppStatus } from './hooks'
 import { Sidebar } from './components/Sidebar'
@@ -11,6 +11,9 @@ import { useTheme } from './theme'
 import { useShortcut } from './shortcuts'
 import { ShortcutHelp } from './components/ShortcutHelp'
 import { Tooltips } from './components/Tooltips'
+import { CommandBar } from './components/CommandBar'
+import type { Command } from './commands/model'
+import { boxCommands, emailCommand, labelCommands } from './commands/sources'
 import { Composer, type ComposeRequest } from './components/Composer'
 import { ScreenerBanner, ScreenerList, useScreener } from './components/ScreenerView'
 
@@ -62,6 +65,8 @@ function Workspace({ status }: { status: AppStatus }) {
   const [activePane, setActivePane] = useState<PaneId>('list')
   const [showActivity, setShowActivity] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
+  const [showCommands, setShowCommands] = useState(false)
+  useShortcut('palette', () => setShowCommands((v) => !v))
   const [composing, setComposing] = useState<ComposeRequest | null>(null)
   useShortcut('compose', () => setComposing({ kind: 'new', message: { to: [], subject: '', body: '' } }), !composing)
   // An undone or failed send comes back here for editing (see the toasts).
@@ -236,6 +241,26 @@ function Workspace({ status }: { status: AppStatus }) {
       <Toasts />
       {showActivity && <ActivityDrawer onClose={() => setShowActivity(false)} />}
       {showHelp && <ShortcutHelp onClose={() => setShowHelp(false)} />}
+      {showCommands && (
+        <CommandBarHost
+          boxes={ordered}
+          postingId={target?.postingId ?? null}
+          onClose={() => setShowCommands(false)}
+          goToBox={(id) => {
+            setScreening(false)
+            setQuery('')
+            setBoxId(id)
+          }}
+          openEmail={(p) => {
+            setScreening(false)
+            setQuery('')
+            // Into its box when it's one of the six, so the list shows it selected.
+            if (ordered.some((b) => b.id === p.boxId)) setBoxId(p.boxId)
+            open(p)
+          }}
+          openActivity={() => setShowActivity(true)}
+        />
+      )}
       <Tooltips />
       {composing && (
         <div className="fixed inset-0 z-[65] flex items-start justify-center bg-ink/20 p-6 pt-[10vh]">
@@ -246,4 +271,41 @@ function Workspace({ status }: { status: AppStatus }) {
       )}
     </div>
   )
+}
+
+/** The command bar with the app's own commands: boxes, labels for the open thread, and more. */
+function CommandBarHost({
+  boxes,
+  postingId,
+  onClose,
+  goToBox,
+  openEmail,
+  openActivity,
+}: {
+  boxes: BoxRow[]
+  postingId: number | null
+  onClose: () => void
+  goToBox: (boxId: number) => void
+  openEmail: (p: PostingRow) => void
+  openActivity: () => void
+}) {
+  const labels = useLive(() => api.labels(), [])
+  const posting = useLive(() => (postingId == null ? Promise.resolve(null) : api.posting(postingId)), [postingId])
+  const commands = useMemo<Command[]>(
+    () => [
+      ...boxCommands(boxes, goToBox),
+      ...labelCommands(labels.data ?? [], posting.data ?? null, (labelId, add) => {
+        if (postingId != null) void api.runAction({ type: 'label', postingId, labelId, add })
+      }),
+      { id: 'app:activity', section: 'App', title: 'Show activity', keywords: ['log', 'history', 'undo'], run: openActivity },
+    ],
+    // The callbacks come fresh from each render of the app; the bar only needs them at run time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [boxes, labels.data, posting.data, postingId],
+  )
+  // Stable, so the bar's lookup isn't restarted by the app re-rendering; the latest `openEmail` still runs.
+  const openRef = useRef(openEmail)
+  openRef.current = openEmail
+  const findEmails = useCallback(async (q: string) => (await api.findPostings(q, 8)).map((p) => emailCommand(p, (row) => openRef.current(row))), [])
+  return <CommandBar commands={commands} findEmails={findEmails} onClose={onClose} />
 }

@@ -90,6 +90,28 @@ describe('Repo postings', () => {
     expect(r.posting(PostingId(1))?.isBundle).toBe(false) // the update path too
   })
 
+  it('finds emails by every word of subject and sender, newest first, once per thread', () => {
+    const r = repo()
+    const stripe = { id: 60, name: 'Stripe', email_address: 'notifications@stripe.com' }
+    r.upsertPostings([
+      P({ id: 1, topic_id: 901, name: 'Your payout is on the way', creator: stripe, active_at: '2026-09-20T00:00:00Z' }),
+      P({ id: 2, topic_id: 902, name: 'Payout failed', creator: stripe, active_at: '2026-09-22T00:00:00Z' }),
+      P({ id: 3, topic_id: 902, name: 'Payout failed', creator: stripe, active_at: '2026-09-21T00:00:00Z' }), // same thread, older
+      P({ id: 4, topic_id: 903, name: 'Lunch payout?', creator: alice, active_at: '2026-09-23T00:00:00Z' }),
+      P({ id: 5, kind: 'bundle', topic_id: null, name: 'Payout • Payout', creator: stripe }),
+      P({ id: 6, topic_id: 904, name: '100% off_today', creator: alice }),
+    ])
+    expect(r.findPostings('payout').map((p) => p.id)).toEqual([4, 2, 1])
+    expect(r.findPostings('stripe PAYOUT').map((p) => p.id)).toEqual([2, 1]) // sender and subject
+    expect(r.findPostings('stripe.com way').map((p) => p.id)).toEqual([1]) // the address counts
+    expect(r.findPostings('payout', 1).map((p) => p.id)).toEqual([4])
+    expect(r.findPostings('   ')).toEqual([])
+    // LIKE's wildcards are taken literally.
+    expect(r.findPostings('100%').map((p) => p.id)).toEqual([6])
+    expect(r.findPostings('f_t').map((p) => p.id)).toEqual([6])
+    expect(r.findPostings('%')).toHaveLength(1)
+  })
+
   it('prefers the alternative sender name', () => {
     const r = repo()
     r.upsertPostings([P({ alternative_sender_name: 'Example Newsletter' })])

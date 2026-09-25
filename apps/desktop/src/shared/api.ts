@@ -42,6 +42,8 @@ export interface Api {
   /** Original HTML of each message in a thread, by entry ID (fetched on first use). */
   threadHtml(topicId: number): Promise<Record<number, string>>
   search(query: string): Promise<SearchHit[]>
+  /** Emails whose subject or sender contains every word of the query (for jumping to one). */
+  findPostings(query: string, limit?: number): Promise<PostingRow[]>
   events(from: string, to: string): Promise<EventRow[]>
   /** Recent threads from one sender, excluding the open one. */
   senderThreads(email: string, excludeTopicId: number | null): Promise<PostingRow[]>
@@ -71,7 +73,7 @@ export interface Api {
   openAttachment(id: string): Promise<void>
 }
 
-export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener'] as const satisfies ReadonlyArray<keyof Api>
+export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener'] as const satisfies ReadonlyArray<keyof Api>
 export type ApiMethod = (typeof API_METHODS)[number]
 
 export type ApiEvent =

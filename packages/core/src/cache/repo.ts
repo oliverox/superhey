@@ -285,6 +285,26 @@ export class Repo {
     ).map(toPostingRow)
   }
 
+  /**
+   * Emails whose subject or sender contains every word of `query`, newest first, one per
+   * thread, across all boxes. For jumping to an email by name; full-text search of bodies
+   * is `search`.
+   */
+  findPostings(query: string, limit = 8): PostingRow[] {
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 6)
+    if (!words.length) return []
+    // LIKE with the pattern characters escaped, so "100%" means a percent sign.
+    const like = words.map(() => `lower(coalesce(p.subject,'') || ' ' || coalesce(p.sender_name,'') || ' ' || coalesce(p.sender_email,'')) LIKE ? ESCAPE '\\'`)
+    return this.all<Record<string, unknown>>(
+      `SELECT * FROM postings p
+       WHERE p.is_bundle = 0 AND p.topic_id IS NOT NULL AND ${like.join(' AND ')}
+         AND p.id = (SELECT q.id FROM postings q WHERE q.topic_id = p.topic_id AND q.is_bundle = 0 ORDER BY q.active_at DESC, q.id DESC LIMIT 1)
+       ORDER BY p.active_at DESC LIMIT ?`,
+      ...words.map((w) => `%${w.replace(/[\\%_]/g, (c) => '\\' + c)}%`),
+      limit,
+    ).map(toPostingRow)
+  }
+
   /** A sender's threads in one box, newest first (the latest posting of each thread). */
   senderThreadsInBox(boxId: number, email: string, limit = 25): PostingRow[] {
     return this.all<Record<string, unknown>>(

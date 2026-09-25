@@ -8,6 +8,8 @@ export interface ShortcutDef {
   keys: readonly string[]
   label: string
   group: 'Navigate' | 'Thread' | 'Act' | 'Screener' | 'App'
+  /** Also works while typing in a field (only for ⌘ combos, which type nothing). */
+  whileTyping?: boolean
 }
 
 export const SHORTCUTS = {
@@ -46,6 +48,7 @@ export const SHORTCUTS = {
   screenNo: { keys: ['n'], label: 'No, screen them out', group: 'Screener' },
   screenSpam: { keys: ['!'], label: 'Spam', group: 'Screener' },
 
+  palette: { keys: ['mod+k'], label: 'Command bar', group: 'App', whileTyping: true },
   help: { keys: ['?'], label: 'Keyboard shortcuts', group: 'App' },
   theme: { keys: ['T'], label: 'Switch theme', group: 'App' },
 } as const satisfies Record<string, ShortcutDef>
@@ -90,13 +93,27 @@ export function isTyping(target: EventTarget | null): boolean {
 
 /** Which shortcut an event triggers, if any (and if something is listening for it). */
 export function match(e: KeyboardEvent): ShortcutId | null {
-  if (e.defaultPrevented || isTyping(e.target)) return null
+  if (e.defaultPrevented) return null
   const combo = comboOf(e)
   if (!combo) return null
+  const typing = isTyping(e.target)
   for (const [id, def] of Object.entries(SHORTCUTS) as Array<[ShortcutId, ShortcutDef]>) {
-    if (def.keys.includes(combo) && (handlers.get(id)?.length ?? 0) > 0) return id
+    if (typing && !def.whileTyping) continue
+    if (def.keys.includes(combo) && isAvailable(id)) return id
   }
   return null
+}
+
+/** Whether a shortcut does something right now (some component is listening for it). */
+export function isAvailable(id: ShortcutId): boolean {
+  return (handlers.get(id)?.length ?? 0) > 0
+}
+
+/** Runs a shortcut's current handler, as its key would. Returns whether one ran. */
+export function runShortcut(id: ShortcutId): boolean {
+  const handler = handlers.get(id)?.at(-1)
+  handler?.run()
+  return !!handler
 }
 
 /** One listener for the whole app. Returns a cleanup function. */
@@ -105,7 +122,7 @@ export function installShortcuts(target: Window = window): () => void {
     const id = match(e)
     if (!id) return
     e.preventDefault()
-    handlers.get(id)!.at(-1)!.run()
+    runShortcut(id)
   }
   target.addEventListener('keydown', onKey)
   return () => target.removeEventListener('keydown', onKey)

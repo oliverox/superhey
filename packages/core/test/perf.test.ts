@@ -32,5 +32,8 @@ describe('list query performance', () => {
     expect(time(() => r.boxes())).toBeLessThan(100)
     expect(time(() => r.postings(1, 200))).toBeLessThan(100)
     expect(r.postings(1, 10_000).filter((p) => p.isBundle)).toHaveLength(20)
+    // The command bar looks up emails on every keystroke.
+    expect(time(() => r.findPostings('sender 42'))).toBeLessThan(50)
+    expect(time(() => r.findPostings('nothing matches this'))).toBeLessThan(50)
   })
 })

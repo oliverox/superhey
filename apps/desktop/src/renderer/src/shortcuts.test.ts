@@ -2,7 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { comboOf, installShortcuts, keyLabel, resetShortcuts, SHORTCUTS, useShortcut, type ShortcutId } from './shortcuts'
+import { comboOf, installShortcuts, isAvailable, keyLabel, resetShortcuts, runShortcut, SHORTCUTS, useShortcut, type ShortcutId } from './shortcuts'
 
 // React's act() needs this flag to run effects synchronously in tests.
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -49,6 +49,40 @@ describe('shortcuts', () => {
     press('/')
     expect(search).toHaveBeenCalledTimes(1)
     uninstall()
+  })
+
+  it('opens the command bar with ⌘K even while typing, but no other key', () => {
+    const uninstall = installShortcuts()
+    const palette = vi.fn()
+    const search = vi.fn()
+    mount([
+      ['palette', palette],
+      ['search', search],
+    ])
+    const input = document.createElement('input')
+    document.body.append(input)
+    press('k', { metaKey: true }, input)
+    press('/', {}, input)
+    expect(palette).toHaveBeenCalledTimes(1)
+    expect(search).not.toHaveBeenCalled()
+    press('k', { ctrlKey: true }) // Ctrl on other platforms
+    expect(palette).toHaveBeenCalledTimes(2)
+    press('k') // a plain k is not ⌘K
+    expect(palette).toHaveBeenCalledTimes(2)
+    input.remove()
+    uninstall()
+  })
+
+  it('tells what is available and runs it as its key would', () => {
+    const later = vi.fn()
+    expect(isAvailable('replyLater')).toBe(false)
+    expect(runShortcut('replyLater')).toBe(false)
+    const unmount = mount([['replyLater', later]])
+    expect(isAvailable('replyLater')).toBe(true)
+    expect(runShortcut('replyLater')).toBe(true)
+    expect(later).toHaveBeenCalledTimes(1)
+    unmount()
+    expect(isAvailable('replyLater')).toBe(false)
   })
 
   it('gives the most recently mounted handler the key', () => {
