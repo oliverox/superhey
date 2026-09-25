@@ -285,6 +285,19 @@ export class Repo {
     ).map(toPostingRow)
   }
 
+  /** A sender's threads in one box, newest first (the latest posting of each thread). */
+  senderThreadsInBox(boxId: number, email: string, limit = 25): PostingRow[] {
+    return this.all<Record<string, unknown>>(
+      `SELECT * FROM postings p
+       WHERE p.box_id = ? AND p.sender_email = ? AND p.is_bundle = 0 AND p.topic_id IS NOT NULL
+         AND p.id = (SELECT q.id FROM postings q WHERE q.topic_id = p.topic_id ORDER BY q.active_at DESC LIMIT 1)
+       ORDER BY p.active_at DESC LIMIT ?`,
+      boxId,
+      email.toLowerCase(),
+      limit,
+    ).map(toPostingRow)
+  }
+
   posting(id: PostingId): PostingRow | null {
     const row = this.get<Record<string, unknown>>('SELECT * FROM postings WHERE id = ?', id)
     return row ? toPostingRow(row) : null

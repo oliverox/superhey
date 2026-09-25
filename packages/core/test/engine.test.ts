@@ -132,6 +132,19 @@ describe('SyncEngine bundles', () => {
     expect(threads.map((t) => [t.id, t.subject, t.isBundle])).toEqual([[2, 'Money received', false]])
     await expect(engine.bundleThreads(PostingId(2))).rejects.toThrow(/not a bundle/)
   })
+
+  it("shows a read bundle's sender mail from the cache, since HEY lists nothing in it", async () => {
+    const stripe = { id: 60, name: 'Stripe', email_address: 'notifications@stripe.com' }
+    const { engine, repo } = setup([['bundle view 1', ok({ id: 1, contact: stripe, postings: [] })]])
+    repo.upsertPostings([
+      S.Posting.parse(posting({ id: 1, kind: 'bundle', topic_id: null, creator: stripe, seen: true, name: 'Action required • Payout' })),
+      S.Posting.parse(posting({ id: 2, kind: 'topic', topic_id: 901, creator: stripe, seen: true, name: 'Action required', active_at: '2026-09-25T06:09:00Z' })),
+      S.Posting.parse(posting({ id: 3, kind: 'topic', topic_id: 902, creator: stripe, seen: true, name: 'Payout', active_at: '2026-09-20T00:00:00Z' })),
+      S.Posting.parse(posting({ id: 4, kind: 'topic', topic_id: 903, name: 'Someone else' })),
+    ])
+    const threads = await engine.bundleThreads(PostingId(1))
+    expect(threads.map((t) => t.subject)).toEqual(['Action required', 'Payout'])
+  })
 })
 
 describe('SyncEngine thread HTML', () => {

@@ -135,8 +135,12 @@ function senderLabel(p: PostingRow) {
   return name || p.senderEmail || 'Unknown'
 }
 
-/** "2 new" for a bundle: from the cache, or HEY's joined subjects when not yet loaded. */
+/**
+ * "2 new" for a bundle: from the cache, or HEY's joined subjects when not yet loaded. A read
+ * bundle keeps the subjects of what it once held, so they don't count as new.
+ */
 function bundleNote(p: PostingRow) {
+  if (p.seen && !p.bundleCount) return 'all read'
   const n = Math.max(p.bundleCount ?? 0, p.subject.split(' • ').length)
   return n > 1 ? `${n} new` : 'new'
 }

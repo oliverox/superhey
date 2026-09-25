@@ -190,6 +190,9 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
     const bundle = this.repo.posting(id)
     if (!bundle?.isBundle) throw new Error(`${id} is not a bundle`)
     const members = await this.client.bundle(id)
+    // HEY lists only what's new in a bundle; once all of it is read, the bundle row stays but
+    // lists nothing (the emails show on their own). Show the sender's mail in the box instead.
+    if (!members.length) return bundle.senderEmail && bundle.boxId != null ? this.repo.senderThreadsInBox(bundle.boxId, bundle.senderEmail) : []
     this.repo.upsertPostings(members, bundle.boxId)
     this.emit('change', { kind: 'postings', boxId: bundle.boxId })
     return members
