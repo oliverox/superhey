@@ -39,7 +39,6 @@ describe('shortcutCommands', () => {
     expect(list.find((c) => c.id === 'key:screener')?.section).toBe('Go to')
     list[0]!.run()
     expect(run).toHaveBeenCalledWith('replyLater')
-    expect(list.map((c) => c.icon)).toEqual(['action', 'action', 'app', 'box'])
   })
 
   it('answers to other words: "delete" finds Move to Trash', () => {

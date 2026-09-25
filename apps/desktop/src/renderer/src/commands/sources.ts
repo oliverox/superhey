@@ -1,7 +1,7 @@
 import type { BoxRow, PostingRow } from '@shared/api'
 import { shortDate } from '../format'
 import { isAvailable, runShortcut, SHORTCUTS, type ShortcutDef, type ShortcutId } from '../shortcuts'
-import type { Command, CommandIcon, Section } from './model'
+import type { Command, Section } from './model'
 
 /**
  * Where the command bar's commands come from. Each source is a plain function of the app's
@@ -32,15 +32,6 @@ const KEYWORDS: Partial<Record<ShortcutId, string[]>> = {
   screener: ['first-time', 'senders', 'approve'],
 }
 
-const ICON_OF: Record<Section, CommandIcon> = {
-  Recent: 'action',
-  Actions: 'action',
-  'Go to': 'box',
-  Labels: 'label',
-  Emails: 'email',
-  App: 'app',
-}
-
 const SECTION_OF: Record<ShortcutDef['group'], Section> = {
   Navigate: 'Go to',
   Thread: 'Actions',
@@ -53,19 +44,15 @@ const SECTION_OF: Record<ShortcutDef['group'], Section> = {
 export function shortcutCommands(available: (id: ShortcutId) => boolean = isAvailable, run: (id: ShortcutId) => void = runShortcut): Command[] {
   return (Object.entries(SHORTCUTS) as Array<[ShortcutId, ShortcutDef]>)
     .filter(([id]) => !NOT_COMMANDS.has(id) && available(id))
-    .map(([id, def]) => {
+    .map(([id, def]) => ({
+      id: `key:${id}`,
       // The Screener is a place to go; its decisions are actions.
-      const section: Section = id === 'screener' ? 'Go to' : SECTION_OF[def.group]
-      return {
-        id: `key:${id}`,
-        section,
-        icon: ICON_OF[section],
-        title: def.label,
-        keywords: KEYWORDS[id],
-        keys: def.keys.slice(0, 1),
-        run: () => run(id),
-      }
-    })
+      section: id === 'screener' ? 'Go to' : SECTION_OF[def.group],
+      title: def.label,
+      keywords: KEYWORDS[id],
+      keys: def.keys.slice(0, 1),
+      run: () => run(id),
+    }))
 }
 
 /** The boxes, in sidebar order, with their number keys. */
@@ -73,7 +60,6 @@ export function boxCommands(boxes: BoxRow[], go: (boxId: number) => void): Comma
   return boxes.map((b, i) => ({
     id: `box:${b.kind}`,
     section: 'Go to',
-    icon: 'box',
     title: b.name,
     keywords: ['go to', 'open', 'box'],
     keys: i < 6 ? [String(i + 1)] : undefined,
@@ -89,7 +75,6 @@ export function labelCommands(labels: Array<{ id: number; name: string }>, posti
     return {
       id: `label:${l.id}`,
       section: 'Labels',
-      icon: 'label',
       title: on ? `Remove label ${l.name}` : `Label ${l.name}`,
       keywords: [l.name, 'tag'],
       run: () => toggle(l.id, !on),
@@ -103,7 +88,6 @@ export function emailCommand(p: PostingRow, open: (p: PostingRow) => void): Comm
   return {
     id: `email:${p.id}`,
     section: 'Emails',
-    icon: 'email',
     title: p.subject || '(no subject)',
     detail: [sender, p.activeAt ? shortDate(p.activeAt) : ''].filter(Boolean).join(' · '),
     keywords: [`${sender} ${p.subject}`, `${p.subject} ${sender}`, p.senderEmail ?? ''],

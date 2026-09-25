@@ -15,13 +15,10 @@ export interface Command {
   detail?: string
   /** The shortcut that does the same, shown so it gets learned. */
   keys?: readonly string[]
-  /** What kind of thing it is, drawn as the row's icon (kept when listed under Recent). */
-  icon?: CommandIcon
   run: () => void
 }
 
 export type Section = 'Recent' | 'Actions' | 'Go to' | 'Labels' | 'Emails' | 'App'
-export type CommandIcon = 'action' | 'box' | 'label' | 'email' | 'app'
 
 /** Order of sections when nothing is typed, and for ties. */
 export const SECTION_ORDER: Section[] = ['Recent', 'Actions', 'Go to', 'Labels', 'Emails', 'App']

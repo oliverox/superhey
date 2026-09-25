@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { fuzzyMatch } from '../commands/fuzzy'
-import { loadRecent, rank, remember, type Command, type CommandIcon, type Ranked } from '../commands/model'
+import { loadRecent, rank, remember, type Command, type Ranked } from '../commands/model'
 import { shortcutCommands } from '../commands/sources'
 import { keyLabel } from '../shortcuts'
 
@@ -136,7 +136,7 @@ export function CommandBar({
             const first = header != null && groups++ === 0
             return (
               <div key={r.command.id} role="presentation">
-                {/* Groups are set apart by a rule and space; headings sit at the icons' edge, titles past them. */}
+                {/* Groups after the first are set apart by a rule and space. */}
                 {header && <div className={`command-heading eyebrow mx-4 pb-1 ${first ? 'pt-1.5' : 'mt-2 border-t border-rule pt-3'}`}>{header}</div>}
                 <Row result={r} id={`${listId}-${r.command.id}`} selected={r === current} onHover={() => setActive(i)} onRun={() => run(r.command)} />
               </div>
@@ -173,7 +173,6 @@ function Row({ result, id, selected, onHover, onRun }: { result: Ranked; id: str
       onClick={onRun}
       className={`mx-1.5 flex cursor-default items-center gap-3 rounded-ui px-2.5 py-[7px] text-[13.5px] ${selected ? 'bg-selection text-ink' : 'text-ink-soft'}`}
     >
-      <span className={`shrink-0 ${selected ? 'text-ink-soft' : 'text-ink-faint'}`}>{ICONS[command.icon ?? 'action']}</span>
       <span className="min-w-0 flex-1 truncate">
         <Highlighted text={command.title} indices={indices} />
         {command.detail && <span className="ml-2 text-[12.5px] text-ink-faint">{command.detail}</span>}
@@ -215,19 +214,3 @@ function Highlighted({ text, indices }: { text: string; indices: number[] }) {
   )
 }
 
-// 15px line icons, drawn like the toolbar's: what kind of thing each row is.
-const icon = (d: React.ReactNode) => (
-  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="block">
-    {d}
-  </svg>
-)
-const ICONS: Record<CommandIcon, React.ReactNode> = {
-  // A lightning bolt: something it does.
-  action: icon(<path d="M9 1.75 3.75 9h4l-1 5.25L12.25 7h-4z" />),
-  // A tray: a place to go.
-  box: icon(<><path d="M2.25 9.25h3.25l1 1.75h3l1-1.75h3.25" /><path d="M2.25 9.25 4 3.25h8l1.75 6v3.5a1 1 0 0 1-1 1H3.25a1 1 0 0 1-1-1z" /></>),
-  label: icon(<><path d="M2.5 3.5v4l6 6 5-5-6-6h-4a1 1 0 0 0-1 1z" /><circle cx="5.5" cy="5.5" r=".8" fill="currentColor" /></>),
-  email: icon(<><rect x="2" y="3.5" width="12" height="9" rx="1.25" /><path d="m2.5 4.5 5.5 4.25 5.5-4.25" /></>),
-  // Sliders: the app itself.
-  app: icon(<><path d="M3 5h10M3 11h10" /><circle cx="6" cy="5" r="1.5" fill="currentColor" /><circle cx="10.5" cy="11" r="1.5" fill="currentColor" /></>),
-}

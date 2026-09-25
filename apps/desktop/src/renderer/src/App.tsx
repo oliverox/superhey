@@ -297,7 +297,7 @@ function CommandBarHost({
       ...labelCommands(labels.data ?? [], posting.data ?? null, (labelId, add) => {
         if (postingId != null) void api.runAction({ type: 'label', postingId, labelId, add })
       }),
-      { id: 'app:activity', section: 'App', icon: 'app', title: 'Show activity', keywords: ['log', 'history', 'undo'], run: openActivity },
+      { id: 'app:activity', section: 'App', title: 'Show activity', keywords: ['log', 'history', 'undo'], run: openActivity },
     ],
     // The callbacks come fresh from each render of the app; the bar only needs them at run time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
