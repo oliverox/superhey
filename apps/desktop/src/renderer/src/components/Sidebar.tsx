@@ -2,7 +2,8 @@ import type { AppStatus, BoxRow, EventRow } from '@shared/api'
 import { api, useLive } from '../api'
 import { clock, startOfDay } from '../format'
 import { withShortcut } from '../shortcuts'
-import { nextScheme, THEMES, type Scheme, type Theme } from '../theme'
+import type { ReactNode } from 'react'
+import type { Scheme, Theme } from '../theme'
 import { OmarchyLogo } from './OmarchyLogo'
 
 interface Props {
@@ -90,10 +91,7 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
             Settings
           </button>
         </div>
-        <div className="mb-3 flex items-center gap-1.5">
-          <ThemeSwitch theme={theme} onTheme={onTheme} />
-          {theme === 'default' && <SchemeButton scheme={scheme} onScheme={onScheme} />}
-        </div>
+        <AppearanceSwitch theme={theme} scheme={scheme} onTheme={onTheme} onScheme={onScheme} />
         <SyncStatus status={status} />
       </footer>
     </aside>
@@ -136,56 +134,68 @@ function Agenda() {
   )
 }
 
-function ThemeSwitch({ theme, onTheme }: { theme: Theme; onTheme: (t: Theme) => void }) {
+type Look = 'light' | 'dark' | 'auto' | 'omarchy'
+
+const LOOKS: Array<{ id: Look; label: string; icon: ReactNode }> = [
+  {
+    id: 'light',
+    label: 'Light',
+    icon: (
+      <>
+        <circle cx="8" cy="8" r="3" />
+        <path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1" />
+      </>
+    ),
+  },
+  { id: 'dark', label: 'Dark', icon: <path d="M13 9.5A5.5 5.5 0 0 1 6.5 3a5.5 5.5 0 1 0 6.5 6.5Z" strokeLinejoin="round" /> },
+  {
+    id: 'auto',
+    label: 'System (as macOS)',
+    icon: (
+      <>
+        <circle cx="8" cy="8" r="5.5" />
+        <path d="M8 2.5v11A5.5 5.5 0 0 0 8 2.5Z" fill="currentColor" stroke="none" />
+      </>
+    ),
+  },
+  { id: 'omarchy', label: 'Omarchy', icon: null },
+]
+
+/**
+ * How the app looks, in one switch: Default in light, dark or as the system is, or
+ * Omarchy. ⇧D flips light and dark; ⇧T switches Default and Omarchy.
+ */
+function AppearanceSwitch({ theme, scheme, onTheme, onScheme }: { theme: Theme; scheme: Scheme; onTheme: (t: Theme) => void; onScheme: (s: Scheme) => void }) {
+  const current: Look = theme === 'omarchy' ? 'omarchy' : scheme
+  const choose = (look: Look) => {
+    if (look === 'omarchy') return onTheme('omarchy')
+    onTheme('default')
+    onScheme(look)
+  }
   return (
-    <div role="radiogroup" aria-label="Theme" className="flex flex-1 rounded-ui bg-side-sel/60 p-0.5" title="Switch theme (⇧T)">
-      {THEMES.map((t) => (
+    <div role="radiogroup" aria-label="Appearance" className="mb-3 flex rounded-ui bg-side-sel/60 p-0.5">
+      {LOOKS.map((l) => (
         <button
-          key={t.id}
+          key={l.id}
           role="radio"
-          aria-label={t.label}
-          aria-checked={theme === t.id}
-          onClick={() => onTheme(t.id)}
-          className={`flex-1 rounded-ui py-1 text-[12px] font-medium transition-colors ${
-            theme === t.id ? 'bg-side-sel text-side-ink shadow-sm' : 'text-side-faint hover:text-side-soft'
+          aria-checked={current === l.id}
+          aria-label={l.label}
+          title={l.label}
+          onClick={() => choose(l.id)}
+          className={`flex h-[26px] flex-1 items-center justify-center rounded-ui transition-colors ${
+            current === l.id ? 'bg-side-sel text-side-ink shadow-sm' : 'text-side-faint hover:text-side-soft'
           }`}
         >
-          {t.id === 'omarchy' ? <OmarchyLogo className="mx-auto size-[13px]" /> : t.label}
+          {l.id === 'omarchy' ? (
+            <OmarchyLogo className="size-[13px]" />
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
+              {l.icon}
+            </svg>
+          )}
         </button>
       ))}
     </div>
-  )
-}
-
-const SCHEME_NAMES: Record<Scheme, string> = { auto: 'Auto (as macOS)', light: 'Light', dark: 'Dark' }
-
-/** Cycles the Default theme's appearance: Auto → Light → Dark. */
-function SchemeButton({ scheme, onScheme }: { scheme: Scheme; onScheme: (s: Scheme) => void }) {
-  const label = `Appearance: ${SCHEME_NAMES[scheme]}. Click for ${SCHEME_NAMES[nextScheme(scheme)].replace(' (as macOS)', '')} (⇧D toggles light and dark)`
-  return (
-    <button
-      type="button"
-      onClick={() => onScheme(nextScheme(scheme))}
-      aria-label={label}
-      title={label}
-      className="flex size-[30px] shrink-0 items-center justify-center rounded-ui bg-side-sel/60 text-side-soft transition-colors hover:text-side-ink"
-    >
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
-        {scheme === 'light' ? (
-          <>
-            <circle cx="8" cy="8" r="3" />
-            <path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1" />
-          </>
-        ) : scheme === 'dark' ? (
-          <path d="M13 9.5A5.5 5.5 0 0 1 6.5 3a5.5 5.5 0 1 0 6.5 6.5Z" strokeLinejoin="round" />
-        ) : (
-          <>
-            <circle cx="8" cy="8" r="5.5" />
-            <path d="M8 2.5v11A5.5 5.5 0 0 0 8 2.5Z" fill="currentColor" stroke="none" />
-          </>
-        )}
-      </svg>
-    </button>
   )
 }
 

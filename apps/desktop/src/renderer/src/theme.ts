@@ -1,11 +1,6 @@
 import { useEffect, useState } from 'react'
 
 export type Theme = 'default' | 'omarchy'
-export const THEMES: Array<{ id: Theme; label: string }> = [
-  { id: 'default', label: 'Default' },
-  { id: 'omarchy', label: 'Omarchy' },
-]
-
 const KEY = 'theme'
 
 // A per-device preference: storage may be unavailable, so every access is guarded.
@@ -46,9 +41,6 @@ const systemIsDark = () => typeof matchMedia === 'function' && matchMedia('(pref
 
 /** Whether a scheme shows dark right now. */
 export const showsDark = (scheme: Scheme, systemDark = systemIsDark()) => scheme === 'dark' || (scheme === 'auto' && systemDark)
-
-/** The click order of the appearance button: Auto → Light → Dark → Auto. */
-export const nextScheme = (s: Scheme): Scheme => (s === 'auto' ? 'light' : s === 'light' ? 'dark' : 'auto')
 
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>(storedTheme)
