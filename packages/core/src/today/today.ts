@@ -12,6 +12,8 @@ import type { TopicId } from '../ids'
 export const WAITING_AFTER_DAYS = 3
 /** …and not so long ago that it's surely settled. */
 export const WAITING_UNTIL_DAYS = 30
+/** New mail shown per box on Today; the rest is a click away in the box. */
+export const NEW_SHOWN = 5
 
 export interface ThreadItem {
   key: string
@@ -66,7 +68,8 @@ export interface TodayView {
   /** The day's calendar events. */
   events: EventRow[]
   /** Unread mail per box since you last looked (the first time: since the start of today). */
-  newSince: { since: string | null; boxes: Array<{ boxId: number; kind: string; name: string; count: number }> }
+  /** What arrived since you last looked (today's, the first time), per box: how many, and the newest few. */
+  newSince: { since: string | null; boxes: Array<{ boxId: number; kind: string; name: string; count: number; threads: PostingRow[] }> }
   /** How many items above are yours to handle (events, dates and new mail aren't). */
   toHandle: number
   /** Threads Today can't judge until they're analysed (candidates for waiting on others). */
@@ -178,7 +181,13 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
     comingUp: comingUp.slice(0, 8),
     events: repo.events(startOfToday.toISOString(), startOfTomorrow.toISOString()),
     // The first time, "new" is today's: every unread email ever would be noise, not news.
-    newSince: { since: input.since, boxes: repo.unseenSince(input.since ?? startOfToday.toISOString()).filter((b) => b.count > 0 && b.kind !== 'bubblebox' && b.kind !== 'laterbox') },
+    newSince: {
+      since: input.since,
+      boxes: repo
+        .unseenSince(input.since ?? startOfToday.toISOString())
+        .filter((b) => b.count > 0 && b.kind !== 'bubblebox' && b.kind !== 'laterbox')
+        .map((b) => ({ ...b, threads: repo.unseenThreadsSince(b.boxId, input.since ?? startOfToday.toISOString(), NEW_SHOWN) })),
+    },
     toHandle: todos.length + actions.length + bubbled.length + needsReply.length + replyLater.length + waiting.length,
     needsAnalysis,
   }

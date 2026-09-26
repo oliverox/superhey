@@ -16,7 +16,7 @@ import { ShortcutHelp } from './components/ShortcutHelp'
 import { Tooltips } from './components/Tooltips'
 import { CommandBar } from './components/CommandBar'
 import { Settings } from './components/Settings'
-import { doneFor, TodayList, todayLabel, todayThreads, type TodayData } from './components/Today'
+import { doneFor, TodayList, todayLabel, todayRows, todayThreads, type TodayData } from './components/Today'
 import type { Command } from './commands/model'
 import { boxCommands, emailCommand, labelCommands } from './commands/sources'
 import { Composer, type ComposeRequest } from './components/Composer'
@@ -116,7 +116,7 @@ function Workspace({ status }: { status: AppStatus }) {
   const listAlone = !screening && !target
   const gridRef = useRef<HTMLDivElement>(null)
   const listWidth = useListWidth()
-  const list = searching ? searchRows : onToday ? todayThreads(todayData) : boxRows
+  const list = searching ? searchRows : onToday ? todayRows(todayData) : boxRows
   const selectedIndex = target?.postingId != null ? list.findIndex((p) => p.id === target.postingId) : -1
 
   /** `markSeen: false` shows a thread without reading it (Today putting its first item up). */

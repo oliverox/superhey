@@ -901,6 +901,11 @@ export class Repo {
     })
   }
 
+  /** The newest unread threads in a box that arrived since `sinceIso` (mail inside bundles too). */
+  unseenThreadsSince(boxId: number, sinceIso: string, limit: number): PostingRow[] {
+    return this.threadRows('p.box_id = ? AND p.seen = 0 AND p.active_at > ?', 'p.active_at DESC', boxId, sinceIso).slice(0, limit)
+  }
+
   /** Unread threads per box that arrived since `sinceIso` (all unread when null); bundles count their mail. */
   unseenSince(sinceIso: string | null): Array<{ boxId: number; kind: string; name: string; count: number }> {
     return this.all<Record<string, unknown>>(

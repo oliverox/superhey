@@ -177,6 +177,15 @@ describe('Today', () => {
     ])
   })
 
+  it('lists the new mail itself, newest first, a few per box', () => {
+    const { repo, put } = setup()
+    for (let i = 0; i < 7; i++) put('feedbox', { id: 40 + i, topic_id: 940 + i, name: `Letter ${i}`, active_at: daysAgo(0, i + 0.5) })
+    put('feedbox', { id: 50, topic_id: 950, name: 'Old read one', active_at: daysAgo(0, 1), seen: true })
+    const feed = buildToday(repo, input({ since: daysAgo(0, 10) })).newSince.boxes.find((b) => b.kind === 'feedbox')!
+    expect(feed.count).toBe(7)
+    expect(feed.threads.map((t) => t.subject)).toEqual(['Letter 0', 'Letter 1', 'Letter 2', 'Letter 3', 'Letter 4'])
+  })
+
   it('keeps an item put off with "not now" away until its thread changes', () => {
     const { repo, put } = setup()
     put('laterbox', { id: 40, topic_id: 940, active_at: daysAgo(4), seen: true })
