@@ -69,6 +69,8 @@ export interface ThreadAnalysisView {
   summary: string
   needsReply: boolean
   replyReason: string | null
+  /** Replies the user might want, in a few words (when it needs one). */
+  replyOptions?: string[]
   expectsReply: boolean
   category: string
   actionItems: Array<{ text: string; due: string | null }>

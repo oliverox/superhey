@@ -3,6 +3,7 @@ import type { ReplyDraftRow, ThreadView } from '@shared/api'
 import { api, useLive } from '../api'
 import { Spinner } from './Spinner'
 import { motionOff } from '../motion'
+import { clockOf } from '../calendar/model'
 
 /** The thread's draft reply, kept current as drafts are written and discarded. */
 export function useDraft(topicId: number) {
@@ -148,11 +149,16 @@ export function DraftRequest({ thread, initial = '', onDone, onCancel }: { threa
   const input = useRef<HTMLInputElement>(null)
   useEffect(() => input.current?.focus(), [])
 
-  const go = async () => {
+  // What the AI made of the thread: replies that fit it, and the dates it proposes.
+  const analysis = useLive(() => api.analysis(thread.topicId), [thread.topicId], (e) => e.type === 'analysis' && e.topicId === thread.topicId).data
+  const options = analysis?.replyOptions ?? []
+  const when = nextTimedDate(analysis?.dates ?? [])
+
+  const go = async (instruction = text) => {
     setBusy(true)
     setError(null)
     try {
-      await api.draftReply(thread.topicId, text.trim() || null)
+      await api.draftReply(thread.topicId, instruction.trim() || null)
       onDone()
     } catch (e) {
       setError(e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e))
@@ -163,6 +169,25 @@ export function DraftRequest({ thread, initial = '', onDone, onCancel }: { threa
 
   return (
     <div className="rise mt-5 rounded-ui-lg border border-rule bg-pane px-4 py-3">
+      {when && <Availability date={when} />}
+      {options.length > 0 && (
+        <div className="mb-2.5 flex flex-wrap gap-1.5" role="group" aria-label="Suggested replies">
+          {options.map((o) => (
+            <button
+              key={o}
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setText(o)
+                void go(o)
+              }}
+              className="rounded-full border border-rule px-3 py-1 text-[13px] text-ink-soft transition-colors hover:border-accent hover:bg-accent-wash hover:text-accent disabled:opacity-50"
+            >
+              {o}
+            </button>
+          ))}
+        </div>
+      )}
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -182,7 +207,7 @@ export function DraftRequest({ thread, initial = '', onDone, onCancel }: { threa
           }}
           disabled={busy}
           maxLength={500}
-          placeholder="What should it say? Optional, e.g. yes, but Friday instead"
+          placeholder={options.length ? 'Or say it your way…' : 'What should it say? Optional, e.g. yes, but Friday instead'}
           aria-label="What the reply should say"
           className="field min-w-0 flex-1"
         />
@@ -197,5 +222,34 @@ export function DraftRequest({ thread, initial = '', onDone, onCancel }: { threa
       {busy && <p className="mt-2 text-[12px] text-ink-faint">Writing it in your voice. This takes a few seconds.</p>}
       {error && <p className="mt-2 text-[13px] text-danger">{error}</p>}
     </div>
+  )
+}
+
+type MailDateLike = { label: string; date: string; time: string | null; endTime?: string | null }
+
+/** The first date in the email with a time that hasn't passed: the one a reply is likely about. */
+function nextTimedDate(dates: MailDateLike[]): MailDateLike | null {
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  return dates.filter((d) => d.time && d.date >= today).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))[0] ?? null
+}
+
+const whenFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+
+/** Whether you're free when the email proposes: checked against your HEY calendar. */
+function Availability({ date: d }: { date: MailDateLike }) {
+  const range = useLive(() => api.calendarRange(d.date, d.date), [d.date], (e) => e.type === 'change' && e.change.kind === 'calendar')
+  const start = new Date(`${d.date}T${d.time}:00`)
+  const end = d.endTime ? new Date(`${d.date}T${d.endTime}:00`) : new Date(start.getTime() + 60 * 60_000)
+  const clash = (range.data?.events ?? []).find((e) => !e.allDay && e.endsAt && new Date(e.startsAt) < end && new Date(e.endsAt) > start)
+  if (!range.data) return null
+  return (
+    <p className="mb-2.5 flex items-center gap-2 text-[13px]">
+      <span className={`size-2 shrink-0 rounded-full ${clash ? 'bg-danger' : 'bg-ok'}`} />
+      <span className="text-ink-soft">{whenFmt.format(start)}</span>
+      <span className={clash ? 'text-danger' : 'text-ok'}>
+        {clash ? `clashes with ${clash.title} (${clockOf(clash.startsAt)}–${clockOf(clash.endsAt!)})` : 'you’re free'}
+      </span>
+    </p>
   )
 }
