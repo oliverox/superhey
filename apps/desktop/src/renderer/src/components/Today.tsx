@@ -71,6 +71,9 @@ export function TodayList({
   onGoToBox: (boxId: number) => void
 }) {
   const listRef = useRef<HTMLDivElement>(null)
+  // The row you clicked: an email can appear in several sections, and only that one is
+  // highlighted; the others get a thin mark (see `pick`).
+  const [clicked, setClicked] = useState<string | null>(null)
   useEffect(() => {
     listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
   }, [selectedId])
@@ -78,12 +81,29 @@ export function TodayList({
   if (!today) return <p className="px-5 py-10 text-center text-ink-faint">Loading…</p>
   const { due, needsReply, replyLater, waiting, comingUp } = today
   const fresh = today.newSince.boxes
+  // Every row of the open email, in the order they're drawn; the one to highlight is the
+  // one clicked, else the first.
+  const rowsOfOpen = [
+    ...due.actions.map((a) => [a.key, a.posting.id] as const),
+    ...[...due.bubbled, ...needsReply, ...replyLater, ...waiting].map((i) => [i.key, i.posting.id] as const),
+    ...comingUp.map((c) => [c.key, c.posting.id] as const),
+    ...fresh.flatMap((b) => b.threads.map((p) => [`new:${p.id}`, p.id] as const)),
+  ]
+    .filter(([, id]) => id === selectedId)
+    .map(([key]) => key)
+  const primary = clicked && rowsOfOpen.includes(clicked) ? clicked : (rowsOfOpen[0] ?? null)
+  /** 'on' for the highlighted row, 'echo' for the open email's other rows. */
+  const pick = (key: string, postingId: number): Mark => (postingId !== selectedId ? null : key === primary ? 'on' : 'echo')
+  const openFrom = (key: string, p: PostingRow) => {
+    setClicked(key)
+    onOpen(p)
+  }
 
   const done = (p: PostingRow) => {
     const run = doneFor(today, p.id)
     return run ? () => void run() : undefined
   }
-  const row = (i: ThreadItem, reason: string) => <ThreadRow key={i.key} item={i} reason={reason} selected={i.posting.id === selectedId} onOpen={() => onOpen(i.posting)} onDone={done(i.posting)} />
+  const row = (i: ThreadItem, reason: string) => <ThreadRow key={i.key} item={i} reason={reason} mark={pick(i.key, i.posting.id)} onOpen={() => openFrom(i.key, i.posting)} onDone={done(i.posting)} />
   return (
     <div ref={listRef} className="scroll min-h-0 flex-1 pb-6">
       {/* Full width when nothing's open: kept to a readable measure. */}
@@ -96,7 +116,7 @@ export function TodayList({
                 <TodoRow key={t.key} item={t} />
               ))}
               {due.actions.slice(0, Math.max(0, limit - due.todos.length)).map((a) => (
-                <ActionRow key={a.key} item={a} selected={a.posting.id === selectedId} onOpen={() => onOpen(a.posting)} onDone={() => void api.markHandled(a.posting.topicId!)} />
+                <ActionRow key={a.key} item={a} mark={pick(a.key, a.posting.id)} onOpen={() => openFrom(a.key, a.posting)} onDone={() => void api.markHandled(a.posting.topicId!)} />
               ))}
               {due.bubbled.slice(0, Math.max(0, limit - due.todos.length - due.actions.length)).map((i) => row(i, why.bubbled()))}
             </>
@@ -113,7 +133,7 @@ export function TodayList({
           <p className="mt-1 text-[13px] text-ink-faint">Nothing due, nothing waiting on your reply, nobody to chase.</p>
         </div>
       )}
-      {comingUp.length > 0 && <ComingUp items={comingUp} selectedId={selectedId} onOpen={onOpen} />}
+      {comingUp.length > 0 && <ComingUp items={comingUp} pick={pick} onOpen={openFrom} />}
       {fresh.length > 0 && (
         <section aria-label="New">
           <h2 className="eyebrow px-5 pt-5 pb-1">{today.newSince.since ? 'New since you last looked' : 'New today'}</h2>
@@ -124,7 +144,7 @@ export function TodayList({
               </h3>
               <ul>
                 {b.threads.map((p) => (
-                  <NewRow key={p.id} posting={p} selected={p.id === selectedId} onOpen={() => onOpen(p)} />
+                  <NewRow key={p.id} posting={p} mark={pick(`new:${p.id}`, p.id)} onOpen={() => openFrom(`new:${p.id}`, p)} />
                 ))}
               </ul>
               {b.count > b.threads.length && (
@@ -159,7 +179,8 @@ function Section({ title, count, children }: { title: string; count: number; chi
   )
 }
 
-function ThreadRow({ item, reason, selected, onOpen, onDone }: { item: ThreadItem; reason: string; selected: boolean; onOpen: () => void; onDone?: () => void }) {
+function ThreadRow({ item, reason, mark, onOpen, onDone }: { item: ThreadItem; reason: string; mark: Mark; onOpen: () => void; onDone?: () => void }) {
+  const selected = mark === 'on'
   const p = item.posting
   // Waiting on others: the thread is about who you wrote to, not you (you sent the last message).
   const other = item.people?.[0]
@@ -170,7 +191,7 @@ function ThreadRow({ item, reason, selected, onOpen, onDone }: { item: ThreadIte
       role="option"
       aria-selected={selected}
       onClick={onOpen}
-      className={`group relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2.5 pr-3 pl-4 ${selected ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
+      className={`group relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2.5 pr-3 pl-4 ${markClass(mark)}`}
     >
       <Avatar avatar={avatar} size={32} seed={other?.email ?? p.senderEmail ?? undefined} />
       <div className="min-w-0 flex-1">
@@ -188,14 +209,15 @@ function ThreadRow({ item, reason, selected, onOpen, onDone }: { item: ThreadIte
 }
 
 /** A new email: subject, then who and what it's about (the AI's line, or HEY's opening words). */
-function NewRow({ posting: p, selected, onOpen }: { posting: PostingRow; selected: boolean; onOpen: () => void }) {
+function NewRow({ posting: p, mark, onOpen }: { posting: PostingRow; mark: Mark; onOpen: () => void }) {
+  const selected = mark === 'on'
   const line = p.ai?.summary ?? p.summary
   return (
     <li
       role="option"
       aria-selected={selected}
       onClick={onOpen}
-      className={`mx-2 flex cursor-default items-center gap-3 rounded-ui py-2 pr-3 pl-4 transition-colors duration-(--dur-1) ${selected ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
+      className={`relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2 pr-3 pl-4 transition-colors duration-(--dur-1) ${markClass(mark)}`}
     >
       <Avatar avatar={p.avatar} size={32} seed={p.senderEmail ?? undefined} />
       <div className="min-w-0 flex-1">
@@ -213,14 +235,15 @@ function NewRow({ posting: p, selected, onOpen }: { posting: PostingRow; selecte
 }
 
 /** A deadline found in mail: what to do, from which thread, and how late. */
-function ActionRow({ item, selected, onOpen, onDone }: { item: ActionItem; selected: boolean; onOpen: () => void; onDone: () => void }) {
+function ActionRow({ item, mark, onOpen, onDone }: { item: ActionItem; mark: Mark; onOpen: () => void; onDone: () => void }) {
+  const selected = mark === 'on'
   const p = item.posting
   return (
     <li
       role="option"
       aria-selected={selected}
       onClick={onOpen}
-      className={`group mx-2 flex cursor-default items-center gap-3 rounded-ui py-2.5 pr-3 pl-4 ${selected ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
+      className={`group relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2.5 pr-3 pl-4 ${markClass(mark)}`}
     >
       <Avatar avatar={p.avatar} size={32} seed={p.senderEmail ?? undefined} />
       <div className="min-w-0 flex-1">
@@ -256,8 +279,17 @@ function RowActions({ onDone, onNotNow }: { onDone?: () => void; onNotNow?: () =
   )
 }
 
+type Mark = 'on' | 'echo' | null
+/** The open email's row is highlighted; its other rows on Today get a thin bar at the edge. */
+const markClass = (m: Mark) =>
+  m === 'on'
+    ? 'bg-selection'
+    : m === 'echo'
+      ? "hover:bg-pane-sunk before:absolute before:top-2.5 before:bottom-2.5 before:left-[5px] before:w-[2px] before:rounded-full before:bg-accent/60 before:content-['']"
+      : 'hover:bg-pane-sunk'
+
 /** Dates found in mail over the next week, each a click from its thread. Information, not tasks. */
-function ComingUp({ items, selectedId, onOpen }: { items: ComingUpItem[]; selectedId: number | null; onOpen: (p: PostingRow) => void }) {
+function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: string, postingId: number) => Mark; onOpen: (key: string, p: PostingRow) => void }) {
   return (
     <section aria-label="Coming up" className="@container">
       <h2 className="eyebrow px-5 pt-4 pb-1.5">Coming up</h2>
@@ -265,9 +297,9 @@ function ComingUp({ items, selectedId, onOpen }: { items: ComingUpItem[]; select
         {items.map((c) => (
           <li key={c.key} className="relative">
             <button
-              onClick={() => onOpen(c.posting)}
-              aria-current={c.posting.id === selectedId || undefined}
-              className={`mx-2 flex w-[calc(100%-1rem)] items-baseline gap-3 rounded-ui py-2 pl-4 text-left ${c.isDeadline ? 'pr-3' : 'pr-[92px] @max-[28rem]:pr-[52px]'} ${c.posting.id === selectedId ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
+              onClick={() => onOpen(c.key, c.posting)}
+              aria-current={pick(c.key, c.posting.id) === 'on' || undefined}
+              className={`relative mx-2 flex w-[calc(100%-1rem)] items-baseline gap-3 rounded-ui py-2 pl-4 text-left ${c.isDeadline ? 'pr-3' : 'pr-[92px] @max-[28rem]:pr-[52px]'} ${markClass(pick(c.key, c.posting.id))}`}
             >
               <span className="w-[76px] shrink-0 text-[12px] text-ink-faint tabular-nums">
                 {dayName(c.date)}
