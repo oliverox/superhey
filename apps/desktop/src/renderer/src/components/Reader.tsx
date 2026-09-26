@@ -799,11 +799,11 @@ export function SummaryStrip({ topicId, onDetails }: { topicId: number; onDetail
   const dates = a.dates.filter((d) => dayOf(d.endDate ?? d.date) >= today).slice(0, 2)
   const amount = a.amounts[0]
   return (
-    <div className="rise mt-2 flex items-start gap-2 text-[14px] leading-snug" aria-label="AI summary">
+    <div className="rise mt-3.5 mb-6 flex items-start gap-4 text-[15px] leading-relaxed" aria-label="AI summary">
       <div className="min-w-0 flex-1">
         <span className="text-ink-soft">{a.summary}</span>
         {(a.needsReply || dates.length > 0 || amount) && (
-          <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <span className="mt-3 flex flex-wrap items-center gap-2">
             {a.needsReply && (
               <Tag kind="reply" title={a.replyReason ?? 'Needs your reply'}>
                 Needs reply
@@ -824,7 +824,7 @@ export function SummaryStrip({ topicId, onDetails }: { topicId: number; onDetail
           </span>
         )}
       </div>
-      <button onClick={onDetails} title={withShortcut('Show details', 'details')} className="mt-px inline-flex shrink-0 items-center gap-1.5 rounded-ui px-1.5 py-0.5 text-[12px] font-medium text-ink-soft hover:bg-pane-sunk hover:text-ink">
+      <button onClick={onDetails} title={withShortcut('Show details', 'details')} className="mt-0.5 inline-flex shrink-0 items-center gap-1.5 rounded-ui px-2 py-1 text-[13px] font-medium text-ink-soft hover:bg-pane-sunk hover:text-ink">
         <AiSparkle size={12} />
         Details
       </button>
