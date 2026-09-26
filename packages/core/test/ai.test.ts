@@ -2,7 +2,7 @@ import { APICallError } from 'ai'
 import { MockLanguageModelV4 } from 'ai/test'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { AiClient, AiError, listLocalModels } from '../src/ai/client'
+import { AiClient, effortOptions, AiError, listLocalModels } from '../src/ai/client'
 import { costOf, maxCostOf } from '../src/ai/models'
 import { checkKey, CLOUD_MODELS, keyHint, PROVIDER_IDS, PROVIDERS, type ProviderId } from '../src/ai/providers'
 import { aiMode, readAiSettings, route, type AiSettings } from '../src/ai/settings'
@@ -184,6 +184,29 @@ describe('cost', () => {
 
   it('bounds a call from above before it is made', () => {
     expect(maxCostOf('claude-haiku-4-5', 4000, 1000)).toBeCloseTo(0.004 + 0.005)
+  })
+})
+
+describe('thinking effort', () => {
+  it('asks for little thinking by default, as each provider takes it', () => {
+    expect(effortOptions('claude', 'claude-sonnet-5', 'low')).toEqual({ anthropic: { effort: 'low' } })
+    // Haiku 4.5 doesn't take effort (and doesn't think unless asked).
+    expect(effortOptions('claude', 'claude-haiku-4-5', 'low')).toBeUndefined()
+    expect(effortOptions('openai', 'gpt-6-sol', 'medium')).toEqual({ openai: { reasoningEffort: 'medium' } })
+    expect(effortOptions('grok', 'grok-4.7', 'low')).toBeUndefined()
+    expect(effortOptions('local', 'llama3.2', 'low')).toBeUndefined()
+  })
+
+  it('sends low effort on quality calls unless a task asks for more', async () => {
+    const { model, calls } = fake({ text: 'OK' })
+    const { ai } = client({ model })
+    await ai.run({ task: 'draft', system: 'S', prompt: 'P' })
+    await ai.run({ task: 'draft', system: 'S', prompt: 'P', effort: 'medium' })
+    await ai.run({ task: 'summary', system: 'S', prompt: 'P' })
+    const opts = calls.map((c) => (c as { providerOptions?: Record<string, unknown> }).providerOptions)
+    expect(opts[0]).toEqual({ anthropic: { effort: 'low' } })
+    expect(opts[1]).toEqual({ anthropic: { effort: 'medium' } })
+    expect(opts[2]).toBeUndefined() // Haiku
   })
 })
 

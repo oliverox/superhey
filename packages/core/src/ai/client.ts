@@ -28,7 +28,26 @@ export interface AiRequest<S extends z.ZodType | undefined = undefined> {
   /** For structured answers (summaries, classifications): the result is parsed to it. */
   schema?: S
   maxOutputTokens?: number
+  /**
+   * How hard the model may think, where it can. Thinking is billed as output (the dearest
+   * tokens), and short everyday tasks don't need much: `low` unless a task earns more.
+   */
+  effort?: Effort
   signal?: AbortSignal
+}
+
+export type Effort = 'low' | 'medium' | 'high'
+
+/**
+ * The effort setting for a provider and model, as the provider takes it. Claude's `effort`
+ * isn't accepted by Haiku 4.5 (which doesn't think unless asked); Grok and local models get
+ * nothing.
+ */
+export function effortOptions(engine: ProviderId | 'local', model: string, effort: Effort | undefined): Record<string, Record<string, string>> | undefined {
+  if (!effort) return undefined
+  if (engine === 'claude') return /^claude-haiku-4/.test(model) ? undefined : { anthropic: { effort } }
+  if (engine === 'openai') return { openai: { reasoningEffort: effort } }
+  return undefined
 }
 
 export interface AiResult<T> {
@@ -104,6 +123,7 @@ export class AiClient extends EventEmitter<{ usage: [] }> {
         model,
         instructions: cachedInstructions(req.system),
         prompt: req.prompt,
+        providerOptions: effortOptions(r.engine, r.model, req.effort ?? 'low'),
         maxOutputTokens,
         maxRetries: 2,
         abortSignal: req.signal ?? AbortSignal.timeout(90_000),

@@ -135,7 +135,7 @@ function Voice({ draftOn }: { draftOn: boolean }) {
       <div>
         <p className="text-[13px] leading-relaxed text-ink-soft">
           SuperHey reads about 40 of the emails you’ve sent (through HEY, only what you wrote), and your AI provider turns them into a short guide to how you write.
-          After that, emails that need a reply get a draft in your voice, and any email can get one with “Draft reply”.
+          After that, an email that needs a reply gets a draft in your voice when you open it, and any email can get one with “Draft reply”.
         </p>
         <button type="button" onClick={build} disabled={v.building} className="btn-primary mt-3 disabled:opacity-60">
           {v.building ? 'Reading your sent mail…' : 'Learn my voice'}
@@ -187,7 +187,7 @@ function Voice({ draftOn }: { draftOn: boolean }) {
       </label>
       <p className="mt-3 text-[12px] text-ink-faint">
         Learned from {v.voice!.samples} of your emails on {new Date(v.voice!.builtAt).toLocaleDateString()}.{' '}
-        {draftOn ? 'Emails that need a reply get a draft on their own.' : 'Reply drafts are off in “What runs where”: turn them on for drafts.'}
+        {draftOn ? 'Emails that need a reply get a draft when you open them.' : 'Reply drafts are off in “What runs where”: turn them on for drafts.'}
       </p>
       <div className="mt-2 flex gap-2">
         <button type="button" onClick={build} disabled={v.building} className="rounded-ui border border-rule-strong px-2.5 py-1 text-ink-soft hover:bg-pane-sunk hover:text-ink disabled:opacity-60">

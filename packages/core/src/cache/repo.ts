@@ -750,16 +750,6 @@ export class Repo {
     this.run('DELETE FROM reply_drafts WHERE topic_id = ?', topicId)
   }
 
-  /** Threads the analysis says need a reply, as of their latest mail, newest first. */
-  threadsNeedingReply(limit: number): TopicId[] {
-    return this.all<{ topic_id: number }>(
-      `SELECT a.topic_id FROM thread_analysis a
-       WHERE a.needs_reply = 1 AND a.active_at >= (SELECT max(p.active_at) FROM postings p WHERE p.topic_id = a.topic_id)
-       ORDER BY a.active_at DESC LIMIT ?`,
-      limit,
-    ).map((r) => TopicId(r.topic_id))
-  }
-
   /** Threads with a draft written as of their latest mail. */
   draftedTopics(): Set<number> {
     return new Set(

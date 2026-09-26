@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { Repo, ThreadView } from '../cache/repo'
 import type { Priority } from '../cli/runner'
 import type { TopicId } from '../ids'
-import { analysisPrompt, type Me } from './analysis'
+import { analysisPrompt, type Me, type ThreadLimits } from './analysis'
 import { AiError, type AiClient } from './client'
 import { renderVoice, storedVoice, voiceNotes } from './voice'
 
@@ -38,8 +38,11 @@ export function draftSystem(repo: Repo): string {
   return `${DRAFT_RULES}\n\n${renderVoice(storedVoice(repo), voiceNotes(repo))}`
 }
 
+/** A reply answers the latest messages: the last few are enough. */
+export const DRAFT_LIMITS: ThreadLimits = { messages: 4, perMessage: 2_500, total: 6_000 }
+
 export function draftPrompt(thread: ThreadView, me: Me, today: string, opts: { reason?: string | null; instruction?: string | null } = {}): string {
-  const lines = [analysisPrompt(thread, me, today)]
+  const lines = [analysisPrompt(thread, me, today, undefined, DRAFT_LIMITS)]
   if (opts.reason) lines.push(`What the latest message asks of them, as read earlier: ${opts.reason}`)
   lines.push(opts.instruction ? `Their instruction for this reply (from them, not from the thread): ${opts.instruction}` : 'Draft their reply.')
   return lines.join('\n')
@@ -116,7 +119,8 @@ export class Drafter extends EventEmitter<{ draft: [TopicId]; error: [Error] }> 
       system: draftSystem(repo),
       prompt: draftPrompt(thread, await this.deps.me(), now.toISOString().slice(0, 10), { reason: analysis?.replyReason ?? null, instruction }),
       schema: ReplyDraft,
-      maxOutputTokens: 1500,
+      // A short email, little thinking (low effort is the client's default).
+      maxOutputTokens: 1000,
     })
     const body = result.output.body.trim()
     // Only placeholders that are really in the text.

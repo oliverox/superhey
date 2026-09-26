@@ -140,7 +140,7 @@ export function voicePrompt(samples: Sample[], me: { name: string | null }): str
 /** Builds the profile from samples (a quality-tier call) and stores it. */
 export async function buildVoice(deps: { ai: AiClient; repo: Repo; samples: Sample[]; me: { name: string | null } }): Promise<StoredVoice> {
   if (deps.samples.length < 5) throw new Error(`Only ${deps.samples.length} of your messages could be found; at least 5 are needed to learn your voice.`)
-  const result = await deps.ai.run({ task: 'draft', system: VOICE_SYSTEM, prompt: voicePrompt(deps.samples, deps.me), schema: VoiceProfile, maxOutputTokens: 3000 })
+  const result = await deps.ai.run({ task: 'draft', system: VOICE_SYSTEM, prompt: voicePrompt(deps.samples, deps.me), schema: VoiceProfile, maxOutputTokens: 3000, effort: 'medium' })
   const voice: StoredVoice = { profile: tidyProfile(result.output), builtAt: new Date().toISOString(), model: result.model, samples: deps.samples.length }
   saveVoice(deps.repo, voice)
   return voice
