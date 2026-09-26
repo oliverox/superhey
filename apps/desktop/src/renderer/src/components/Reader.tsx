@@ -193,7 +193,7 @@ function PanelSlot({ show, children }: { show: boolean; children: React.ReactNod
   const { mounted, shown } = usePresence(show)
   if (!mounted) return null
   return (
-    <div className="panel-slot flex shrink-0 justify-end" style={{ width: shown ? 296 : 0 }}>
+    <div className="panel-slot flex shrink-0 justify-end" style={{ width: shown ? 'var(--panel-w)' : 0 }}>
       {children}
     </div>
   )
@@ -760,7 +760,7 @@ export function snippet(markdown: string) {
 }
 
 /** Wide enough for the email column and the details panel side by side. */
-const PANEL_AUTO_WIDTH = 1080
+const PANEL_AUTO_WIDTH = 1120
 const PANEL_KEY = 'details-panel'
 type PanelPref = 'auto' | 'open' | 'closed'
 

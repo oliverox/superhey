@@ -44,20 +44,20 @@ const analysis = (over: Partial<ThreadAnalysisView> = {}): ThreadAnalysisView =>
 })
 
 describe('the Summary in the details panel', () => {
-  it('shows what the thread is about, that it needs you and why, what to do and the facts', async () => {
+  it('shows what the thread asks of you: that it needs a reply and why, what to do, the dates and sums', async () => {
     answer = analysis()
     act(() => root.render(createElement(Panel.Understanding, { topicId: 900 })))
     await flush()
     const text = host.textContent!
-    expect(text).toContain('Alice asks if you’re free for lunch on Friday')
-    expect(text).toContain('Needs your reply: asks if Friday works')
-    expect([...host.querySelectorAll('[aria-label="Action items"] li')].map((li) => li.textContent)).toEqual([
+    expect(text).not.toContain('Alice asks if you’re free for lunch on Friday') // the summary is under the title
+    expect(text).toContain('Needs replyasks if Friday works')
+    expect([...host.querySelectorAll('[aria-label="To do"] li')].map((li) => li.textContent)).toEqual([
       `Answer Alice about lunch${new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(2020, 0, 3))}`,
       'Book a table',
     ])
-    expect(host.querySelector('[aria-label="Action items"] .text-danger')).not.toBeNull() // overdue
+    expect(host.querySelector('[aria-label="To do"] .text-danger')).not.toBeNull() // overdue
     expect(text).toContain('Lunch')
-    expect(text).toContain(', 12:30')
+    expect(text).toContain(' · 12:30')
     expect(text).toContain(new Intl.NumberFormat(undefined, { style: 'currency', currency: 'EUR' }).format(20))
   })
 
@@ -66,7 +66,7 @@ describe('the Summary in the details panel', () => {
     act(() => root.render(createElement(Panel.Understanding, { topicId: 900 })))
     await flush()
     expect(host.textContent).toContain('You asked; waiting on their answer.')
-    expect(host.textContent).not.toContain('Needs your reply')
+    expect(host.textContent).not.toContain('Needs reply')
     answer = null
     act(() => root.render(createElement(Panel.Understanding, { topicId: 901 })))
     await flush()
