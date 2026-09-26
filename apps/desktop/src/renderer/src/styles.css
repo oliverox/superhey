@@ -55,8 +55,10 @@
   --tip-rule: #17191e;
   --tip-key-rule: rgba(255, 255, 255, 0.24);
 
-  --font-ui: 'Onest Variable', ui-sans-serif, sans-serif;
-  --font-read: 'Onest Variable', ui-sans-serif, sans-serif;
+  /* Inter: made for screens, a tall x-height that stays legible at 12–13px; bundled, so the
+     same on macOS and Linux. */
+  --font-ui: 'Inter Variable', ui-sans-serif, sans-serif;
+  --font-read: 'Inter Variable', ui-sans-serif, sans-serif;
   --r: 8px;
   --r-lg: 12px;
   --avatar-r: 9999px;
@@ -526,8 +528,9 @@ kbd.tooltip-key {
 }
 
 /* The reading column: about 72 characters of body text per line, whatever the window
-   width. Set in em of the body font, since ch (the width of "0") overstates Onest's
-   average character by 40%. Onest averages 0.465em a character; monospace is 0.6em. */
+   width. Set in em of the body font, since ch (the width of "0") overstates Inter's
+   average character by about a third. Inter averages 0.46em a character in email prose
+   (measured); monospace is 0.6em. */
 .reading-column {
   font-family: var(--font-read);
   font-size: var(--read-size);
