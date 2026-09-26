@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import Markdown, { type Components } from 'react-markdown'
-import type { EntryRow, OutgoingMessage, PostingRow, ThreadView } from '@shared/api'
+import type { EntryRow, OutgoingMessage, OutgoingRecord, PostingRow, ThreadView } from '@shared/api'
 import { api, useLive } from '../api'
 import { dayAndTime, longDate } from '../format'
 import { listTags, parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes, tagKind, type ForwardedHeader, unwrapHardBreaks } from '../mail/forwarded'
@@ -13,6 +13,7 @@ import { ActionBar } from './ActionBar'
 import { BundleView } from './BundleView'
 import { ContextPanel } from './ContextPanel'
 import { usePresence } from '../motion'
+import { dropOutgoing, useOutgoingReplies } from '../outbox'
 import { useShortcut, withShortcut } from '../shortcuts'
 import { HtmlBody } from './HtmlBody'
 import { Composer, type ComposeRequest } from './Composer'
@@ -163,6 +164,7 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
               <>
                 <ThreadTopic.Provider value={thread.data.topicId}>
                   <Conversation entries={thread.data.entries} subject={subject} htmlByEntry={html.data ?? {}} canReply={target.screeningId == null} />
+                  <OutgoingReplies topicId={thread.data.topicId} entries={thread.data.entries} />
                 </ThreadTopic.Provider>
                 {/* No replying to someone who hasn't been let in yet. */}
                 {target.screeningId == null && <ReplyArea key={thread.data.topicId} thread={thread.data} />}
@@ -435,6 +437,80 @@ function Message({
           <Composer request={reply} variant="inline" onClose={() => setReply(null)} />
         </div>
       )}
+    </li>
+  )
+}
+
+/**
+ * Replies you've sent to this thread, shown at its end straight away: with Undo while they
+ * wait, then until HEY's copy arrives in the thread and takes their place.
+ */
+export function OutgoingReplies({ topicId, entries }: { topicId: number; entries: EntryRow[] }) {
+  const replies = useOutgoingReplies(topicId, entries)
+  if (!replies.length) return null
+  return (
+    <ol className="mt-2.5 space-y-2.5">
+      {replies.map((r) => (
+        <OutgoingReply key={r.id} record={r} />
+      ))}
+    </ol>
+  )
+}
+
+function OutgoingReply({ record: r }: { record: OutgoingRecord }) {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    if (r.status !== 'pending') return
+    const t = setInterval(() => setNow(Date.now()), 250)
+    return () => clearInterval(t)
+  }, [r.status])
+  const reopen = (message = r.message) => window.dispatchEvent(new CustomEvent('superhey:compose', { detail: { kind: r.kind, message, forwardOf: r.forwardOf } }))
+  const seconds = Math.max(0, Math.ceil((r.sendsAt - now) / 1000))
+  const failed = r.status === 'failed'
+  const to = [...r.message.to, ...(r.message.cc ?? [])]
+
+  return (
+    <li className="rise pt-4">
+      <header className="mb-3 flex items-baseline gap-2">
+        <span className="font-semibold">You</span>
+        {to.length > 0 && <span className="min-w-0 truncate text-[13px] text-ink-faint">to {to.join(', ')}</span>}
+        <span className={`ml-auto shrink-0 text-[12px] ${failed ? 'text-danger' : 'text-ink-faint'}`}>
+          {r.status === 'pending' ? `Sending in ${seconds}s` : r.status === 'sending' ? 'Sending…' : r.status === 'sent' ? 'Sent' : 'Not sent'}
+        </span>
+        {r.status === 'pending' && (
+          <button
+            onClick={async () => {
+              try {
+                reopen((await api.cancelSend(r.id)).message)
+              } catch {
+                // too late: it's already on its way
+              }
+            }}
+            className="shrink-0 rounded-ui px-1.5 py-0.5 text-[12px] font-semibold text-ink hover:bg-pane-sunk"
+          >
+            Undo
+          </button>
+        )}
+        {failed && (
+          <button
+            onClick={() => {
+              reopen()
+              dropOutgoing(r.id)
+            }}
+            className="shrink-0 rounded-ui px-1.5 py-0.5 text-[12px] font-semibold text-danger hover:bg-pane-sunk"
+          >
+            Edit
+          </button>
+        )}
+      </header>
+      <div className={`rounded-ui-lg border bg-pane px-7 pt-6 pb-4 ${failed ? 'border-danger/40' : 'border-rule'} ${r.status === 'pending' || r.status === 'sending' ? 'opacity-75' : ''}`}>
+        <div className="prose-mail">
+          {/* Line breaks kept, as HEY sends them. */}
+          <Markdown components={mdComponents}>{r.message.body.replace(/([^\n])\n(?!\n)/g, '$1  \n')}</Markdown>
+        </div>
+        {failed && r.error && <p className="mt-2 text-[13px] text-danger">{r.error}</p>}
+        {(r.message.attach?.length ?? 0) > 0 && <p className="mt-2 text-[12px] text-ink-faint">📎 {r.message.attach!.map((a) => a.split('/').pop()).join(', ')}</p>}
+      </div>
     </li>
   )
 }
