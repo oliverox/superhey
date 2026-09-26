@@ -85,7 +85,7 @@ export function SearchField({
   return (
     <div
       className={`no-drag relative ml-auto flex h-7 items-center rounded-ui bg-pane-sunk px-2 text-ink-faint transition-[width] duration-200 ease-out focus-within:ring-1 focus-within:ring-rule-strong ${
-        expanded ? 'w-full' : 'w-44'
+        expanded ? 'w-full max-w-[640px]' : 'w-44'
       }`}
     >
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden className="shrink-0">

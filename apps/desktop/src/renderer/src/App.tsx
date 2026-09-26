@@ -111,8 +111,9 @@ function Workspace({ status }: { status: AppStatus }) {
   const groups = useCollapsedGroups(activeBox?.id)
   // j/k move through what's showing: rows in folded groups are skipped.
   const boxRows = useMemo(() => (postings.data ?? []).filter((p) => !groups.collapsed.has(groupOf(p))), [postings.data, groups.collapsed])
-  // Today with nothing open has nothing for a reader to show: it takes the whole width until you open something.
-  const todayAlone = onToday && !screening && !query && !target
+  // With nothing open there's nothing for a reader to show: the list (a box, Today, search
+  // results) takes the whole width until you open something. The Screener keeps its reader.
+  const listAlone = !screening && !target
   const gridRef = useRef<HTMLDivElement>(null)
   const listWidth = useListWidth()
   const list = searching ? searchRows : onToday ? todayThreads(todayData) : boxRows
@@ -210,7 +211,7 @@ function Workspace({ status }: { status: AppStatus }) {
     <div
       ref={gridRef}
       style={{ '--list-w': `${listWidth.width}px` } as React.CSSProperties}
-      className={`tiles grid h-full ${todayAlone ? 'grid-cols-[232px_1fr]' : 'grid-cols-[232px_var(--list-w)_1fr]'}`}
+      className={`tiles grid h-full ${listAlone ? 'grid-cols-[232px_1fr]' : 'grid-cols-[232px_var(--list-w)_1fr]'}`}
       onMouseDown={(e) => {
         const pane = (e.target as HTMLElement).closest<HTMLElement>('[data-pane]')?.dataset.pane as PaneId | undefined
         if (pane) setActivePane(pane)
@@ -232,7 +233,7 @@ function Workspace({ status }: { status: AppStatus }) {
       />
 
       <section className="pane relative flex min-w-0 flex-col bg-pane" data-pane="list" data-active={activePane === 'list'}>
-        {!todayAlone && <ListResizer gridRef={gridRef} width={listWidth.width} onResize={listWidth.save} />}
+        {!listAlone && <ListResizer gridRef={gridRef} width={listWidth.width} onResize={listWidth.save} />}
         <header className="drag flex h-[52px] shrink-0 items-center border-b border-rule px-4">
           {/* The title makes way while the search box is in use. */}
           <h1
@@ -271,6 +272,8 @@ function Workspace({ status }: { status: AppStatus }) {
             }}
           />
         </header>
+        {/* Standing alone, the list keeps a readable measure. */}
+        <div className={listAlone ? 'mx-auto flex min-h-0 w-full max-w-[780px] flex-1 flex-col' : 'contents'}>
         {screening ? (
           <ScreenerList
             items={waiting}
@@ -320,10 +323,11 @@ function Workspace({ status }: { status: AppStatus }) {
           />
           </>
         )}
+        </div>
       </section>
 
       <div data-pane="reader" className="contents">
-        {!todayAlone && (
+        {!listAlone && (
         <Reader
           target={target}
           active={activePane === 'reader'}
