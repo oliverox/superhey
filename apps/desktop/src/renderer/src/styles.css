@@ -977,3 +977,20 @@ mark {
 .row-actions {
   background: linear-gradient(90deg, transparent, var(--row-bg, var(--pane-sunk)) 28px);
 }
+
+/* The caret while a draft types itself out. */
+.type-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 1px;
+  vertical-align: -0.15em;
+  border-radius: 1px;
+  background: var(--accent);
+  animation: caret-blink 900ms steps(1) infinite;
+}
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}

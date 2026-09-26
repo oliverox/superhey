@@ -22,6 +22,8 @@ beforeEach(() => {
   calls.length = 0
   for (const k of Object.keys(answers)) delete answers[k]
   localStorage.clear()
+  // Shown before: no typing it out (that's tested on its own).
+  localStorage.setItem('drafts:typed', JSON.stringify(['900:2026-09-26T08:00:00Z']))
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -65,6 +67,33 @@ describe('a draft reply', () => {
     act(() => button('Redraft…')!.click())
     act(() => button('Discard')!.click())
     expect([onUse, onRedraft, onDiscard].map((f) => f.mock.calls.length)).toEqual([1, 1, 1])
+  })
+
+  it('can be edited in place, and Use draft takes the edited text', () => {
+    const onUse = vi.fn()
+    act(() => root.render(createElement(Draft.DraftCard, { draft: draft(), onUse, onRedraft: vi.fn(), onDiscard: vi.fn() })))
+    act(() => (host.querySelector('[title="Click to edit"]') as HTMLElement).click())
+    const area = host.querySelector('textarea[aria-label="Draft text"]') as HTMLTextAreaElement
+    expect(area.value).toContain('Shall we meet at [place]?')
+    const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
+    act(() => {
+      set.call(area, 'Hi Alice,\n\nFriday works, at the usual café.\n\nOliver')
+      area.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(host.textContent).not.toContain('Fill in before sending') // the gap was filled
+    act(() => button('Use draft')!.click())
+    expect(onUse).toHaveBeenCalledWith('Hi Alice,\n\nFriday works, at the usual café.\n\nOliver')
+    expect(button('Revert')).toBeTruthy()
+  })
+
+  it('types itself out the first time it’s shown, and a click shows it all', () => {
+    localStorage.clear()
+    act(() => root.render(createElement(Draft.DraftCard, { draft: draft({ createdAt: '2026-09-26T09:00:00Z' }), onUse: vi.fn(), onRedraft: vi.fn(), onDiscard: vi.fn() })))
+    expect(host.querySelector('.type-caret')).toBeTruthy()
+    act(() => (host.querySelector('[title="Show it all"]') as HTMLElement).click())
+    expect(host.querySelector('.type-caret')).toBeNull()
+    expect(host.textContent).toContain('With warm regards')
+    expect(localStorage.getItem('drafts:typed')).toContain('900:2026-09-26T09:00:00Z')
   })
 
   it('says when it was written before the latest message, or what it was asked to say', () => {
