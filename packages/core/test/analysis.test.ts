@@ -59,7 +59,18 @@ describe('analysisPrompt', () => {
     expect(p).not.toContain('Message 0.')
     expect(p).toMatch(/earlier_messages_left_out="\d+"/)
     expect(p).not.toContain('> earlier')
-    expect(p.length).toBeLessThan(14_000)
+    // At most 6,000 characters of mail: the newest messages, each without its history.
+    expect(p.length).toBeLessThan(7_000)
+    expect(p).toContain('Message 10.')
+  })
+
+  it('reads the start of one very long email, where its substance is', () => {
+    const entries = [{ ...thread().entries[0]!, bodyMd: `The order shipped on Friday.\n${'Legal footer. '.repeat(2_000)}` }]
+    const p = analysisPrompt(thread({ entries }), ME, '2026-09-25')
+    expect(p).toContain('The order shipped on Friday.')
+    // A lone email gets the whole 6,000 characters, not a share of them.
+    expect(p.length).toBeGreaterThan(6_000)
+    expect(p.length).toBeLessThan(7_000)
   })
 })
 

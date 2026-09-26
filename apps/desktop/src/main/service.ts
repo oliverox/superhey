@@ -92,6 +92,8 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
   private analyzer: ThreadAnalyzer | null = null
   private drafter: Drafter | null = null
   private buildingVoice: Promise<StoredVoice> | null = null
+  /** The thread last opened: the one a draft is worth writing for. */
+  private openTopic: TopicId | null = null
   private get aiSettingsPath() {
     return join(dirname(this.opts.dbPath), 'ai-settings.json')
   }
@@ -152,9 +154,15 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
 
   async thread(topicId: number, entryCount: number | null) {
     const id = TopicId(int(topicId))
-    const view = await this.need().engine.ensureThread(id, entryCount == null ? null : int(entryCount))
-    // A thread you open is worth understanding, whichever box it's in (a no-op when current).
-    this.analyzer?.enqueue(id, true)
+    const core = this.need()
+    const view = await core.engine.ensureThread(id, entryCount == null ? null : int(entryCount))
+    this.openTopic = id
+    // A thread you open is worth understanding (a no-op when current), except in The Feed:
+    // you're reading it already, and newsletters never need a reply.
+    const feed = core.repo.boxes().find((b) => b.kind === 'feedbox')?.id
+    if (!core.repo.boxesOf(id).every((b) => b === feed)) this.analyzer?.enqueue(id, true)
+    // Drafts are written for what you open, not for every email that needs a reply.
+    if ((core.repo.analysis(id) as { needsReply?: boolean } | null)?.needsReply) this.drafter?.enqueue(id)
     return view
   }
 
@@ -319,8 +327,8 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
       this.emit('event', { type: 'voice' })
     })
     const voice = await this.buildingVoice
-    // Now there's a voice: draft what's waiting for a reply.
-    for (const topicId of core.repo.threadsNeedingReply(10)) this.drafter?.enqueue(topicId)
+    // Now there's a voice: the open thread gets its draft, if it needs one.
+    if (this.openTopic != null && (core.repo.analysis(this.openTopic) as { needsReply?: boolean } | null)?.needsReply) this.drafter?.enqueue(this.openTopic)
     return voice
   }
 
@@ -524,14 +532,13 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     drafter.on('error', (err) => console.error('[drafts]', err.message))
     analyzer.on('analysis', (topicId) => {
       this.emit('event', { type: 'analysis', topicId })
-      // A thread that needs a reply gets a draft in the user's voice (when they have one).
-      if ((core.repo.analysis(topicId) as { needsReply?: boolean } | null)?.needsReply) drafter.enqueue(topicId)
+      // The open thread, just understood as needing a reply, gets its draft now.
+      if (topicId === this.openTopic && (core.repo.analysis(topicId) as { needsReply?: boolean } | null)?.needsReply) drafter.enqueue(topicId)
     })
     analyzer.on('error', (err) => console.error('[analysis]', err.message))
     core.engine.on('mail', ({ topicId, boxKind }) => topicId != null && boxKind === 'imbox' && analyzer.enqueue(topicId))
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
     for (const topicId of core.repo.unanalysedUnread('imbox', weekAgo, 25, ANALYSIS_VERSION)) analyzer.enqueue(topicId)
-    for (const topicId of core.repo.threadsNeedingReply(10)) drafter.enqueue(topicId)
   }
 
   private needAi(): AiClient {

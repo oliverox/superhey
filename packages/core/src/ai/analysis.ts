@@ -46,9 +46,17 @@ export interface Me {
   emails: string[]
 }
 
-const PER_MESSAGE_CHARS = 3_000
-const TOTAL_CHARS = 12_000
-const MESSAGES = 8
+/**
+ * How much of a thread a model reads: the newest messages, each without its quoted history.
+ * The substance of an email comes first; the tail of a long one is mostly footers and legal
+ * text, so a cap here saves tokens on every call without losing what matters.
+ */
+export interface ThreadLimits {
+  messages: number
+  perMessage: number
+  total: number
+}
+export const ANALYSIS_LIMITS: ThreadLimits = { messages: 6, perMessage: 2_500, total: 6_000 }
 
 export const ANALYSIS_SYSTEM = `You read one email thread for its owner (the user) and describe it for their mail app.
 
@@ -68,16 +76,23 @@ Rules:
 export const ANALYSIS_VERSION = 3
 
 /** The prompt: the thread as data, newest messages kept when it's long. */
-export function analysisPrompt(thread: ThreadView, me: Me, today: string, timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone): string {
+export function analysisPrompt(
+  thread: ThreadView,
+  me: Me,
+  today: string,
+  timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
+  limits: ThreadLimits = ANALYSIS_LIMITS,
+): string {
   const mine = new Set(me.emails.map((e) => e.toLowerCase()))
-  const recent = thread.entries.slice(-MESSAGES)
-  let budget = TOTAL_CHARS
+  const recent = thread.entries.slice(-limits.messages)
+  let budget = limits.total
   const blocks: string[] = []
   // Newest first while filling the budget, then put back in order.
   for (const e of [...recent].reverse()) {
     const fromMe = e.isMine || (e.from?.email != null && mine.has(e.from.email.toLowerCase()))
     const who = fromMe ? 'you' : e.from?.name ? `${e.from.name} (${e.from.email})` : (e.from?.email ?? 'unknown')
-    const body = clip(e.bodyMd, Math.min(PER_MESSAGE_CHARS, budget))
+    // A lone message may use the whole allowance; several share it.
+    const body = clip(e.bodyMd, Math.min(recent.length === 1 ? limits.total : limits.perMessage, budget))
     budget -= body.length
     blocks.unshift(`<message from="${attr(who)}" date="${e.createdAt}">\n${body}\n</message>`)
     if (budget <= 200) break
