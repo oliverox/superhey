@@ -282,13 +282,16 @@ function Availability({ date: d }: { date: MailDateLike }) {
   const end = d.endTime ? new Date(`${d.date}T${d.endTime}:00`) : new Date(start.getTime() + 60 * 60_000)
   const clash = (range.data?.events ?? []).find((e) => !e.allDay && e.endsAt && new Date(e.startsAt) < end && new Date(e.endsAt) > start)
   if (!range.data) return null
+  // Context, not a badge: quiet when the time is free, amber only when it clashes.
   return (
-    <p className="mb-2.5 flex items-center gap-2 text-[13px]">
-      <span className={`size-2 shrink-0 rounded-full ${clash ? 'bg-danger' : 'bg-ok'}`} />
-      <span className="text-ink-soft">{whenFmt.format(start)}</span>
-      <span className={clash ? 'text-danger' : 'text-ok'}>
-        {clash ? `clashes with ${clash.title} (${clockOf(clash.startsAt)}–${clockOf(clash.endsAt!)})` : 'you’re free'}
-      </span>
+    <p className={`mb-2.5 flex items-center gap-1.5 text-[13px] ${clash ? 'text-attn' : 'text-ink-faint'}`}>
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden className="shrink-0">
+        <rect x="2" y="3" width="12" height="11" rx="2" />
+        <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" />
+      </svg>
+      <span className={clash ? '' : 'text-ink-soft'}>{whenFmt.format(start)}</span>
+      <span aria-hidden>·</span>
+      <span className="min-w-0 truncate">{clash ? `clashes with ${clash.title} (${clockOf(clash.startsAt)}–${clockOf(clash.endsAt!)})` : 'nothing else on your calendar'}</span>
     </p>
   )
 }
