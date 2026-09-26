@@ -3,7 +3,8 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 // The type scale documented at the top of styles.css. Anything else is a new size creeping in.
-const SCALE = [11, 12, 13, 14, 15, 17, 20, 26]
+// 10 is only for tags, which are in capitals (capitals read a size larger).
+const SCALE = [10, 11, 12, 13, 14, 15, 17, 20, 26]
 const here = __dirname
 
 function sources(dir: string): string[] {

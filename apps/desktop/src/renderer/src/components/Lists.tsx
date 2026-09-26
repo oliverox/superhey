@@ -1,3 +1,4 @@
+import { Tag } from './Tag'
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { DUR, motionOff } from '../motion'
 import type { PostingRow } from '@shared/api'
@@ -149,14 +150,14 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
                   {search?.boxNames[p.boxId] && <span className="shrink-0 text-[12px] font-medium text-ink-faint">{search.boxNames[p.boxId]}</span>}
                   {!p.isBundle && <SubjectTags subject={p.subject} sender={senderLabel(p)} labels={p.labels} />}
                   {p.labels.map((label) => (
-                    <span key={label} className="shrink-0 rounded-[4px] border border-rule-strong px-1 text-[11px] leading-[15px] font-medium text-ink-soft">
+                    <Tag key={label} kind="label">
                       {label}
-                    </span>
+                    </Tag>
                   ))}
                   {p.ai?.needsReply && (
-                    <span className="shrink-0 text-[12px] font-semibold text-accent" title={p.ai.replyReason ? `Needs your reply: ${p.ai.replyReason}` : 'Needs your reply'}>
+                    <Tag kind="reply" title={p.ai.replyReason ? `Needs your reply: ${p.ai.replyReason}` : 'Needs your reply'}>
                       Reply
-                    </span>
+                    </Tag>
                   )}
                   <span className="min-w-0 truncate">
                     <span className="font-medium text-ink-soft">{mark(senderLabel(p))}</span>
@@ -235,14 +236,14 @@ export function SubjectTags({ subject, sender, labels }: { subject: string; send
   return (
     <>
       {action.map((tag) => (
-        <span key={`a:${tag}`} className="shrink-0 rounded-[4px] bg-attn-wash px-1.5 text-[11px] leading-[16px] font-semibold text-attn">
+        <Tag key={`a:${tag}`} kind="action">
           {tag}
-        </span>
+        </Tag>
       ))}
       {lists.map((tag) => (
-        <span key={`l:${tag}`} title="Mailing list" className="shrink-0 rounded-[4px] border border-dashed border-rule-strong px-1 text-[11px] leading-[15px] font-medium text-ink-faint">
+        <Tag key={`l:${tag}`} kind="list" title="Mailing list">
           {tag}
-        </span>
+        </Tag>
       ))}
     </>
   )

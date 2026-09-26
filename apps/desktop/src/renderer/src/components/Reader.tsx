@@ -16,6 +16,7 @@ import { usePresence } from '../motion'
 import { dropOutgoing, useOutgoingReplies } from '../outbox'
 import { useShortcut, withShortcut } from '../shortcuts'
 import { HtmlBody } from './HtmlBody'
+import { Tag } from './Tag'
 import { Composer, type ComposeRequest } from './Composer'
 import { PersonChip, RecipientsButton } from './People'
 import { ReplyArea } from './ReplyArea'
@@ -145,13 +146,13 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose }: Rea
                 .tags.filter((t) => tagKind(t, target.sender ?? null) !== 'sender')
                 .map((tag) =>
                   tagKind(tag, target.sender ?? null) === 'action' ? (
-                    <span key={tag} className="rounded-[4px] bg-attn-wash px-1.5 text-[12px] leading-[20px] font-semibold text-attn">
+                    <Tag key={tag} kind="action">
                       {tag}
-                    </span>
+                    </Tag>
                   ) : (
-                    <span key={tag} title="Mailing list" className="rounded-[4px] border border-dashed border-rule-strong px-1.5 text-[12px] leading-[18px] font-medium text-ink-faint">
+                    <Tag key={tag} kind="list" title="Mailing list">
                       {tag}
-                    </span>
+                    </Tag>
                   ),
                 )}
             </div>
