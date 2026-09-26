@@ -390,18 +390,6 @@ function Message({
               {showOriginal ? 'Simplified' : 'Original'}
             </button>
           )}
-          {replyable && !reply && (
-            <span className="flex shrink-0 gap-0.5 self-center opacity-0 group-hover/header:opacity-100 focus-within:opacity-100">
-              <HeaderButton onClick={() => replyTo('reply')} title="Reply to this message only">
-                Reply
-              </HeaderButton>
-              {others > 1 && (
-                <HeaderButton onClick={() => replyTo('reply-all')} title="Reply to everyone on this message">
-                  Reply all
-                </HeaderButton>
-              )}
-            </span>
-          )}
           {time}
           {onCollapse && (
             <button
@@ -419,7 +407,29 @@ function Message({
         {forwarded && <ForwardedLine header={forwarded.header} threadSubject={subject} />}
       </header>
 
-      <MessageCard entry={entry} index={index} entryHtml={entryHtml} showOriginal={showOriginal} surface={surface} signatureAt={signatureAt} />
+      <MessageCard
+        entry={entry}
+        index={index}
+        entryHtml={entryHtml}
+        showOriginal={showOriginal}
+        surface={surface}
+        signatureAt={signatureAt}
+        corner={
+          replyable &&
+          !reply && (
+            <>
+              <CornerButton onClick={() => replyTo('reply')} label="Reply to this message only">
+                <path d="M6.5 4 2.5 8l4 4M3 8h6.5a4 4 0 0 1 4 4v.5" />
+              </CornerButton>
+              {others > 1 && (
+                <CornerButton onClick={() => replyTo('reply-all')} label="Reply all to this message">
+                  <path d="M8.5 4 4.5 8l4 4M5 8h4.5a4 4 0 0 1 4 4v.5M5 4 1 8l4 4" />
+                </CornerButton>
+              )}
+            </>
+          )
+        }
+      />
       {reply && (
         <div className="mt-3">
           <Composer request={reply} variant="inline" onClose={() => setReply(null)} />
@@ -429,10 +439,12 @@ function Message({
   )
 }
 
-function HeaderButton({ children, onClick, title }: { children: React.ReactNode; onClick: () => void; title: string }) {
+function CornerButton({ children, onClick, label }: { children: React.ReactNode; onClick: () => void; label: string }) {
   return (
-    <button onClick={onClick} title={title} className="rounded-ui px-1.5 py-0.5 text-[12px] font-medium text-ink-faint hover:bg-pane-sunk hover:text-ink">
-      {children}
+    <button onClick={onClick} aria-label={label} title={label} className="flex size-7 items-center justify-center rounded-ui text-ink-soft hover:bg-pane-sunk hover:text-ink">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        {children}
+      </svg>
     </button>
   )
 }
@@ -459,6 +471,7 @@ export function MessageCard({
   showOriginal,
   surface = 'bg-pane',
   signatureAt,
+  corner,
 }: {
   entry: EntryRow
   /** Position in its thread; a reply's quoted history is only folded after the first. */
@@ -467,12 +480,19 @@ export function MessageCard({
   showOriginal: boolean
   surface?: string
   signatureAt?: number
+  /** Actions shown in the card's bottom-right corner while the message is hovered. */
+  corner?: React.ReactNode
 }) {
   const { quote, body, forwarded } = messageParts(entry, index)
+  const actions = corner ? (
+    <div className="absolute right-3 bottom-3 flex gap-0.5 rounded-ui-lg border border-rule bg-pane p-0.5 opacity-0 shadow-[0_4px_12px_-6px_rgba(0,0,0,0.2)] transition-opacity duration-[var(--dur-1)] group-hover/card:opacity-100 focus-within:opacity-100">
+      {corner}
+    </div>
+  ) : null
   return showOriginal ? (
       // Designed mail assumes a white page, so it gets one in every theme. It's built for
       // ~600–700px, so its card may grow past the text measure (centred, within the pane).
-      <div className={`email-wide overflow-hidden rounded-ui-lg border border-rule ${surface}`}>
+      <div className={`group/card email-wide relative overflow-hidden rounded-ui-lg border border-rule ${surface}`}>
         <div className="bg-white p-3">
           <HtmlBody entryHtml={entryHtml!} />
         </div>
@@ -481,9 +501,10 @@ export function MessageCard({
             <AttachmentStrip attachments={visibleAttachments(entry.attachments)} />
           </div>
         )}
+        {actions}
       </div>
     ) : (
-      <div className={`rounded-ui-lg border border-rule px-7 pt-6 pb-4 ${surface}`}>
+      <div className={`group/card relative rounded-ui-lg border border-rule px-7 pt-6 pb-4 ${surface}`}>
         <div className="prose-mail">
           {forwarded ? (
             <>
@@ -501,6 +522,7 @@ export function MessageCard({
           {quote && <QuotedHistory quote={quote} />}
         </div>
         <AttachmentStrip attachments={visibleAttachments(entry.attachments)} />
+        {actions}
       </div>
     )
 }
