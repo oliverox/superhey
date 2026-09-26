@@ -102,7 +102,11 @@ export function ActivityDrawer({ onClose }: { onClose: () => void }) {
   const log = useLive(() => api.recentActions(100), [], (e) => e.type === 'action')
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      onClose()
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])

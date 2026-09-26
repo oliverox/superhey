@@ -58,9 +58,11 @@ interface ReaderProps {
   onOpenThread: (p: PostingRow) => void
   /** Called when an action takes the open thread out of the box being viewed. */
   onLeaveBox: () => void
+  /** Closes the reader, giving the list the room (absent in The Screener). */
+  onClose?: () => void
 }
 
-export function Reader({ target, active, onOpenThread, onLeaveBox }: ReaderProps) {
+export function Reader({ target, active, onOpenThread, onLeaveBox, onClose }: ReaderProps) {
   if (!target) {
     return (
       <main className="pane flex flex-col bg-pane-alt" data-active={active}>
@@ -74,10 +76,10 @@ export function Reader({ target, active, onOpenThread, onLeaveBox }: ReaderProps
       </main>
     )
   }
-  return <ThreadReader key={`${target.postingId}-${target.topicId}`} target={target} active={active} onOpenThread={onOpenThread} onLeaveBox={onLeaveBox} />
+  return <ThreadReader key={`${target.postingId}-${target.topicId}`} target={target} active={active} onOpenThread={onOpenThread} onLeaveBox={onLeaveBox} onClose={onClose} />
 }
 
-function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps & { target: ReaderTarget }) {
+function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose }: ReaderProps & { target: ReaderTarget }) {
   const { topicId } = target
   const thread = useLive<ThreadView | null>(
     () => (topicId == null ? Promise.resolve(null) : api.thread(topicId, target.entryCount)),
@@ -98,6 +100,18 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
   return (
     <main ref={mainRef} className="pane flex min-h-0 flex-col bg-pane-alt" data-active={active}>
       <header className="drag flex h-[52px] shrink-0 items-center justify-end gap-1 border-b border-rule bg-pane px-4">
+        {onClose && (
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            title="Close (Esc)"
+            className="no-drag -ml-1.5 mr-1 flex size-7 shrink-0 items-center justify-center rounded-ui text-ink-faint hover:bg-pane-sunk hover:text-ink"
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
+              <path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
         <div className="mr-auto">{target.postingId != null && <ActionBar postingId={target.postingId} onLeaveBox={onLeaveBox} />}</div>
         {target.appUrl && (
           <a
