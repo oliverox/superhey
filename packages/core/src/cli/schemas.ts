@@ -139,7 +139,8 @@ export const SavedAttachment = z.looseObject({
 
 /** One thread `hey search` found: its box item, subject and the messages that matched. */
 export const SearchResult = z.looseObject({
-  id: z.number(),
+  // The box item; missing for a thread that's in no box HEY lists (it can still be read).
+  id: nullish(z.number()),
   topic_id: z.number(),
   subject: z.string().default(''),
   updated_at: utc,
