@@ -267,7 +267,7 @@ function ComingUp({ items, selectedId, onOpen }: { items: ComingUpItem[]; select
             <button
               onClick={() => onOpen(c.posting)}
               aria-current={c.posting.id === selectedId || undefined}
-              className={`mx-2 flex w-[calc(100%-1rem)] items-baseline gap-3 rounded-ui py-1.5 pr-3 pl-4 text-left ${c.posting.id === selectedId ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
+              className={`mx-2 flex w-[calc(100%-1rem)] items-baseline gap-3 rounded-ui py-2 pl-4 text-left ${c.isDeadline ? 'pr-3' : 'pr-[92px]'} ${c.posting.id === selectedId ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
             >
               <span className="w-[76px] shrink-0 text-[12px] text-ink-faint tabular-nums">
                 {dayName(c.date)}
@@ -282,7 +282,7 @@ function ComingUp({ items, selectedId, onOpen }: { items: ComingUpItem[]; select
               </span>
             </button>
             {!c.isDeadline && (
-              <span className="absolute top-1.5 right-5">
+              <span className="absolute top-1/2 right-5 -translate-y-1/2">
                 <AddToCalendar item={c} source={c.posting.subject ? stripSubjectPrefixes(c.posting.subject) : undefined} />
               </span>
             )}

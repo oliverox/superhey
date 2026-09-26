@@ -63,15 +63,17 @@ export function AddToCalendar({ item, source }: { item: MailDate; source?: strin
 
   if (added != null) {
     return (
-      <span className="inline-flex shrink-0 items-center gap-1.5 text-[12px] font-medium text-ok">
+      <span className="inline-flex h-7 shrink-0 items-center gap-1.5 text-[13px] font-medium text-ok">
+        <CheckIcon />
         Added
         <button
-          onClick={async () => {
+          onClick={async (e) => {
+            e.stopPropagation()
             await api.deleteEvent(added, item.date).catch(() => {})
             setAdded(null)
             setUndone(true)
           }}
-          className="rounded-ui px-1 font-semibold text-ink-soft hover:bg-pane-sunk hover:text-ink"
+          className="ml-1 rounded-ui px-1.5 py-0.5 text-ink-soft hover:bg-pane-sunk hover:text-ink"
         >
           Undo
         </button>
@@ -81,13 +83,14 @@ export function AddToCalendar({ item, source }: { item: MailDate; source?: strin
   if (match && !undone) {
     return (
       <button
-        onClick={() => showInCalendar(item.date)}
-        title={`“${match.title}”${match.allDay ? '' : ` at ${clockOf(match.startsAt)}`} — show in the calendar`}
-        className="inline-flex shrink-0 items-center gap-1 rounded-ui px-1 text-[12px] font-medium text-ok hover:bg-pane-sunk"
+        onClick={(e) => {
+          e.stopPropagation()
+          showInCalendar(item.date)
+        }}
+        title={`“${match.title}”${match.allDay ? '' : ` at ${clockOf(match.startsAt)}`}: show in the calendar`}
+        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-ui px-2 text-[13px] font-medium text-ok hover:bg-pane-sunk"
       >
-        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="m3 8.5 3.5 3.5L13 4.5" />
-        </svg>
+        <CheckIcon />
         In calendar
       </button>
     )
@@ -101,9 +104,9 @@ export function AddToCalendar({ item, source }: { item: MailDate; source?: strin
         }}
         disabled={!range.data}
         title="Add to HEY Calendar"
-        className="inline-flex shrink-0 items-center gap-1 rounded-ui border border-rule px-1.5 py-px text-[12px] font-medium text-ink-soft hover:border-rule-strong hover:text-ink disabled:opacity-50"
+        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-ui bg-accent-wash px-2.5 text-[13px] font-medium text-accent transition-colors hover:bg-[color-mix(in_oklab,var(--accent)_18%,var(--pane))] disabled:opacity-50"
       >
-        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
           <rect x="2" y="3" width="12" height="11" rx="2" />
           <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3M8 8.5v3.5M6.25 10.25h3.5" />
         </svg>
@@ -131,5 +134,13 @@ export function AddToCalendar({ item, source }: { item: MailDate; source?: strin
         />
       )}
     </>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="m3 8.5 3.5 3.5L13 4.5" />
+    </svg>
   )
 }
