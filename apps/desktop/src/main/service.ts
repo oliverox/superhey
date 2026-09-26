@@ -428,8 +428,9 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     return this.drafter.draftFor(TopicId(int(topicId)), int(entryId), text)
   }
 
+  /** You discarded or sent the draft: it goes, and isn't rewritten by itself for this mail. */
   async discardDraft(topicId: unknown) {
-    this.need().repo.deleteReplyDraft(TopicId(int(topicId)))
+    this.need().repo.deleteReplyDraft(TopicId(int(topicId)), { dismissed: true })
     this.emit('event', { type: 'draft', topicId: int(topicId) })
   }
 

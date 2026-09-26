@@ -186,6 +186,30 @@ describe('reply drafts', () => {
     await expect(d.draftFor(TopicId(900), 99)).rejects.toThrow(/isn’t available/)
   })
 
+  it('doesn’t draft by itself once you’ve replied, or after you discarded or sent the draft', async () => {
+    const { repo, d, calls } = drafter()
+    saveVoice(repo, PROFILE)
+    // You've dealt with the draft for this mail: no new one until there's new mail.
+    repo.deleteReplyDraft(TopicId(900), { dismissed: true })
+    d.enqueue(TopicId(900))
+    await d.idle()
+    expect(calls).toHaveLength(0)
+    // New mail from them: drafting is back on.
+    repo.upsertPostings([S.Posting.parse(posting({ id: 7, topic_id: 900, active_at: '2026-09-26T10:00:00Z', creator: alice }))])
+    d.enqueue(TopicId(900))
+    await d.idle()
+    expect(calls).toHaveLength(1)
+    // Your reply is the latest message: nothing to answer.
+    repo.deleteReplyDraft(TopicId(900))
+    repo.replaceMyAddresses(['me@hey.example'])
+    repo.upsertPostings([S.Posting.parse(posting({ id: 8, topic_id: 900, active_at: '2026-09-26T11:00:00Z', creator: me }))])
+    repo.storeThread(TopicId(900), [S.Entry.parse(entry({ id: 1, creator: alice, created_at: '2026-09-26T10:00:00Z' })), S.Entry.parse(entry({ id: 2, creator: me, created_at: '2026-09-26T11:00:00Z' }))], 'Lunch on Friday?')
+    repo.setState('draft:dismissed:900', null)
+    d.enqueue(TopicId(900))
+    await d.idle()
+    expect(calls).toHaveLength(1)
+  })
+
   it('drafts in the background only with a voice profile and drafting on, once per state of a thread', async () => {
     const { repo, d, calls } = drafter()
     d.enqueue(TopicId(900))

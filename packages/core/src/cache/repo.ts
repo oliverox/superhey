@@ -789,8 +789,26 @@ export class Repo {
     }
   }
 
-  deleteReplyDraft(topicId: TopicId) {
+  /**
+   * Removes the thread's draft. `dismissed` (you discarded or sent it): no draft is written
+   * for the thread in the background again until it has new mail.
+   */
+  deleteReplyDraft(topicId: TopicId, opts: { dismissed?: boolean } = {}) {
     this.run('DELETE FROM reply_drafts WHERE topic_id = ?', topicId)
+    if (opts.dismissed) this.setState(`draft:dismissed:${topicId}`, this.latestActivity(topicId) ?? new Date().toISOString())
+  }
+
+  /** Whether you've dealt with a draft for the thread's latest mail (so it shouldn't be redrafted by itself). */
+  draftDismissed(topicId: TopicId): boolean {
+    const at = this.getState(`draft:dismissed:${topicId}`)
+    const latest = this.latestActivity(topicId)
+    return at != null && (latest == null || at >= latest)
+  }
+
+  /** Whether the thread's latest message is one you sent (then there's nothing to reply to). */
+  lastEntryIsMine(topicId: TopicId): boolean {
+    const r = this.get<{ is_mine: number }>('SELECT is_mine FROM entries WHERE topic_id = ? ORDER BY created_at DESC, id DESC LIMIT 1', topicId)
+    return r?.is_mine === 1
   }
 
   /** Threads with a draft written as of their latest mail. */
