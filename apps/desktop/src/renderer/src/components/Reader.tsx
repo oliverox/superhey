@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import Markdown, { type Components } from 'react-markdown'
-import type { EntryRow, PostingRow, ThreadView } from '@shared/api'
+import type { EntryRow, OutgoingMessage, PostingRow, ThreadView } from '@shared/api'
 import { api, useLive } from '../api'
 import { dayAndTime, longDate } from '../format'
 import { listTags, parseForwardedDate, sameSubject, splitForwarded, stripSubjectPrefixes, tagKind, type ForwardedHeader, unwrapHardBreaks } from '../mail/forwarded'
-import { displayName } from '../mail/people'
+import { displayName, replyRecipients } from '../mail/people'
 import { isDesigned } from '../mail/html'
 import { splitQuoted, type QuotedSplit } from '../mail/quoted'
 import { repeatedSignatures } from '../mail/signature'
@@ -15,6 +15,7 @@ import { ContextPanel } from './ContextPanel'
 import { usePresence } from '../motion'
 import { useShortcut, withShortcut } from '../shortcuts'
 import { HtmlBody } from './HtmlBody'
+import { Composer, type ComposeRequest } from './Composer'
 import { PersonChip, RecipientsButton } from './People'
 import { ReplyArea } from './ReplyArea'
 
@@ -161,7 +162,7 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox }: ReaderProps 
             ) : (
               <>
                 <ThreadTopic.Provider value={thread.data.topicId}>
-                  <Conversation entries={thread.data.entries} subject={subject} htmlByEntry={html.data ?? {}} />
+                  <Conversation entries={thread.data.entries} subject={subject} htmlByEntry={html.data ?? {}} canReply={target.screeningId == null} />
                 </ThreadTopic.Provider>
                 {/* No replying to someone who hasn't been let in yet. */}
                 {target.screeningId == null && <ReplyArea key={thread.data.topicId} thread={thread.data} />}
@@ -192,6 +193,7 @@ export function Conversation({
   subject,
   htmlByEntry,
   keys = true,
+  canReply = false,
 }: {
   entries: EntryRow[]
   subject: string
@@ -199,6 +201,8 @@ export function Conversation({
   htmlByEntry: Record<number, string>
   /** Whether `;` / `:` act on this conversation (off inside a bundle, where they act on the bundle). */
   keys?: boolean
+  /** Whether earlier messages offer their own Reply (the latest has the buttons under the thread). */
+  canReply?: boolean
 }) {
   const [open, setOpen] = useState<Set<number>>(() => new Set(entries.length ? [entries.at(-1)!.id] : []))
   const [showAll, setShowAll] = useState(false)
@@ -292,6 +296,7 @@ export function Conversation({
               signatureAt={signatures.get(entry.id)}
             entryHtml={htmlByEntry[entry.id]}
               index={i}
+              canReply={canReply && i < entries.length - 1}
             />
           )
         })}
@@ -309,6 +314,7 @@ function Message({
   entryHtml,
   index,
   signatureAt,
+  canReply = false,
 }: {
   entry: EntryRow
   subject: string
@@ -320,8 +326,20 @@ function Message({
   index: number
   /** Where a signature repeated across the thread starts in the body (folded). */
   signatureAt?: number
+  /** Offers Reply / Reply all to this message itself, not the thread's latest. */
+  canReply?: boolean
 }) {
   const { designed, showOriginal, toggle } = useDesignedView(entryHtml)
+  const topicId = useContext(ThreadTopic)
+  const [reply, setReply] = useState<ComposeRequest | null>(null)
+  const replyable = canReply && topicId != null && topicId > 0
+  const others = [entry.from, ...entry.to, ...entry.cc].filter((p) => p && !p.isMe).length
+  const replyTo = (kind: 'reply' | 'reply-all') => {
+    const whose = entry.from ? (entry.from.isMe ? 'your' : `${displayName(entry.from)}’s`) : 'the'
+    const { to, cc } = replyRecipients(entry, kind)
+    const context = `to ${whose} message of ${dayAndTime(entry.createdAt).day}`
+    setReply({ kind, message: { to, cc, body: '', threadId: topicId as OutgoingMessage['threadId'] & number }, replyTo: entry.id, context })
+  }
   // Everyone's messages sit on the same paper; the header says who wrote it.
   const surface = 'bg-pane'
   const time = <Time iso={entry.createdAt} />
@@ -372,6 +390,18 @@ function Message({
               {showOriginal ? 'Simplified' : 'Original'}
             </button>
           )}
+          {replyable && !reply && (
+            <span className="flex shrink-0 gap-0.5 self-center opacity-0 group-hover/header:opacity-100 focus-within:opacity-100">
+              <HeaderButton onClick={() => replyTo('reply')} title="Reply to this message only">
+                Reply
+              </HeaderButton>
+              {others > 1 && (
+                <HeaderButton onClick={() => replyTo('reply-all')} title="Reply to everyone on this message">
+                  Reply all
+                </HeaderButton>
+              )}
+            </span>
+          )}
           {time}
           {onCollapse && (
             <button
@@ -390,7 +420,20 @@ function Message({
       </header>
 
       <MessageCard entry={entry} index={index} entryHtml={entryHtml} showOriginal={showOriginal} surface={surface} signatureAt={signatureAt} />
+      {reply && (
+        <div className="mt-3">
+          <Composer request={reply} variant="inline" onClose={() => setReply(null)} />
+        </div>
+      )}
     </li>
+  )
+}
+
+function HeaderButton({ children, onClick, title }: { children: React.ReactNode; onClick: () => void; title: string }) {
+  return (
+    <button onClick={onClick} title={title} className="rounded-ui px-1.5 py-0.5 text-[12px] font-medium text-ink-faint hover:bg-pane-sunk hover:text-ink">
+      {children}
+    </button>
   )
 }
 

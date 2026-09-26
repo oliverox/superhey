@@ -14,13 +14,15 @@ export interface ComposeRequest {
   context?: string
   /** Start from `message` even if unsent text was kept for this thread (a draft chosen on purpose). */
   fresh?: boolean
+  /** The earlier message a reply answers (not the thread's latest); its unsent text is kept apart. */
+  replyTo?: number
 }
 
 const TITLES: Record<OutgoingKind, string> = { new: 'New message', reply: 'Reply', 'reply-all': 'Reply all', forward: 'Forward' }
 
 /** Unsent text survives closing the composer, per thread and kind, on this device. */
 function storageKey(req: ComposeRequest) {
-  return `compose:${req.kind}:${req.message.threadId ?? req.forwardOf ?? 'new'}`
+  return `compose:${req.kind}:${req.message.threadId ?? req.forwardOf ?? 'new'}${req.replyTo != null ? `:${req.replyTo}` : ''}`
 }
 function loadSaved(req: ComposeRequest): Partial<OutgoingMessage> | null {
   try {

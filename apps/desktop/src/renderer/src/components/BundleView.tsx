@@ -191,7 +191,7 @@ function BundleEmail({ posting: p, focused }: { posting: PostingRow; focused: bo
   return (
     <>
       <ThreadTopic.Provider value={thread.data.topicId}>
-        <Conversation entries={thread.data.entries} subject={thread.data.subject ?? p.subject ?? ''} htmlByEntry={html.data ?? {}} keys={false} />
+        <Conversation entries={thread.data.entries} subject={thread.data.subject ?? p.subject ?? ''} htmlByEntry={html.data ?? {}} keys={false} canReply />
       </ThreadTopic.Provider>
       <ReplyArea thread={thread.data} keys={focused} />
     </>
