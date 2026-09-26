@@ -94,6 +94,14 @@ const ANALYSED_DAYS = 60
 /** How far ahead Coming up looks. */
 const COMING_UP_DAYS = 7
 
+/**
+ * Whether an action item is being somewhere at a set time rather than work to finish. Told
+ * by the analysis; older analyses didn't say, so it's read from the wording.
+ */
+export function isEvent(i: { text: string; event?: boolean }): boolean {
+  return i.event ?? /^(attend|join|go to|be at|take part|participate|meet)\b/i.test(i.text.trim())
+}
+
 const DAY = 86_400_000
 
 export function buildToday(repo: Repo, input: TodayInput): TodayView {
@@ -126,7 +134,8 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
   const actions: ActionItem[] = []
   for (const { posting, a } of analysed) {
     if (!shown(posting) || seen.has(posting.topicId!)) continue
-    const due = (a.actionItems ?? []).filter((i) => i.due != null && i.due <= today)
+    // A call or meeting that has passed is simply over, not late.
+    const due = (a.actionItems ?? []).filter((i) => i.due != null && (isEvent(i) ? i.due === today : i.due <= today))
     due.forEach((i, n) => actions.push({ key: `action:${posting.id}:${n}`, posting, text: i.text, due: i.due!, daysLate: Math.round((dayStart(today) - dayStart(i.due!)) / DAY) }))
     if (due.length) seen.add(posting.topicId!)
   }

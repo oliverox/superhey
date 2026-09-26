@@ -1,6 +1,6 @@
 import { MockLanguageModelV4 } from 'ai/test'
 import { describe, expect, it, vi } from 'vitest'
-import { ANALYSIS_VERSION, analysisPrompt, clipWords, scrub, ThreadAnalyzer, type ThreadAnalysis } from '../src/ai/analysis'
+import { ANALYSIS_VERSION, analysisPrompt, clipWords, inLocalTime, scrub, ThreadAnalyzer, type ThreadAnalysis } from '../src/ai/analysis'
 import { AiClient } from '../src/ai/client'
 import { readAiSettings, type AiSettings } from '../src/ai/settings'
 import { openDb } from '../src/cache/db'
@@ -80,8 +80,8 @@ const ANSWER: ThreadAnalysis = {
   replyReason: 'asks if Friday works',
   expectsReply: false,
   category: 'personal',
-  actionItems: [{ text: 'Answer Alice about Friday lunch', due: '2026-09-26' }],
-  dates: [{ label: 'Lunch', date: '2026-09-26', time: null }],
+  actionItems: [{ text: 'Answer Alice about Friday lunch', due: '2026-09-26', event: false }],
+  dates: [{ label: 'Lunch', date: '2026-09-26', time: null, timeZone: null }],
   amounts: [],
 }
 
@@ -158,7 +158,7 @@ describe('ThreadAnalyzer', () => {
   })
 
   it('stores only what the prompt allows (short summary, reason only when a reply is needed, 5 items)', async () => {
-    const noisy: ThreadAnalysis = { ...ANSWER, summary: 'x'.repeat(300), needsReply: false, replyReason: 'n/a', actionItems: Array.from({ length: 9 }, (_, i) => ({ text: `do ${i}`, due: null })) }
+    const noisy: ThreadAnalysis = { ...ANSWER, summary: 'x'.repeat(300), needsReply: false, replyReason: 'n/a', actionItems: Array.from({ length: 9 }, (_, i) => ({ text: `do ${i}`, due: null, event: false })) }
     const { repo, analyzer } = setup({ answer: noisy })
     analyzer.enqueue(TopicId(900))
     await analyzer.idle()
@@ -219,7 +219,7 @@ describe('instructions versions', () => {
   })
 
   it('stores summaries, reasons and action items scrubbed', async () => {
-    const { repo, analyzer } = setup({ answer: { ...ANSWER, summary: 'Your one-time password: 998877', actionItems: [{ text: 'Enter code 445566', due: null }] } })
+    const { repo, analyzer } = setup({ answer: { ...ANSWER, summary: 'Your one-time password: 998877', actionItems: [{ text: 'Enter code 445566', due: null, event: false }] } })
     analyzer.enqueue(TopicId(900))
     await analyzer.idle()
     const a = repo.analysis(TopicId(900)) as unknown as ThreadAnalysis
@@ -235,5 +235,20 @@ describe('clipWords', () => {
     expect(c.length).toBeLessThanOrEqual(140)
     expect(c).toBe('Madagascar Office round-table on peace scheduled for September 26, with a broader media cycle; Office of Public Discourse acknowledged…')
     expect(clipWords('short', 140)).toBe('short')
+  })
+})
+
+describe('times in another zone', () => {
+  const at = (time: string | null, timeZone: string | null, date = '2026-10-12') => ({ label: 'Call', date, time, timeZone })
+  it('moves a time given in another zone into the user’s', () => {
+    expect(inLocalTime(at('16:00', 'Asia/Jerusalem'), 'Asia/Dubai')).toEqual(at('17:00', null))
+    expect(inLocalTime(at('16:00', 'Asia/Jerusalem'), 'Europe/London')).toEqual(at('14:00', null))
+  })
+  it('can change the day', () => {
+    expect(inLocalTime(at('23:30', 'America/Los_Angeles'), 'Europe/Paris')).toEqual(at('08:30', null, '2026-10-13'))
+  })
+  it('keeps the user’s own times, and drops a time in a zone it doesn’t know', () => {
+    expect(inLocalTime(at('09:00', null), 'Europe/Paris')).toEqual(at('09:00', null))
+    expect(inLocalTime(at('09:00', 'Tokyo time'), 'Europe/Paris')).toEqual(at(null, null))
   })
 })

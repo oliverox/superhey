@@ -83,6 +83,23 @@ describe('Today', () => {
     expect(ids(t.replyLater)).toEqual([62])
   })
 
+  it('lets a call or meeting that has passed go, rather than calling it late', () => {
+    const { repo, put } = setup()
+    put('imbox', { id: 72, topic_id: 972, active_at: daysAgo(5) })
+    analyse(repo, 972, daysAgo(5), {
+      actionItems: [
+        { text: 'Join the Africa call', due: '2026-09-21', event: true },
+        { text: 'Attend the dinner', due: '2026-09-23' }, // an older analysis: read from the wording
+        { text: 'Go to the dentist', due: '2026-09-25', event: true },
+        { text: 'Send the report', due: '2026-09-24', event: false },
+      ],
+    })
+    expect(buildToday(repo, input()).due.actions.map((a) => [a.text, a.daysLate])).toEqual([
+      ['Send the report', 1],
+      ['Go to the dentist', 0],
+    ])
+  })
+
   it('puts deadlines from mail that have come in Due, and later ones in Coming up', () => {
     const { repo, put } = setup()
     put('imbox', { id: 70, topic_id: 970, active_at: daysAgo(2) })
