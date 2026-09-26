@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ThreadView } from '@shared/api'
-import { displayName, replyRecipients } from '../mail/people'
+import { displayName, replyRecipients, shortName } from '../mail/people'
 import { useShortcut, withShortcut } from '../shortcuts'
 import { api } from '../api'
 import { Composer, type ComposeRequest } from './Composer'
@@ -41,6 +41,16 @@ export function ReplyArea({
   useShortcut('replyAll', () => open('reply-all'), keys && !request && !!latest)
   useShortcut('forward', () => open('forward'), keys && !request && !!latest)
 
+  // Send the draft as it is: a reply to the sender, through the outbox (a few seconds to undo).
+  const sendTo = latest?.from && !latest.from.isMe ? shortName(latest.from) : undefined
+  const sendDraft = async (body: string) => {
+    if (!latest) return
+    const { to, cc } = replyRecipients(latest, 'reply')
+    if (!to.length) throw new Error('No one to send it to: use Edit')
+    await api.sendMessage({ to, cc, body, threadId: thread.topicId }, 'reply', null)
+    await api.discardDraft(thread.topicId)
+  }
+
   const useDraftText = (body: string) => {
     if (!latest || !shownDraft) return
     const who = latest.from ? (latest.from.isMe ? 'your message' : displayName(latest.from)) : 'the thread'
@@ -63,7 +73,7 @@ export function ReplyArea({
     {asking ? (
       <DraftRequest thread={thread} initial={shownDraft?.instruction ?? ''} onDone={() => setAsking(false)} onCancel={() => setAsking(false)} />
     ) : (
-      shownDraft && <DraftCard draft={shownDraft} onUse={useDraftText} onRedraft={() => setAsking(true)} onDiscard={() => void api.discardDraft(thread.topicId)} />
+      shownDraft && <DraftCard draft={shownDraft} sendTo={sendTo} onSend={sendDraft} onUse={useDraftText} onRedraft={() => setAsking(true)} onDiscard={() => void api.discardDraft(thread.topicId)} />
     )}
     <div className="mt-5 flex gap-2">
       <ReplyButton onClick={() => open('reply')} title={withShortcut('Reply', 'reply')}>

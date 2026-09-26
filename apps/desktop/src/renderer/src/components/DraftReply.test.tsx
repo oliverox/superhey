@@ -115,10 +115,30 @@ describe('the reply area with drafts', () => {
     answers.replyDraft = () => draft()
     act(() => root.render(createElement(Reply.ReplyArea, { thread: thread() })))
     await flush()
-    act(() => button('Use draft')!.click())
+    act(() => button('Edit')!.click())
     await flush()
     const box = host.querySelector('textarea') as HTMLTextAreaElement
     expect(box.value).toContain('Friday works')
+    expect(calls).toContainEqual(['discardDraft', [900]])
+  })
+
+  it('sends a finished draft straight from the card, to the sender; not one with gaps left', async () => {
+    answers.replyDraft = () => draft()
+    act(() => root.render(createElement(Reply.ReplyArea, { thread: thread() })))
+    await flush()
+    const send = [...host.querySelectorAll('button')].find((b) => b.textContent?.startsWith('Send to'))!
+    expect(send.textContent).toBe('Send to Alice')
+    expect(send.disabled).toBe(true) // [place] still to fill in
+
+    act(() => root.unmount())
+    root = createRoot(host)
+    answers.replyDraft = () => draft({ body: 'Hi Alice,\n\nFriday works.\n\nOliver', placeholders: [] })
+    act(() => root.render(createElement(Reply.ReplyArea, { thread: thread() })))
+    await flush()
+    await act(async () => [...host.querySelectorAll('button')].find((b) => b.textContent?.startsWith('Send to'))!.click())
+    await flush()
+    const sent = calls.find(([m]) => m === 'sendMessage')!
+    expect(sent[1]).toEqual([{ to: ['alice@example.com'], cc: [], body: 'Hi Alice,\n\nFriday works.\n\nOliver', threadId: 900 }, 'reply', null])
     expect(calls).toContainEqual(['discardDraft', [900]])
   })
 
