@@ -17,6 +17,7 @@ import { dropOutgoing, useOutgoingReplies } from '../outbox'
 import { useShortcut, withShortcut } from '../shortcuts'
 import { HtmlBody } from './HtmlBody'
 import { Tag } from './Tag'
+import { AiSparkle } from './DraftReply'
 import { Composer, type ComposeRequest } from './Composer'
 import { PersonChip, RecipientsButton } from './People'
 import { ReplyArea } from './ReplyArea'
@@ -158,6 +159,7 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose }: Rea
             </div>
           )}
           {!target.isBundle && <h1 className="rise font-app text-[26px] leading-[1.2] font-semibold tracking-[-0.02em] text-balance">{title}</h1>}
+          {!target.isBundle && topicId != null && !showPanel && <SummaryStrip topicId={topicId} onDetails={panel.toggle} />}
 
             {target.isBundle ? (
               target.postingId != null && <BundleView bundleId={target.postingId} sender={target.sender ?? 'this sender'} onLeaveBox={onLeaveBox} />
@@ -773,6 +775,63 @@ type PanelPref = 'auto' | 'open' | 'closed'
  * Open automatically when the reader is wide; the toggle (or "i") overrides that and is
  * remembered on this device.
  */
+const tagDay = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
+const dayOf = (ymd: string) => {
+  const [y, m, d] = ymd.split('-').map(Number) as [number, number, number]
+  return new Date(y, m - 1, d)
+}
+const moneyTag = (amount: number, currency: string) => {
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount)
+  } catch {
+    return `${amount} ${currency}`
+  }
+}
+
+/**
+ * The AI's reading of the thread, where you'll see it: one line under the title, with what
+ * matters as tags (it needs your reply, the dates, a sum). Details opens the full panel.
+ */
+export function SummaryStrip({ topicId, onDetails }: { topicId: number; onDetails: () => void }) {
+  const a = useLive(() => api.analysis(topicId), [topicId], (e) => e.type === 'analysis' && e.topicId === topicId).data
+  if (!a?.summary) return null
+  const today = new Date(new Date().toDateString())
+  const dates = a.dates.filter((d) => dayOf(d.endDate ?? d.date) >= today).slice(0, 2)
+  const amount = a.amounts[0]
+  return (
+    <div className="rise mt-2 flex items-start gap-2 text-[14px] leading-snug" aria-label="AI summary">
+      <div className="min-w-0 flex-1">
+        <span className="text-ink-soft">{a.summary}</span>
+        {(a.needsReply || dates.length > 0 || amount) && (
+          <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {a.needsReply && (
+              <Tag kind="reply" title={a.replyReason ?? 'Needs your reply'}>
+                Needs reply
+              </Tag>
+            )}
+            {dates.map((d, i) => (
+              <Tag key={i} kind="label" title={d.label}>
+                {tagDay.format(dayOf(d.date))}
+                {d.endDate && d.endDate !== d.date ? `–${tagDay.format(dayOf(d.endDate)).replace(/^\D+\s/, '')}` : ''}
+                {d.time ? ` · ${d.time}` : ''}
+              </Tag>
+            ))}
+            {amount && (
+              <Tag kind="label" title={amount.label}>
+                {moneyTag(amount.amount, amount.currency)}
+              </Tag>
+            )}
+          </span>
+        )}
+      </div>
+      <button onClick={onDetails} title={withShortcut('Show details', 'details')} className="mt-px inline-flex shrink-0 items-center gap-1.5 rounded-ui px-1.5 py-0.5 text-[12px] font-medium text-ink-soft hover:bg-pane-sunk hover:text-ink">
+        <AiSparkle size={12} />
+        Details
+      </button>
+    </div>
+  )
+}
+
 function useContextPanel(ref: React.RefObject<HTMLElement | null>) {
   const [wide, setWide] = useState(false)
   const [pref, setPref] = useState<PanelPref>(() => {
