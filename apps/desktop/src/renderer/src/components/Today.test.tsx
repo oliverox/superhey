@@ -169,22 +169,45 @@ describe('Done', () => {
 })
 
 describe('What’s new, and nothing left', () => {
-  it('lists new mail per box at the end, each a click from its box', async () => {
+  it('lists the new mail itself, per box, and offers the rest of the box', async () => {
     const onGoToBox = vi.fn()
-    const today = data({ newSince: { since: '2026-09-25T06:00:00Z', boxes: [{ boxId: 201228, kind: 'imbox', name: 'Imbox', count: 4 }, { boxId: 201229, kind: 'feedbox', name: 'The Feed', count: 12 }] } })
-    act(() => root.render(createElement(Today.TodayList, { today, selectedId: null, onOpen: vi.fn(), onGoToBox })))
+    const onOpen = vi.fn()
+    const letter = { ...posting(7, 'Three new fonts', 'Design Weekly'), summary: 'This week in type', seen: false }
+    const today = data({
+      newSince: {
+        since: '2026-09-25T06:00:00Z',
+        boxes: [
+          { boxId: 201228, kind: 'imbox', name: 'Imbox', count: 1, threads: [posting(6, 'Lunch Friday?', 'Sam')] },
+          { boxId: 201229, kind: 'feedbox', name: 'The Feed', count: 12, threads: [letter] },
+        ],
+      },
+    })
+    act(() => root.render(createElement(Today.TodayList, { today, selectedId: null, onOpen, onGoToBox })))
     const sections = [...host.querySelectorAll('section')].map((s) => s.getAttribute('aria-label'))
     expect(sections.at(-1)).toBe('New')
-    expect(host.querySelector('section[aria-label="New"]')!.textContent).toBe('New since you last lookedImbox 4The Feed 12')
-    await click([...host.querySelectorAll('section[aria-label="New"] button')][1]!)
+    const block = host.querySelector('section[aria-label="New"]')!.textContent!
+    expect(block).toContain('New since you last looked')
+    expect(block).toContain('Imbox · 1')
+    expect(block).toContain('Lunch Friday?')
+    expect(block).toContain('Three new fonts')
+    expect(block).toContain('Design Weekly – This week in type')
+    // One shown of 12: the rest are in the box.
+    expect(block).toContain('11 more in The Feed')
+    expect(block).not.toContain('more in Imbox')
+    await click([...host.querySelectorAll('section[aria-label="New"] [role=option]')].find((o) => o.textContent!.includes('Three new fonts'))!)
+    expect(onOpen).toHaveBeenCalledWith(letter)
+    await click([...host.querySelectorAll('section[aria-label="New"] button')].find((b) => b.textContent === '11 more in The Feed')!)
     expect(onGoToBox).toHaveBeenCalledWith(201229)
+    // j/k reach the new mail after everything to handle.
+    expect(Today.todayRows(today).map((p) => p.id).slice(-2)).toEqual([6, 7])
   })
 
   it('says you’re caught up, and still shows what’s new', () => {
-    const today = data({ due: { todos: [], actions: [], bubbled: [] }, replyLater: [], waiting: [], toHandle: 0, newSince: { since: null, boxes: [{ boxId: 1, kind: 'imbox', name: 'Imbox', count: 2 }] } })
+    const today = data({ due: { todos: [], actions: [], bubbled: [] }, replyLater: [], waiting: [], toHandle: 0, newSince: { since: null, boxes: [{ boxId: 1, kind: 'imbox', name: 'Imbox', count: 1, threads: [posting(8, 'Hello')] }] } })
     act(() => root.render(createElement(Today.TodayList, { today, selectedId: null, onOpen: vi.fn(), onGoToBox: vi.fn() })))
     expect(text()).toContain('You’re caught up.')
-    expect(text()).toContain('New todayImbox 2')
+    expect(text()).toContain('New today')
+    expect(text()).toContain('Hello')
   })
 
 })

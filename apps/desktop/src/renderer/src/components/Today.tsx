@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ActionItem, ComingUpItem, PostingRow, ThreadItem, TodayView, TodoItem } from '@shared/api'
 import { api } from '../api'
-import { dayName } from '../format'
+import { dayName, shortDate } from '../format'
 import { stripSubjectPrefixes } from '../mail/forwarded'
 import { withShortcut } from '../shortcuts'
 import { Avatar } from './Avatar'
@@ -41,6 +41,12 @@ export function doneFor(t: TodayData | null, postingId: number): (() => Promise<
 }
 
 /** The threads on Today, in the order they're listed (for j / k), each once. */
+/** Everything on Today in order, new mail last: what j/k move through. */
+export function todayRows(t: TodayData | null): PostingRow[] {
+  const all = [...todayThreads(t), ...(t?.newSince.boxes.flatMap((b) => b.threads) ?? [])]
+  return all.filter((p, i) => all.findIndex((q) => q.id === p.id) === i)
+}
+
 export function todayThreads(t: TodayData | null): PostingRow[] {
   if (!t) return []
   const all = [...t.due.actions.map((a) => a.posting), ...t.due.bubbled.map((i) => i.posting), ...[...t.needsReply, ...t.replyLater, ...t.waiting].map((i) => i.posting)]
@@ -109,16 +115,24 @@ export function TodayList({
       {comingUp.length > 0 && <ComingUp items={comingUp} selectedId={selectedId} onOpen={onOpen} />}
       {fresh.length > 0 && (
         <section aria-label="New">
-          <h2 className="eyebrow px-5 pt-5 pb-1.5">{today.newSince.since ? 'New since you last looked' : 'New today'}</h2>
-          <ul className="flex flex-wrap gap-1.5 px-5">
-            {fresh.map((b) => (
-              <li key={b.boxId}>
-                <button onClick={() => onGoToBox(b.boxId)} className="rounded-ui border border-rule px-2.5 py-1 text-[13px] text-ink-soft hover:border-rule-strong hover:text-ink">
-                  {b.name} <span className="font-semibold text-ink tabular-nums">{b.count}</span>
+          <h2 className="eyebrow px-5 pt-5 pb-1">{today.newSince.since ? 'New since you last looked' : 'New today'}</h2>
+          {fresh.map((b) => (
+            <div key={b.boxId} className="pb-2">
+              <h3 className="px-5 pt-2 pb-1 text-[13px] font-medium text-ink-soft">
+                {b.name} <span className="text-ink-faint tabular-nums">· {b.count}</span>
+              </h3>
+              <ul>
+                {b.threads.map((p) => (
+                  <NewRow key={p.id} posting={p} selected={p.id === selectedId} onOpen={() => onOpen(p)} />
+                ))}
+              </ul>
+              {b.count > b.threads.length && (
+                <button onClick={() => onGoToBox(b.boxId)} className="mx-2 rounded-ui px-3 py-1 text-[13px] font-medium text-ink-faint hover:bg-pane-sunk hover:text-ink-soft">
+                  {b.count - b.threads.length} more in {b.name}
                 </button>
-              </li>
-            ))}
-          </ul>
+              )}
+            </div>
+          ))}
         </section>
       )}
       </div>
@@ -168,6 +182,31 @@ function ThreadRow({ item, reason, selected, onOpen, onDone }: { item: ThreadIte
         onDone={onDone}
         onNotNow={() => void api.hideFromToday(item.key, p.activeAt ?? '')}
       />
+    </li>
+  )
+}
+
+/** A new email: subject, then who and what it's about (the AI's line, or HEY's opening words). */
+function NewRow({ posting: p, selected, onOpen }: { posting: PostingRow; selected: boolean; onOpen: () => void }) {
+  const line = p.ai?.summary ?? p.summary
+  return (
+    <li
+      role="option"
+      aria-selected={selected}
+      onClick={onOpen}
+      className={`mx-2 flex cursor-default items-center gap-3 rounded-ui py-2 pr-3 pl-4 transition-colors duration-(--dur-1) ${selected ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
+    >
+      <Avatar avatar={p.avatar} size={32} seed={p.senderEmail ?? undefined} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <span className="min-w-0 truncate font-semibold text-ink">{p.subject ? stripSubjectPrefixes(p.subject) : '(no subject)'}</span>
+          <span className="ml-auto shrink-0 pl-1 text-[12px] text-ink-faint">{shortDate(p.activeAt)}</span>
+        </div>
+        <div className="mt-0.5 truncate text-[13px] text-ink-faint">
+          <span className="font-medium text-ink-soft">{p.senderName ?? p.senderEmail}</span>
+          {line && <> – {line}</>}
+        </div>
+      </div>
     </li>
   )
 }
