@@ -22,8 +22,8 @@ export function ReplyArea({
   const [asking, setAsking] = useState(false)
   const draft = useDraft(thread.topicId).data ?? null
   const latest = thread.entries.at(-1)
-  // A draft outdated by the user's own reply has nothing left to answer.
-  const shownDraft = draft && !(draft.stale && latest?.from?.isMe) ? draft : null
+  // Once your own message is the latest, there's nothing to answer: no draft.
+  const shownDraft = draft && !latest?.from?.isMe ? draft : null
   const others = latest ? [latest.from, ...latest.to, ...latest.cc].filter((p) => p && !p.isMe).length : 0
 
   const open = (kind: 'reply' | 'reply-all' | 'forward') => {

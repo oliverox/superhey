@@ -75,7 +75,10 @@ export class Drafter extends EventEmitter<{ draft: [TopicId]; error: [Error] }> 
   }
 
   enqueue(topicId: TopicId) {
-    if (!this.automatic || this.queue.includes(topicId) || this.deps.repo.draftedTopics().has(topicId)) return
+    const { repo } = this.deps
+    if (!this.automatic || this.queue.includes(topicId) || repo.draftedTopics().has(topicId)) return
+    // You've answered already, or dealt with the draft for this mail: nothing to write until they reply.
+    if (repo.lastEntryIsMine(topicId) || repo.draftDismissed(topicId)) return
     this.queue.push(topicId)
     void this.pump()
   }
@@ -90,6 +93,8 @@ export class Drafter extends EventEmitter<{ draft: [TopicId]; error: [Error] }> 
     try {
       while (this.queue.length) {
         const topicId = this.queue.shift()!
+        // Checked again as it comes up: a reply may have gone out while it waited.
+        if (this.deps.repo.lastEntryIsMine(topicId) || this.deps.repo.draftDismissed(topicId)) continue
         try {
           await this.draft(topicId)
         } catch (e) {
