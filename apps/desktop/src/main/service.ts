@@ -156,15 +156,16 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     return this.need().repo.postings(int(boxId), Math.min(int(limit), 1000))
   }
 
-  async thread(topicId: number, entryCount: number | null) {
+  /** `analyze: false` (an email opened inside a bundle): read it only when asked (Summarize). */
+  async thread(topicId: number, entryCount: number | null, opts: { analyze?: boolean } = {}) {
     const id = TopicId(int(topicId))
     const core = this.need()
     const view = await core.engine.ensureThread(id, entryCount == null ? null : int(entryCount))
     this.openTopic = id
     // A thread you open is worth understanding (a no-op when current), except in The Feed:
-    // you're reading it already, and newsletters never need a reply.
+    // you're reading it already, and newsletters never need a reply. Same for bundles.
     const feed = core.repo.boxes().find((b) => b.kind === 'feedbox')?.id
-    if (!core.repo.boxesOf(id).every((b) => b === feed)) this.analyzer?.enqueue(id, true)
+    if (opts?.analyze !== false && !core.repo.boxesOf(id).every((b) => b === feed)) this.analyzer?.enqueue(id, true)
     // Drafts are written for what you open, not for every email that needs a reply.
     if ((core.repo.analysis(id) as { needsReply?: boolean } | null)?.needsReply) this.drafter?.enqueue(id)
     return view
@@ -178,6 +179,12 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
       const view = await core.engine.ensureThread(topicId, before + 1, 'high').catch(() => null)
       if ((view?.entries.length ?? 0) > before) return
     }
+  }
+
+  /** Summarize: read this thread with AI now (any box), when you ask. */
+  async summarize(topicId: unknown) {
+    if (!this.analyzer) throw new Error('AI isn’t set up yet: add a provider in Settings → AI')
+    await this.analyzer.analyseNow(TopicId(int(topicId)))
   }
 
   /** What the AI made of a thread (summary, action items, dates, amounts), or null. */

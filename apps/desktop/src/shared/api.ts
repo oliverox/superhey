@@ -105,7 +105,9 @@ export interface Api {
   boxes(): Promise<BoxRow[]>
   postings(boxId: number, limit?: number): Promise<PostingRow[]>
   /** Cached thread, fetched from HEY first if missing or behind `entryCount`. */
-  thread(topicId: number, entryCount: number | null): Promise<ThreadView | null>
+  thread(topicId: number, entryCount: number | null, opts?: { analyze?: boolean }): Promise<ThreadView | null>
+  /** Reads a thread with AI now (the Summarize button). */
+  summarize(topicId: number): Promise<void>
   /** Original HTML of each message in a thread, by entry ID (fetched on first use). */
   threadHtml(topicId: number): Promise<Record<number, string>>
   /** Search the cache (Gmail-style query): at once. */
@@ -182,7 +184,7 @@ export interface Api {
   testAi(engine: ProviderId | 'local'): Promise<AiTestResult>
 }
 
-export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'searchHey', 'searchPeople', 'voice', 'buildVoice', 'setVoiceNotes', 'forgetVoice', 'replyDraft', 'draftReply', 'draftReplyTo', 'discardDraft', 'forwardedOriginal', 'findPostings', 'events', 'calendarRange', 'addEvent', 'deleteEvent', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'analysis', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
+export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'searchHey', 'searchPeople', 'voice', 'buildVoice', 'setVoiceNotes', 'forgetVoice', 'replyDraft', 'draftReply', 'draftReplyTo', 'discardDraft', 'forwardedOriginal', 'findPostings', 'events', 'calendarRange', 'addEvent', 'deleteEvent', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'analysis', 'summarize', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
 export type ApiMethod = (typeof API_METHODS)[number]
 
 export type ApiEvent =

@@ -17,6 +17,7 @@ import { dropOutgoing, useOutgoingReplies } from '../outbox'
 import { useShortcut, withShortcut } from '../shortcuts'
 import { HtmlBody } from './HtmlBody'
 import { Tag } from './Tag'
+import { Spinner } from './Spinner'
 import { AiSpend } from './AiSpend'
 import { AiSparkle } from './DraftReply'
 import { Composer, type ComposeRequest } from './Composer'
@@ -768,6 +769,41 @@ type PanelPref = 'auto' | 'open' | 'closed'
  * Open automatically when the reader is wide; the toggle (or "i") overrides that and is
  * remembered on this device.
  */
+/**
+ * No summary yet (the Feed, bundles, or not read yet): reading it costs a little, so it's
+ * on request. Hidden when AI isn't set up.
+ */
+function Summarize({ topicId }: { topicId: number }) {
+  const ai = useLive(() => api.aiStatus(), [], (e) => e.type === 'ai').data
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  if (!ai || (!ai.mode.cloud && !ai.mode.local)) return null
+  return (
+    <div className="rise mt-3 mb-5 flex items-center gap-3 text-[13px]">
+      <button
+        onClick={async () => {
+          setBusy(true)
+          setError(null)
+          try {
+            await api.summarize(topicId)
+          } catch (e) {
+            setError(e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e))
+          } finally {
+            setBusy(false)
+          }
+        }}
+        disabled={busy}
+        title="Summarize this email with AI: what it's about, what it asks of you, its dates"
+        className="inline-flex items-center gap-1.5 rounded-ui border border-rule px-2.5 py-1 font-medium text-ink-soft hover:border-rule-strong hover:text-ink disabled:opacity-60"
+      >
+        {busy ? <Spinner size={12} /> : <AiSparkle size={12} />}
+        {busy ? 'Summarizing…' : 'Summarize'}
+      </button>
+      {error && <span className="min-w-0 truncate text-danger">{error}</span>}
+    </div>
+  )
+}
+
 const tagDay = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
 const dayOf = (ymd: string) => {
   const [y, m, d] = ymd.split('-').map(Number) as [number, number, number]
@@ -785,9 +821,9 @@ const moneyTag = (amount: number, currency: string) => {
  * The AI's reading of the thread, where you'll see it: one line under the title, with what
  * matters as tags (it needs your reply, the dates, a sum). Details opens the full panel.
  */
-export function SummaryStrip({ topicId, detailsOpen = false, onDetails }: { topicId: number; detailsOpen?: boolean; onDetails: () => void }) {
+export function SummaryStrip({ topicId, detailsOpen = false, onDetails }: { topicId: number; detailsOpen?: boolean; onDetails?: () => void }) {
   const a = useLive(() => api.analysis(topicId), [topicId], (e) => e.type === 'analysis' && e.topicId === topicId).data
-  if (!a?.summary) return null
+  if (!a?.summary) return <Summarize topicId={topicId} />
   const today = new Date(new Date().toDateString())
   const dates = a.dates.filter((d) => dayOf(d.endDate ?? d.date) >= today).slice(0, 2)
   const amount = a.amounts[0]
@@ -817,15 +853,17 @@ export function SummaryStrip({ topicId, detailsOpen = false, onDetails }: { topi
           </span>
         )}
       </div>
-      <button
-        onClick={onDetails}
-        aria-pressed={detailsOpen}
-        title={withShortcut(detailsOpen ? 'Hide details' : 'Show details', 'details')}
-        className={`mt-0.5 inline-flex shrink-0 items-center gap-1.5 rounded-ui px-2 py-1 text-[13px] font-medium hover:bg-pane-sunk hover:text-ink ${detailsOpen ? 'bg-pane-sunk text-ink' : 'text-ink-soft'}`}
-      >
-        <AiSparkle size={12} />
-        Details
-      </button>
+      {onDetails && (
+        <button
+          onClick={onDetails}
+          aria-pressed={detailsOpen}
+          title={withShortcut(detailsOpen ? 'Hide details' : 'Show details', 'details')}
+          className={`mt-0.5 inline-flex shrink-0 items-center gap-1.5 rounded-ui px-2 py-1 text-[13px] font-medium hover:bg-pane-sunk hover:text-ink ${detailsOpen ? 'bg-pane-sunk text-ink' : 'text-ink-soft'}`}
+        >
+          <AiSparkle size={12} />
+          Details
+        </button>
+      )}
     </div>
   )
 }

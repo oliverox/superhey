@@ -5,9 +5,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 let analysis: unknown = null
+let ai: unknown = null
+const calls: string[] = []
 let Reader: typeof import('./Reader')
 beforeAll(async () => {
-  window.bridge = { call: async (m) => (m === 'analysis' ? analysis : null), onEvent: () => () => {} }
+  window.bridge = { call: async (m) => (calls.push(m), m === 'analysis' ? analysis : m === 'aiStatus' ? ai : null), onEvent: () => () => {} }
   Reader = await import('./Reader')
 })
 let root: Root
@@ -46,5 +48,21 @@ describe('the summary under the title', () => {
     expect(host.querySelectorAll('.tag')).toHaveLength(3)
     act(() => [...host.querySelectorAll('button')].find((b) => b.textContent?.includes('Details'))!.click())
     expect(onDetails).toHaveBeenCalled()
+  })
+
+  it('offers Summarize when there’s no summary yet, and only when AI is set up', async () => {
+    analysis = null
+    ai = { mode: { cloud: 'claude', local: false } }
+    act(() => root.render(createElement(Reader.SummaryStrip, { topicId: 2 })))
+    await flush()
+    const b = [...host.querySelectorAll('button')].find((x) => x.textContent?.includes('Summarize'))!
+    await act(async () => b.click())
+    expect(calls).toContain('summarize')
+    ai = { mode: { cloud: null, local: false } }
+    act(() => root.unmount())
+    root = createRoot(host)
+    act(() => root.render(createElement(Reader.SummaryStrip, { topicId: 3 })))
+    await flush()
+    expect(host.textContent).toBe('')
   })
 })
