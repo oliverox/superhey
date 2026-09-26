@@ -142,6 +142,18 @@ describe('the reply area with drafts', () => {
     expect(calls).toContainEqual(['discardDraft', [900]])
   })
 
+  it('shows a draft you asked for even when your own message is the latest (a follow-up)', async () => {
+    answers.replyDraft = () => null
+    answers.draftReply = () => draft()
+    act(() => root.render(createElement(Reply.ReplyArea, { thread: thread(true) })))
+    await flush()
+    act(() => button('Draft reply')!.click())
+    answers.replyDraft = () => draft()
+    await act(async () => void host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+    await flush()
+    expect(host.textContent).toContain('Friday works')
+  })
+
   it('offers “Draft reply” when there’s no draft, and hides one your own reply made moot', async () => {
     answers.replyDraft = () => null
     act(() => root.render(createElement(Reply.ReplyArea, { thread: thread() })))

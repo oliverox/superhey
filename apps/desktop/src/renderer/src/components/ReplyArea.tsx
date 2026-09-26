@@ -20,10 +20,13 @@ export function ReplyArea({
 }) {
   const [request, setRequest] = useState<ComposeRequest | null>(null)
   const [asking, setAsking] = useState(false)
-  const draft = useDraft(thread.topicId).data ?? null
+  const drafts = useDraft(thread.topicId)
+  const draft = drafts.data ?? null
   const latest = thread.entries.at(-1)
-  // Once your own message is the latest, there's nothing to answer: no draft.
-  const shownDraft = draft && !latest?.from?.isMe ? draft : null
+  // Once your own message is the latest, there's nothing to answer: no draft, unless you
+  // just asked for one (a follow-up to your own message).
+  const [asked, setAsked] = useState(false)
+  const shownDraft = draft && (!latest?.from?.isMe || asked) ? draft : null
   const others = latest ? [latest.from, ...latest.to, ...latest.cc].filter((p) => p && !p.isMe).length : 0
 
   const open = (kind: 'reply' | 'reply-all' | 'forward') => {
@@ -71,7 +74,16 @@ export function ReplyArea({
   return (
     <>
     {asking ? (
-      <DraftRequest thread={thread} initial={shownDraft?.instruction ?? ''} onDone={() => setAsking(false)} onCancel={() => setAsking(false)} />
+      <DraftRequest
+        thread={thread}
+        initial={shownDraft?.instruction ?? ''}
+        onDone={() => {
+          setAsked(true)
+          setAsking(false)
+          drafts.reload()
+        }}
+        onCancel={() => setAsking(false)}
+      />
     ) : (
       shownDraft && <DraftCard draft={shownDraft} sendTo={sendTo} onSend={sendDraft} onUse={useDraftText} onRedraft={() => setAsking(true)} onDiscard={() => void api.discardDraft(thread.topicId)} />
     )}
