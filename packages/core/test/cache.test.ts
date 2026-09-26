@@ -69,7 +69,7 @@ describe('Repo postings', () => {
     expect(r.thread(TopicId(950))?.subject).toBe('Payment received')
   })
 
-  it('lists a bundle once and hides the unread mail it holds, as HEY does', () => {
+  it('lists a bundle once and hides the mail it holds, read or not, as HEY does', () => {
     const r = repo()
     const wise = { id: 50, name: 'Wise', email_address: 'noreply@wise.com' }
     r.upsertPostings([
@@ -80,9 +80,9 @@ describe('Repo postings', () => {
     ])
     const rows = r.postings(1)
     expect(rows.map((p) => [p.id, p.isBundle, p.bundleCount])).toEqual([
-      [1, true, 1],
+      [1, true, 1], // "1 new": the unread one
       [4, false, null],
-      [3, false, null], // already read: HEY lists it on its own
+      // The read statement is in the bundle too (HEY lists only the bundle).
     ])
     r.replaceBoxes([{ id: 1, kind: 'imbox', name: 'Imbox' }])
     expect(r.boxes().find((b) => b.id === 1)?.unseen).toBe(2) // the bundle and Lunch

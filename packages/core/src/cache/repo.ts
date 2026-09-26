@@ -291,9 +291,9 @@ export class Repo {
   }
 
   /**
-   * A box as HEY lists it: bubbled up, then new, then previously seen. Unread mail from a
-   * sender who has a bundle row in the box is left out (HEY shows it inside the bundle),
-   * and each bundle carries how many of those it holds.
+   * A box as HEY lists it: bubbled up, then new, then previously seen. Mail from a sender
+   * who has a bundle row in the box is left out, read or not (HEY shows it inside the
+   * bundle), and each bundle carries how many unread emails it holds.
    *
    * Bundles are few, so their senders are gathered once (`bundled`) and rows are checked
    * against that small set; checking every row against the whole box took seconds.
@@ -310,7 +310,7 @@ export class Repo {
          END AS bundle_count
        FROM postings p
        WHERE p.box_id = ?1
-         AND NOT (p.is_bundle = 0 AND p.seen = 0
+         AND NOT (p.is_bundle = 0
                   AND p.sender_email IN (SELECT sender_email FROM bundled WHERE id != p.id))
        ORDER BY p.bubbled_up DESC, p.seen ASC, p.active_at DESC LIMIT ?2 OFFSET ?3`,
       boxId,
