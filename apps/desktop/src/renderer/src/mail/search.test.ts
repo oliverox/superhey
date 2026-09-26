@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PostingRow } from '@shared/api'
-import { accept, completing, mergeResults, splitMatches, suggestions } from './search'
+import { accept, completing, mergeResults, splitMatches, suggestions, withRecent } from './search'
 
 describe('completing', () => {
   it('finds an operator value being typed', () => {
@@ -66,5 +66,14 @@ describe('splitMatches', () => {
     ])
     expect(splitMatches('Price (USD) up', ['(usd)'])).toEqual([{ text: 'Price ', match: false }, { text: '(USD)', match: true }, { text: ' up', match: false }])
     expect(splitMatches('abc', [])).toEqual([{ text: 'abc', match: false }])
+  })
+})
+
+describe('recent searches', () => {
+  it('puts the latest first, once, and keeps eight', () => {
+    expect(withRecent(['from:sam', 'invoice'], '  Invoice ')).toEqual(['Invoice', 'from:sam'])
+    expect(withRecent(['a'], '   ')).toEqual(['a'])
+    expect(withRecent(Array.from({ length: 8 }, (_, i) => `q${i}`), 'new')).toHaveLength(8)
+    expect(withRecent(['x'], 'from:sam   has:pdf')).toEqual(['from:sam has:pdf', 'x'])
   })
 })

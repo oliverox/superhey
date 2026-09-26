@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { OPERATORS, operatorValue, withOperator, type Operator } from '@superhey/core/search/query'
 import type { HeySearchPage, PostingRow } from '@shared/api'
 import { api, useLive } from '../api'
-import { accept, completing, mergeResults, OPERATOR_HELP, suggestions, type Suggestion } from '../mail/search'
+import { accept, clearSearches, completing, forgetSearch, mergeResults, OPERATOR_HELP, recentSearches, suggestions, type Suggestion } from '../mail/search'
 import { Menu, MenuItem, MenuSeparator } from './Menu'
 import { PostingList } from './Lists'
 
@@ -44,16 +44,27 @@ export function SearchField({
   const c = atEnd ? completing(value) : null
   const people = usePeople(c)
   const labels = useLabels(focused)
+  // Read again each time the box is focused (a search may have been used since).
+  const [recent, setRecent] = useState<string[]>([])
+  useEffect(() => {
+    if (focused) setRecent(recentSearches())
+  }, [focused])
 
   const items: Suggestion[] = useMemo(() => {
-    if (!value.trim()) return OPERATORS.map((o) => ({ label: OPERATOR_HELP[o].example, hint: OPERATOR_HELP[o].hint, insert: `${o}:` }))
+    if (!value.trim()) {
+      return [
+        ...recent.map((q) => ({ label: q, insert: q, recent: true })),
+        ...OPERATORS.map((o) => ({ label: OPERATOR_HELP[o].example, hint: OPERATOR_HELP[o].hint, insert: `${o}:` })),
+      ]
+    }
     return suggestions(c, people, labels)
-  }, [value, c?.kind, c?.start, c && 'op' in c ? c.op : null, c && 'value' in c ? c.value : null, people, labels]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [value, recent, c?.kind, c?.start, c && 'op' in c ? c.op : null, c && 'value' in c ? c.value : null, people, labels]) // eslint-disable-line react-hooks/exhaustive-deps
   const open = focused && !dismissed && items.length > 0
   useEffect(() => setActive(-1), [value])
 
   const take = (s: Suggestion) => {
-    const next = value.trim() ? accept(value, c!, s) : s.insert
+    // A recent search runs as it was, ready to refine.
+    const next = value.trim() ? accept(value, c!, s) : s.recent ? `${s.insert} ` : s.insert
     onChange(next)
     setDismissed(false)
     setAtEnd(true)
@@ -144,21 +155,61 @@ export function SearchField({
           aria-label={value.trim() ? 'Suggestions' : 'Search with'}
           className="pop-in absolute top-full right-0 left-0 z-50 mt-1.5 max-h-[340px] overflow-y-auto rounded-ui-lg border border-rule-strong bg-pane p-1 text-[13px] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.28)]"
         >
-          {!value.trim() && <li className="px-2.5 pt-1 pb-1.5 text-[12px] font-medium text-ink-faint">Search with</li>}
           {items.map((s, i) => (
+            <Fragment key={s.insert + s.label + (s.recent ? ':recent' : '')}>
+            {!value.trim() && i === 0 && s.recent && (
+              <li className="flex items-baseline px-2.5 pt-1 pb-1.5 text-[12px] font-medium text-ink-faint">
+                Recent
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    clearSearches()
+                    setRecent([])
+                  }}
+                  className="ml-auto rounded-ui px-1 font-normal hover:text-ink"
+                >
+                  Clear
+                </button>
+              </li>
+            )}
+            {!value.trim() && !s.recent && (i === 0 || items[i - 1]!.recent) && (
+              <li className={`px-2.5 pb-1.5 text-[12px] font-medium text-ink-faint ${i === 0 ? 'pt-1' : 'mt-1 border-t border-rule pt-2.5'}`}>Search with</li>
+            )}
             <li
-              key={s.insert + s.label}
               id={`search-suggestion-${i}`}
               role="option"
               aria-selected={i === active}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => take(s)}
               onMouseEnter={() => setActive(i)}
-              className={`flex cursor-default items-baseline gap-3 rounded-ui px-2.5 py-1.5 ${i === active ? 'bg-pane-alt' : ''}`}
+              className={`group/opt flex cursor-default items-baseline gap-3 rounded-ui px-2.5 py-1.5 ${i === active ? 'bg-pane-alt' : ''}`}
             >
+              {s.recent && (
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden className="shrink-0 self-center text-ink-faint">
+                  <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M8 4.5V8l2.5 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
               <span className="min-w-0 truncate text-ink">{s.label}</span>
               {s.hint && <span className="ml-auto shrink-0 truncate text-[12px] text-ink-faint">{s.hint}</span>}
+              {s.recent && (
+                <button
+                  type="button"
+                  aria-label={`Remove “${s.label}” from recent searches`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    forgetSearch(s.insert)
+                    setRecent((r) => r.filter((q) => q !== s.insert))
+                  }}
+                  className="ml-auto shrink-0 self-center rounded-ui px-1 text-ink-faint opacity-0 group-hover/opt:opacity-100 hover:text-ink"
+                >
+                  ×
+                </button>
+              )}
             </li>
+            </Fragment>
           ))}
         </ul>
       )}

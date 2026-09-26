@@ -26,6 +26,8 @@ export interface Suggestion {
   hint?: string
   /** Replaces the term being typed. Ends with ":" to keep completing, else a space follows. */
   insert: string
+  /** A search used before (shown while the box is empty). */
+  recent?: boolean
 }
 
 /** What each operator does, for the tips and for completing its name. */
@@ -93,3 +95,36 @@ export function splitMatches(text: string, terms: string[]): Array<{ text: strin
     .filter(Boolean)
     .map((part) => ({ text: part, match: words.some((w) => w.toLowerCase() === part.toLowerCase()) }))
 }
+
+const RECENT_KEY = 'search:recent'
+const RECENT_MAX = 8
+
+/** `list` with `query` put first (once, whatever its case or spacing), at most eight. */
+export function withRecent(list: string[], query: string): string[] {
+  const q = query.trim().replace(/\s+/g, ' ')
+  if (!q) return list
+  return [q, ...list.filter((r) => r.toLowerCase() !== q.toLowerCase())].slice(0, RECENT_MAX)
+}
+
+/** Searches used on this device, newest first. */
+export function recentSearches(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]') as unknown
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(0, RECENT_MAX) : []
+  } catch {
+    return []
+  }
+}
+
+function saveRecent(list: string[]) {
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list))
+  } catch {
+    // not kept on this device; search still works
+  }
+}
+
+/** A search counts as used once a result is opened or the results are entered. */
+export const rememberSearch = (query: string) => saveRecent(withRecent(recentSearches(), query))
+export const forgetSearch = (query: string) => saveRecent(recentSearches().filter((r) => r !== query))
+export const clearSearches = () => saveRecent([])
