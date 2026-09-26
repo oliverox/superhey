@@ -6,7 +6,7 @@ import { api, useLive } from './api'
 import { useAppStatus } from './hooks'
 import { Sidebar } from './components/Sidebar'
 import { ListResizer, useListWidth } from './components/ListResizer'
-import { groupOf, PostingList, useCollapsedGroups } from './components/Lists'
+import { groupOf, inGroupOrder, PostingList, useCollapsedGroups } from './components/Lists'
 import { SearchField, SearchFilters, SearchResults } from './components/Search'
 import { ActivityDrawer, Toasts } from './components/Activity'
 import { Reader, type ReaderTarget } from './components/Reader'
@@ -125,7 +125,10 @@ function Workspace({ status }: { status: AppStatus }) {
 
   const groups = useCollapsedGroups(activeBox?.id)
   // j/k move through what's showing: rows in folded groups are skipped.
-  const boxRows = useMemo(() => (postings.data ?? []).filter((p) => !groups.collapsed.has(groupOf(p))), [postings.data, groups.collapsed])
+  // The email opened while new stays among the new until another is opened.
+  const [heldNew, setHeldNew] = useState<number | null>(null)
+  const boxList = useMemo(() => inGroupOrder(postings.data ?? [], heldNew), [postings.data, heldNew])
+  const boxRows = useMemo(() => boxList.filter((p) => !groups.collapsed.has(groupOf(p, heldNew))), [boxList, groups.collapsed, heldNew])
   // With nothing open there's nothing for a reader to show: the list (a box, Today, search
   // results) takes the whole width until you open something. The Screener keeps its reader.
   const listAlone = !screening && !target
@@ -139,6 +142,7 @@ function Workspace({ status }: { status: AppStatus }) {
     // Opening a thread marks it seen, as in HEY. Kept out of the activity log.
     // Unless Settings says seen is yours to mark (u).
     if (markSeen && markSeenOnOpen() && !p.seen && !p.isBundle) api.runAction({ type: 'seen', postingId: p.id, seen: true }, 'auto').catch(() => {})
+    setHeldNew((held) => (p.id === held ? held : p.seen ? null : p.id))
     setTarget({
       // A search result in no box has only its thread (a negative stand-in id): read-only.
       postingId: p.id > 0 ? p.id : null,
@@ -361,7 +365,8 @@ function Workspace({ status }: { status: AppStatus }) {
           {activeBox?.kind === 'imbox' && <ScreenerBanner count={waiting.length} onOpen={openScreener} />}
           <PostingList
             key={activeBox?.id}
-            postings={postings.data ?? []}
+            postings={boxList}
+            heldNew={heldNew}
             loading={postings.loading && !postings.data}
             selectedId={target?.postingId ?? null}
             onOpen={open}

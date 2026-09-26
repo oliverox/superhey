@@ -64,3 +64,19 @@ describe('folding a box’s groups', () => {
     expect(subjects()).toHaveLength(2)
   })
 })
+
+describe('an email opened while new', () => {
+  it('stays in New for you, unbolded, until another is opened', () => {
+    const at = (r: PostingRow, activeAt: string) => ({ ...r, activeAt }) as PostingRow
+    // Opened and marked seen: the cache now sorts it among the seen.
+    const list = [at(row(4, 'Still new', false), '2026-09-20T09:00:00Z'), at(row(1, 'Just opened', true), '2026-09-20T10:00:00Z'), at(row(2, 'Invoice', true), '2026-09-19T10:00:00Z')]
+    const held = Lists.inGroupOrder(list, 1)
+    expect(held.map((p) => [p.subject, Lists.groupOf(p, 1)])).toEqual([
+      ['Just opened', 'New for you'],
+      ['Still new', 'New for you'],
+      ['Invoice', 'Previously seen'],
+    ])
+    expect(Lists.inGroupOrder(list, null)).toBe(list)
+    expect(Lists.groupOf(list[1]!)).toBe('Previously seen')
+  })
+})
