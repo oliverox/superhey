@@ -159,7 +159,7 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose }: Rea
             </div>
           )}
           {!target.isBundle && <h1 className="rise font-app text-[26px] leading-[1.2] font-semibold tracking-[-0.02em] text-balance">{title}</h1>}
-          {!target.isBundle && topicId != null && !showPanel && <SummaryStrip topicId={topicId} onDetails={panel.toggle} />}
+          {!target.isBundle && topicId != null && <SummaryStrip topicId={topicId} detailsOpen={showPanel} onDetails={panel.toggle} />}
 
             {target.isBundle ? (
               target.postingId != null && <BundleView bundleId={target.postingId} sender={target.sender ?? 'this sender'} onLeaveBox={onLeaveBox} />
@@ -792,7 +792,7 @@ const moneyTag = (amount: number, currency: string) => {
  * The AI's reading of the thread, where you'll see it: one line under the title, with what
  * matters as tags (it needs your reply, the dates, a sum). Details opens the full panel.
  */
-export function SummaryStrip({ topicId, onDetails }: { topicId: number; onDetails: () => void }) {
+export function SummaryStrip({ topicId, detailsOpen = false, onDetails }: { topicId: number; detailsOpen?: boolean; onDetails: () => void }) {
   const a = useLive(() => api.analysis(topicId), [topicId], (e) => e.type === 'analysis' && e.topicId === topicId).data
   if (!a?.summary) return null
   const today = new Date(new Date().toDateString())
@@ -824,7 +824,12 @@ export function SummaryStrip({ topicId, onDetails }: { topicId: number; onDetail
           </span>
         )}
       </div>
-      <button onClick={onDetails} title={withShortcut('Show details', 'details')} className="mt-0.5 inline-flex shrink-0 items-center gap-1.5 rounded-ui px-2 py-1 text-[13px] font-medium text-ink-soft hover:bg-pane-sunk hover:text-ink">
+      <button
+        onClick={onDetails}
+        aria-pressed={detailsOpen}
+        title={withShortcut(detailsOpen ? 'Hide details' : 'Show details', 'details')}
+        className={`mt-0.5 inline-flex shrink-0 items-center gap-1.5 rounded-ui px-2 py-1 text-[13px] font-medium hover:bg-pane-sunk hover:text-ink ${detailsOpen ? 'bg-pane-sunk text-ink' : 'text-ink-soft'}`}
+      >
         <AiSparkle size={12} />
         Details
       </button>
