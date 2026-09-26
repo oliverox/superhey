@@ -41,11 +41,11 @@ export function ReplyArea({
   useShortcut('replyAll', () => open('reply-all'), keys && !request && !!latest)
   useShortcut('forward', () => open('forward'), keys && !request && !!latest)
 
-  const useDraftText = () => {
+  const useDraftText = (body: string) => {
     if (!latest || !shownDraft) return
     const who = latest.from ? (latest.from.isMe ? 'your message' : displayName(latest.from)) : 'the thread'
     const { to, cc } = replyRecipients(latest, 'reply')
-    setRequest({ kind: 'reply', message: { to, cc, body: shownDraft.body, threadId: thread.topicId }, context: `to ${who}`, fresh: true })
+    setRequest({ kind: 'reply', message: { to, cc, body, threadId: thread.topicId }, context: `to ${who}`, fresh: true })
     // From here the text is the composer's (kept on this device until sent or discarded).
     void api.discardDraft(thread.topicId)
   }
