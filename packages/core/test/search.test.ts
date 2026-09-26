@@ -158,6 +158,15 @@ describe('asking HEY', () => {
     expect(page.more).toBe(true)
   })
 
+  it('keeps a result that’s in no box, as a thread to read', async () => {
+    const { repo } = setup()
+    const noBox = S.SearchResult.parse({ topic_id: 7777, subject: 'Fizzy: New notifications', updated_at: '2026-09-24T12:42:46Z', messages: [] })
+    expect(fromHey(noBox)).toMatchObject({ id: -7777, topicId: 7777, subject: 'Fizzy: New notifications' })
+    const search = vi.fn(async () => [noBox, result(1, 91, '2026-09-25T09:00:00Z')])
+    const page = await searchHey({ search } as unknown as HeyClient, repo, q('fizzy'), 1, TODAY)
+    expect(page.rows.map((r) => r.id)).toEqual([-7777, 1])
+  })
+
   it('doesn’t call HEY for what it can’t answer', async () => {
     const { repo } = setup()
     const search = vi.fn()

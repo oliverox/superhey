@@ -125,7 +125,8 @@ function Workspace({ status }: { status: AppStatus }) {
     // Unless Settings says seen is yours to mark (u).
     if (markSeen && markSeenOnOpen() && !p.seen && !p.isBundle) api.runAction({ type: 'seen', postingId: p.id, seen: true }, 'auto').catch(() => {})
     setTarget({
-      postingId: p.id,
+      // A search result in no box has only its thread (a negative stand-in id): read-only.
+      postingId: p.id > 0 ? p.id : null,
       topicId: p.topicId,
       entryCount: p.entryCount,
       subject: p.subject,

@@ -55,13 +55,17 @@ function dateRange(q: SearchQuery, today: Date): string | null {
   return null
 }
 
-/** A HEY search result as a list row (read state and box unknown: it isn't in the cache). */
+/**
+ * A HEY search result as a list row (read state and box unknown: it isn't in the cache). A
+ * result in no box has no box item: its row id is the negated thread id, which opens the
+ * thread to read but names nothing to act on (the reader offers no actions for it).
+ */
 export function fromHey(r: S.SearchResult): PostingRow {
   const m = r.messages.at(-1)
   const c = m?.creator
   const name = m?.alternative_sender_name ?? c?.name ?? null
   return {
-    id: PostingId(r.id),
+    id: PostingId(r.id ?? -r.topic_id),
     topicId: TopicId(r.topic_id),
     boxId: 0,
     subject: r.subject,
