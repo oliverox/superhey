@@ -3,6 +3,7 @@ import type { AiSettings, AiStatus, AiTask, AiTestResult, ProviderId } from '@sh
 import { setMarkSeenOnOpen, useMarkSeenOnOpen } from '../prefs'
 import { api, useLive } from '../api'
 import { Menu, MenuItem, MenuSeparator } from './Menu'
+import { Spinner } from './Spinner'
 
 /**
  * Settings, over the app (⌘, or the command bar). For now: AI. Changes apply as they're
@@ -214,7 +215,8 @@ function Voice({ draftOn }: { draftOn: boolean }) {
           SuperHey reads about 40 of the emails you’ve sent (through HEY, only what you wrote), and your AI provider turns them into a short guide to how you write.
           After that, an email that needs a reply gets a draft in your voice when you open it, and any email can get one with “Draft reply”.
         </p>
-        <button type="button" onClick={build} disabled={v.building} className="btn-primary mt-3 disabled:opacity-60">
+        <button type="button" onClick={build} disabled={v.building} className="btn-primary mt-3 inline-flex items-center gap-2 disabled:opacity-60">
+          {v.building && <Spinner />}
           {v.building ? 'Reading your sent mail…' : 'Learn my voice'}
         </button>
         {v.building && <p className="mt-2 text-[12px] text-ink-faint">This takes a minute: each thread is fetched from HEY, then read once.</p>}
@@ -267,7 +269,8 @@ function Voice({ draftOn }: { draftOn: boolean }) {
         {draftOn ? 'Emails that need a reply get a draft when you open them.' : 'Reply drafts are off in “What runs where”: turn them on for drafts.'}
       </p>
       <div className="mt-2 flex gap-2">
-        <button type="button" onClick={build} disabled={v.building} className="rounded-ui border border-rule-strong px-2.5 py-1 text-ink-soft hover:bg-pane-sunk hover:text-ink disabled:opacity-60">
+        <button type="button" onClick={build} disabled={v.building} className="inline-flex items-center gap-2 rounded-ui border border-rule-strong px-2.5 py-1 text-ink-soft hover:bg-pane-sunk hover:text-ink disabled:opacity-60">
+          {v.building && <Spinner size={12} />}
           {v.building ? 'Relearning…' : 'Relearn from my sent mail'}
         </button>
         <button type="button" onClick={() => void api.forgetVoice()} className="rounded-ui px-2.5 py-1 text-ink-faint hover:bg-pane-sunk hover:text-ink">

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import type { ReplyDraftRow, ThreadView } from '@shared/api'
 import { api, useLive } from '../api'
+import { Spinner } from './Spinner'
 
 /** The thread's draft reply, kept current as drafts are written and discarded. */
 export function useDraft(topicId: number) {
@@ -123,7 +124,8 @@ export function DraftRequest({ thread, initial = '', onDone, onCancel }: { threa
           aria-label="What the reply should say"
           className="field min-w-0 flex-1"
         />
-        <button type="submit" disabled={busy} className="btn-primary disabled:opacity-60">
+        <button type="submit" disabled={busy} className="btn-primary inline-flex items-center gap-2 disabled:opacity-60">
+          {busy && <Spinner size={12} />}
           {busy ? 'Drafting…' : 'Draft'}
         </button>
         <button type="button" onClick={onCancel} disabled={busy} className="rounded-ui px-2 py-1.5 text-[13px] text-ink-faint hover:bg-pane-sunk hover:text-ink">

@@ -762,6 +762,16 @@ mark {
   animation: pulse-dot 1.6s ease-in-out infinite;
 }
 
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Work in progress (see Spinner). */
+.spinner {
+  animation: spin 0.8s linear infinite;
+}
+
 /* Off for reduced motion, and in Omarchy (instant by design). The list's width while dragging never animates. */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -782,6 +792,10 @@ mark {
 }
 [data-theme='omarchy'] .pulse {
   animation-duration: 1.6s !important;
+}
+/* A spinner isn't flourish: it says work is going on, so it keeps turning in Omarchy. */
+[data-theme='omarchy'] .spinner {
+  animation-duration: 0.8s !important;
 }
 
 .scroll {
