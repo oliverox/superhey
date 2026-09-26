@@ -11,6 +11,7 @@ import { Reader, type ReaderTarget } from './components/Reader'
 import { SetupScreen, StartingScreen } from './components/Setup'
 import { useTheme } from './theme'
 import { markSeenOnOpen } from './prefs'
+import { rememberSearch } from './mail/search'
 import { useShortcut } from './shortcuts'
 import { ShortcutHelp } from './components/ShortcutHelp'
 import { Tooltips } from './components/Tooltips'
@@ -135,6 +136,11 @@ function Workspace({ status }: { status: AppStatus }) {
       sender: p.senderName ?? p.senderEmail,
     })
   }, [])
+
+  // Opening a result makes the search a recent one.
+  useEffect(() => {
+    if (searching && target) rememberSearch(query)
+  }, [target?.topicId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // On Today, the reader shows the first thing to handle, so there's never an empty pane to
   // look at. It isn't marked seen: you haven't chosen to read it.
@@ -267,6 +273,7 @@ function Workspace({ status }: { status: AppStatus }) {
             expanded={searchExpanded}
             onFocusChange={setSearchFocused}
             onLeave={() => {
+              rememberSearch(query)
               searchRef.current?.blur()
               setActivePane('list')
               if (searchRows[0]) open(searchRows[0])
