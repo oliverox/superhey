@@ -16,12 +16,28 @@ interface ListProps {
   /** Groups folded away (see useCollapsedGroups); their heading stays, with a count. */
   collapsed?: ReadonlySet<string>
   onToggleGroup?: (group: string) => void
+  /** The just-opened email kept in New for you (see groupOf). */
+  heldNew?: number | null
 }
 
-/** Groups rows the way HEY does: Bubbled up, New for you, Previously seen. */
-export function groupOf(p: PostingRow) {
+/**
+ * Groups rows the way HEY does: Bubbled up, New for you, Previously seen. `heldNew` is the
+ * email you just opened while it was new: it stays in New for you (no longer bold) until
+ * you open another, so it doesn't jump away under the pointer.
+ */
+export function groupOf(p: PostingRow, heldNew: number | null = null) {
   if (p.bubbledUp) return 'Bubbled up'
-  return p.seen ? 'Previously seen' : 'New for you'
+  return p.seen && p.id !== heldNew ? 'Previously seen' : 'New for you'
+}
+
+/** The rows in group order (as the cache sorts them), with `heldNew` kept among the new. */
+export function inGroupOrder(postings: PostingRow[], heldNew: number | null): PostingRow[] {
+  if (heldNew == null || !postings.some((p) => p.id === heldNew)) return postings
+  const rank = (p: PostingRow) => (p.bubbledUp ? 0 : groupOf(p, heldNew) === 'New for you' ? 1 : 2)
+  return postings
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => rank(a.p) - rank(b.p) || (b.p.activeAt ?? '').localeCompare(a.p.activeAt ?? '') || a.i - b.i)
+    .map(({ p }) => p)
 }
 
 /**
@@ -60,7 +76,7 @@ export function useCollapsedGroups(boxId: number | null | undefined) {
   return { collapsed, toggle }
 }
 
-export function PostingList({ postings, loading, selectedId, onOpen, search, collapsed, onToggleGroup }: ListProps) {
+export function PostingList({ postings, loading, selectedId, onOpen, search, collapsed, onToggleGroup, heldNew = null }: ListProps) {
   const listRef = useRef<HTMLUListElement>(null)
   // Rows that just left the box stay a moment, folding shut, so the list closes the gap.
   const { rows: shown, leaving } = useLeavingRows(postings, !search)
@@ -73,14 +89,14 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
   if (!postings.length) return search ? <div className="scroll min-h-0 flex-1">{search.empty}</div> : <Empty>Nothing here.</Empty>
   const mark = (text: string) => (search ? <Highlighted text={text} terms={search.highlight} /> : text)
   const counts = new Map<string, number>()
-  if (!search) for (const p of postings) counts.set(groupOf(p), (counts.get(groupOf(p)) ?? 0) + 1)
+  if (!search) for (const p of postings) counts.set(groupOf(p, heldNew), (counts.get(groupOf(p, heldNew)) ?? 0) + 1)
   const rows = shown
 
   return (
     <ul ref={listRef} role="listbox" aria-label="Threads" className="scroll min-h-0 flex-1">
       {rows.map((p, i) => {
-        const group = groupOf(p)
-        const showHeader = !search && (i === 0 || groupOf(rows[i - 1]!) !== group)
+        const group = groupOf(p, heldNew)
+        const showHeader = !search && (i === 0 || groupOf(rows[i - 1]!, heldNew) !== group)
         const selected = p.id === selectedId
         const gone = leaving.has(p.id)
         const folded = !search && !!collapsed?.has(group)
