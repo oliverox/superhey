@@ -182,46 +182,49 @@ function TimeGrid({
   const lanes = bars.reduce((n, b) => Math.max(n, b.row + 1), 0)
   const nowMin = now.getHours() * 60 + now.getMinutes()
 
+  // One scroller for the day names, the all-day lane and the hours, with the first two
+  // held at the top: the columns then line up exactly, whatever the scrollbar takes.
+  const cols = { gridTemplateColumns: `56px repeat(${days.length}, minmax(0, 1fr))` }
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {/* Day names */}
-      <div className="grid shrink-0 pr-[10px]" style={{ gridTemplateColumns: `56px repeat(${days.length}, minmax(0, 1fr))` }}>
-        <span />
-        {days.map((d) => (
-          <button key={d} onClick={() => onDay(d)} className="flex items-center justify-center gap-1.5 py-2 text-[14px] text-ink-soft hover:text-ink" title="Show this day">
-            <span className={d < today ? 'text-ink-faint' : ''}>{weekdayFmt.format(parse(d))}</span>
-            <span className={`flex h-[26px] min-w-[26px] items-center justify-center rounded-full px-1 tabular-nums ${d === today ? 'bg-accent font-semibold text-accent-ink' : d < today ? 'text-ink-faint' : 'text-ink'}`}>{parse(d).getDate()}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* All-day lane */}
-      <div className="relative grid shrink-0 border-b-2 border-rule pr-[10px]" style={{ gridTemplateColumns: `56px repeat(${days.length}, minmax(0, 1fr))`, minHeight: Math.max(1, lanes) * 22 + 8 }}>
-        <span className="pt-1.5 pr-2 text-right text-[11px] text-ink-faint">all-day</span>
-        {days.map((d) => (
-          <span key={d} className={`border-l border-rule ${d === today ? 'bg-accent/[0.04]' : ''}`} onDoubleClick={() => onNew(d)} />
-        ))}
-        <div className="pointer-events-none absolute inset-0 left-[56px] right-[10px] grid py-1" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))`, gridAutoRows: '22px' }}>
-          {bars.map((b) => (
-            <AllDayBar key={b.event.key} bar={b} onEvent={onEvent} />
+    <div ref={scroller} className="scroll relative min-h-0 flex-1 overflow-y-auto">
+      <div className="sticky top-0 z-20 bg-pane">
+        {/* Day names */}
+        <div className="grid" style={cols}>
+          <span />
+          {days.map((d) => (
+            <button key={d} onClick={() => onDay(d)} className="flex items-center justify-center gap-1.5 py-2 text-[14px] text-ink-soft hover:text-ink" title="Show this day">
+              <span className={d < today ? 'text-ink-faint' : ''}>{weekdayFmt.format(parse(d))}</span>
+              <span className={`flex h-[26px] min-w-[26px] items-center justify-center rounded-full px-1 tabular-nums ${d === today ? 'bg-accent font-semibold text-accent-ink' : d < today ? 'text-ink-faint' : 'text-ink'}`}>{parse(d).getDate()}</span>
+            </button>
           ))}
+        </div>
+
+        {/* All-day lane */}
+        <div className="relative grid border-b border-rule-strong" style={{ ...cols, minHeight: Math.max(1, lanes) * 24 + 8 }}>
+          <span className="pt-2 pr-2 text-right text-[11px] text-ink-faint">all-day</span>
+          {days.map((d) => (
+            <span key={d} className={`border-l border-rule ${d === today ? 'bg-accent/[0.04]' : ''}`} onDoubleClick={() => onNew(d)} />
+          ))}
+          <div className="pointer-events-none absolute inset-y-0 right-0 left-[56px] grid py-1" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))`, gridAutoRows: '24px' }}>
+            {bars.map((b) => (
+              <AllDayBar key={b.event.key} bar={b} onEvent={onEvent} />
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Hours */}
-      <div ref={scroller} className="scroll relative min-h-0 flex-1 overflow-y-scroll">
-        <div className="relative grid" style={{ gridTemplateColumns: `56px repeat(${days.length}, minmax(0, 1fr))`, height: 24 * HOUR }}>
-          <div className="relative">
-            {Array.from({ length: 23 }, (_, i) => i + 1).map((h) => (
-              <span key={h} className="absolute right-2 -translate-y-1/2 text-[11px] text-ink-faint tabular-nums" style={{ top: h * HOUR }}>
-                {hourLabel(h)}
-              </span>
-            ))}
-          </div>
-          {days.map((d) => (
-            <DayColumn key={d} day={d} isToday={d === today} nowMin={nowMin} events={events} onEvent={onEvent} onNew={onNew} />
+      <div className="relative grid" style={{ ...cols, height: 24 * HOUR }}>
+        <div className="relative">
+          {Array.from({ length: 23 }, (_, i) => i + 1).map((h) => (
+            <span key={h} className="absolute right-2 -translate-y-1/2 text-[11px] text-ink-faint tabular-nums" style={{ top: h * HOUR }}>
+              {hourLabel(h)}
+            </span>
           ))}
         </div>
+        {days.map((d) => (
+          <DayColumn key={d} day={d} isToday={d === today} nowMin={nowMin} events={events} onEvent={onEvent} onNew={onNew} />
+        ))}
       </div>
     </div>
   )
@@ -248,26 +251,24 @@ function DayColumn({ day, isToday, nowMin, events, onEvent, onNew }: { day: stri
             key={p.event.key}
             onClick={(e) => onEvent(p.event, e.currentTarget.getBoundingClientRect())}
             onDoubleClick={(e) => e.stopPropagation()}
-            className="absolute overflow-hidden rounded-[5px] border-l-[3px] px-1.5 py-[3px] text-left text-[12px] leading-tight hover:brightness-[0.97]"
+            className="cal-event absolute overflow-hidden rounded-[6px] px-2 py-1 text-left leading-tight"
             style={{
               top: (p.start / 60) * HOUR + 1,
               height,
-              left: `calc(${(p.col / p.cols) * 100}% + 2px)`,
-              width: `calc(${100 / p.cols}% - 4px)`,
-              background: c.fill,
-              borderColor: c.solid,
-              color: c.text,
-            }}
+              left: `calc(${(p.col / p.cols) * 100}% + 3px)`,
+              width: `calc(${100 / p.cols}% - 6px)`,
+              '--ev': c.solid,
+            } as React.CSSProperties}
           >
             {short ? (
-              <span className="block truncate whitespace-nowrap">
-                <span className="font-semibold">{p.event.title || '(No title)'}</span>
-                <span className="ml-1 opacity-80">{timeRange(p.event).split(' – ')[0]}</span>
+              <span className="block truncate text-[12px] whitespace-nowrap">
+                <span className="font-semibold text-ink">{p.event.title || '(No title)'}</span>
+                <span className="ml-1.5 text-ink-soft tabular-nums">{timeRange(p.event).split(' – ')[0]}</span>
               </span>
             ) : (
               <>
-                <span className="block truncate font-semibold">{p.event.title || '(No title)'}</span>
-                <span className="block truncate opacity-85">{timeRange(p.event)}</span>
+                <span className="block truncate text-[12px] font-semibold text-ink">{p.event.title || '(No title)'}</span>
+                <span className="mt-px block truncate text-[11px] text-ink-soft tabular-nums">{timeRange(p.event)}</span>
               </>
             )}
             {p.event.recurring && !short && <RepeatIcon />}
@@ -289,11 +290,10 @@ function AllDayBar({ bar, onEvent }: { bar: Bar; onEvent: (e: EventRow, rect: DO
   return (
     <button
       onClick={(e) => onEvent(bar.event, e.currentTarget.getBoundingClientRect())}
-      className="pointer-events-auto mx-[2px] flex min-w-0 items-center gap-1.5 rounded-[5px] px-1.5 text-left text-[12px] font-semibold hover:brightness-[0.97]"
-      style={{ gridColumn: `${bar.from + 1} / ${bar.to + 2}`, gridRow: bar.row + 1, background: c.fill, color: c.text }}
+      className="cal-event pointer-events-auto mx-[3px] my-[2px] flex min-w-0 items-center gap-1.5 rounded-[5px] px-2 text-left text-[12px]"
+      style={{ gridColumn: `${bar.from + 1} / ${bar.to + 2}`, gridRow: bar.row + 1, '--ev': c.solid } as React.CSSProperties}
     >
-      <span className="size-[7px] shrink-0 rounded-full" style={{ background: c.solid }} />
-      <span className="truncate">{bar.event.title || '(No title)'}</span>
+      <span className="truncate font-semibold text-ink">{bar.event.title || '(No title)'}</span>
       {bar.event.recurring && <RepeatIcon inline />}
     </button>
   )
@@ -447,7 +447,7 @@ export function EventPopover({ event: e, rect, onClose }: { event: EventRow; rec
 
 function RepeatIcon({ inline }: { inline?: boolean }) {
   return (
-    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-label="Repeats" className={inline ? 'ml-auto shrink-0 opacity-70' : 'absolute top-[5px] right-[5px] opacity-70'}>
+    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-label="Repeats" className={`text-ink-faint ${inline ? 'ml-auto shrink-0' : 'absolute top-[6px] right-[6px]'}`}>
       <path d="M3 7a5 5 0 0 1 9-3l1 1M13 9a5 5 0 0 1-9 3l-1-1M13 2v3h-3M3 14v-3h3" />
     </svg>
   )

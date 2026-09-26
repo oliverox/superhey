@@ -998,3 +998,17 @@ mark {
 [data-theme='omarchy'] .ai-sparkle path {
   fill: var(--accent);
 }
+
+/* A calendar event: the calendar's colour as a soft wash with a hairline edge of the same
+   colour; the text stays the app's own, so it reads the same in every calendar. */
+.cal-event {
+  background: color-mix(in oklab, var(--ev) 15%, var(--pane));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ev) 38%, transparent);
+  transition: background-color var(--dur-1);
+}
+.cal-event:hover {
+  background: color-mix(in oklab, var(--ev) 24%, var(--pane));
+}
+[data-theme='omarchy'] .cal-event {
+  border-radius: 0;
+}
