@@ -57,6 +57,18 @@ describe('Repo postings', () => {
     expect(r.posting(PostingId(101))).toMatchObject({ avatar: { url: null, color: null, initials: 'BL' }, blockedTrackers: false })
   })
 
+  it('names a thread by its own email, not by a bundle that shares it', () => {
+    const r = repo()
+    const stripe = { id: 51, name: 'Stripe', email_address: 'notify@stripe.com' }
+    r.upsertPostings([
+      P({ id: 1, kind: 'bundle', topic_id: 950, name: 'Payment received • Provide a tax ID • Instant Payouts', creator: stripe, active_at: '2026-09-26T06:01:00Z' }),
+      P({ id: 2, kind: 'topic', topic_id: 950, name: 'Payment received', creator: stripe, active_at: '2026-09-26T06:01:00Z' }),
+    ])
+    // Cached earlier with the bundle's name: read back with the thread's own.
+    r.storeThread(TopicId(950), [S.Entry.parse(entry())], 'Payment received • Provide a tax ID • Instant Payouts')
+    expect(r.thread(TopicId(950))?.subject).toBe('Payment received')
+  })
+
   it('lists a bundle once and hides the unread mail it holds, as HEY does', () => {
     const r = repo()
     const wise = { id: 50, name: 'Wise', email_address: 'noreply@wise.com' }

@@ -521,8 +521,11 @@ export class Repo {
   }
 
   thread(topicId: TopicId): ThreadView | null {
+    // The thread's own subject, not a bundle's (a bundle sharing the thread is named after
+    // every email in it, joined with " • ").
     const t = this.get<{ subject: string | null; fetched_at: string }>(
-      'SELECT subject, fetched_at FROM threads WHERE topic_id = ?',
+      `SELECT coalesce((SELECT p.subject FROM postings p WHERE p.topic_id = t.topic_id AND p.is_bundle = 0 ORDER BY p.active_at DESC LIMIT 1), t.subject) AS subject,
+              t.fetched_at FROM threads t WHERE t.topic_id = ?`,
       topicId,
     )
     if (!t) return null
