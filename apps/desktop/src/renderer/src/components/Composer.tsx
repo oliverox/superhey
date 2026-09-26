@@ -66,9 +66,9 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
   const canAttach = request.kind !== 'forward' && !!window.bridge
   // A reply to an earlier message can be drafted in the user's voice, right here.
   const canDraft = request.replyTo != null && request.message.threadId != null
-  const [asking, setAsking] = useState(false)
-  const [instruction, setInstruction] = useState('')
   const [drafting, setDrafting] = useState(false)
+  /** What the box held before a draft replaced it, until the user edits it. */
+  const [beforeDraft, setBeforeDraft] = useState<string | null>(null)
 
   const message: OutgoingMessage = {
     ...request.message,
@@ -132,14 +132,15 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
     }
   }
 
+  // What's in the box is the instruction ("say yes, Monday works"); the draft replaces it.
   const writeDraft = async () => {
-    if (drafting) return
+    if (!canDraft || drafting) return
     setDrafting(true)
     setError(null)
     try {
-      const draft = await api.draftReplyTo(request.message.threadId!, request.replyTo!, instruction.trim() || null)
+      const draft = await api.draftReplyTo(request.message.threadId!, request.replyTo!, body.trim() || null)
+      setBeforeDraft(body)
       setBody(draft.body)
-      setAsking(false)
       setNote(draft.placeholders.length ? `Fill in before sending: ${draft.placeholders.join(', ')}` : null)
       bodyRef.current?.focus()
     } catch (e) {
@@ -147,6 +148,13 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
     } finally {
       setDrafting(false)
     }
+  }
+
+  const undoDraft = () => {
+    setBody(beforeDraft ?? '')
+    setBeforeDraft(null)
+    setNote(null)
+    bodyRef.current?.focus()
   }
 
   const discard = () => {
@@ -164,6 +172,9 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
           e.preventDefault()
           void send()
+        } else if (canDraft && e.key.toLowerCase() === 'j' && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault()
+          void writeDraft()
         } else if (e.key === 'Escape') {
           e.preventDefault()
           e.stopPropagation()
@@ -221,50 +232,26 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
         />
       )}
 
-      {asking && (
-        <div className="flex items-center gap-2 border-b border-rule px-4 py-2">
-          <input
-            autoFocus
-            value={instruction}
-            onChange={(e) => setInstruction(e.target.value)}
-            onKeyDown={(e) => {
-              // Enter drafts (never sends); Escape closes just this.
-              if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
-                e.preventDefault()
-                void writeDraft()
-              } else if (e.key === 'Escape') {
-                e.preventDefault()
-                e.stopPropagation()
-                setAsking(false)
-              }
-            }}
-            disabled={drafting}
-            maxLength={500}
-            placeholder="What should it say? Optional, e.g. yes, that time works"
-            aria-label="What the reply should say"
-            className="field min-w-0 flex-1"
-          />
-          <button type="button" onClick={() => void writeDraft()} disabled={drafting} className="btn-primary inline-flex items-center gap-2 disabled:opacity-60">
-            {drafting && <Spinner size={12} />}
-            {drafting ? 'Drafting…' : 'Draft'}
-          </button>
-          <button type="button" onClick={() => setAsking(false)} disabled={drafting} className="rounded-ui px-2 py-1.5 text-[13px] text-ink-faint hover:bg-pane-sunk hover:text-ink">
-            Cancel
-          </button>
-        </div>
-      )}
       <textarea
         ref={bodyRef}
         value={body}
         onChange={(e) => {
           setBody(e.target.value)
+          setBeforeDraft(null)
           if (note && !/\[[^\]]+\]/.test(e.target.value)) setNote(null)
         }}
-        placeholder={request.kind === 'forward' ? 'Add a note (optional)' : 'Write your message… Markdown works.'}
+        readOnly={drafting}
+        placeholder={
+          request.kind === 'forward'
+            ? 'Add a note (optional)'
+            : canDraft
+              ? `Write your message… Markdown works.\nOr say what it should say, e.g. “yes, Monday works”, and press ${keyLabel('mod+j')} to draft it in your voice.`
+              : 'Write your message… Markdown works.'
+        }
         aria-label="Message"
         // Grows with the text (up to most of the window) instead of a resize grip; starts at
         // about 7 lines inline, 12 in the dialog.
-        className={`block max-h-[60vh] w-full resize-none [field-sizing:content] bg-transparent ${variant === 'dialog' ? 'min-h-[19.5em]' : 'min-h-[11.5em]'} px-4 py-3 font-body text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-faint`}
+        className={`block max-h-[60vh] w-full resize-none [field-sizing:content] bg-transparent ${variant === 'dialog' ? 'min-h-[19.5em]' : 'min-h-[11.5em]'} px-4 py-3 font-body text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-faint ${drafting ? 'opacity-50' : ''}`}
       />
 
       {attach.length > 0 && (
@@ -303,19 +290,27 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
             Attach…
           </button>
         )}
-        {canDraft && !asking && (
-          <button
-            type="button"
-            onClick={() => setAsking(true)}
-            title={body.trim() ? 'Replace the text with a reply drafted in your voice' : 'Draft this reply in your voice'}
-            className="rounded-ui px-2.5 py-1.5 text-[13px] text-ink-soft hover:bg-pane-sunk hover:text-ink"
-          >
-            {drafting ? 'Drafting…' : 'Draft in my voice'}
-          </button>
-        )}
         <span className={`min-w-0 flex-1 truncate text-[12px] ${error ? 'text-danger' : note ? 'text-attn' : 'text-ink-faint'}`}>
           {error ?? note ?? (problem && to.length ? problem : '')}
         </span>
+        {canDraft && beforeDraft != null && !drafting && (
+          <button type="button" onClick={undoDraft} className="rounded-ui px-2.5 py-1.5 text-[13px] text-ink-soft hover:bg-pane-sunk hover:text-ink">
+            Undo draft
+          </button>
+        )}
+        {canDraft && (
+          <button
+            type="button"
+            onClick={() => void writeDraft()}
+            disabled={drafting}
+            title={body.trim() ? 'Draft a reply in your voice, following what’s written in the box' : 'Draft a reply in your voice'}
+            className="inline-flex items-center gap-1.5 rounded-ui px-2.5 py-1.5 text-[13px] text-ink-soft hover:bg-pane-sunk hover:text-ink disabled:opacity-70"
+          >
+            {drafting ? <Spinner size={12} /> : <span aria-hidden>✦</span>}
+            {drafting ? 'Drafting…' : body.trim() && beforeDraft == null ? 'Draft this' : 'Draft in my voice'}
+            {!drafting && <kbd className="font-sans text-[11px] text-ink-faint">{keyLabel('mod+j')}</kbd>}
+          </button>
+        )}
         <button type="button" onClick={discard} className="rounded-ui px-2.5 py-1.5 text-[13px] text-ink-soft hover:bg-pane-sunk hover:text-danger">
           Discard
         </button>
