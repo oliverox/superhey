@@ -64,6 +64,10 @@ export function Settings({ onClose }: { onClose: () => void }) {
                 <Tasks status={s} save={save} />
               </Section>
 
+              <Section title="Your voice" hint="Drafts of replies to emails that need one, written the way you write. Never sent without you.">
+                <Voice draftOn={s.settings.tasks.draft?.enabled ?? true} />
+              </Section>
+
               <Section title="Budget and usage" hint="A hard stop on cloud spending (Claude and OpenAI together) each month. Local models are free and don't count.">
                 <Budget status={s} save={save} />
               </Section>
@@ -107,6 +111,94 @@ function Check({ label }: { label?: string }) {
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true} className="inline-block shrink-0 align-[-2px] text-ok">
       <path d="m2.75 8.5 3.5 3.5 7-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  )
+}
+
+/**
+ * The voice profile: built on request from mail the user wrote, shown as the guide the
+ * drafts follow, with their own notes on top. Rebuild and remove are always at hand.
+ */
+function Voice({ draftOn }: { draftOn: boolean }) {
+  const state = useLive(() => api.voice(), [], (e) => e.type === 'voice' || e.type === 'ai')
+  const [error, setError] = useState<string | null>(null)
+  const [notes, setNotes] = useState<string | null>(null)
+  const v = state.data
+  if (!v) return null
+  const build = () => {
+    setError(null)
+    api.buildVoice().catch((e: unknown) => setError(message(e)))
+  }
+  const p = v.voice?.profile
+
+  if (!p) {
+    return (
+      <div>
+        <p className="text-[13px] leading-relaxed text-ink-soft">
+          SuperHey reads about 40 of the emails you’ve sent (through HEY, only what you wrote), and your AI provider turns them into a short guide to how you write.
+          After that, emails that need a reply get a draft in your voice, and any email can get one with “Draft reply”.
+        </p>
+        <button type="button" onClick={build} disabled={v.building} className="btn-primary mt-3 disabled:opacity-60">
+          {v.building ? 'Reading your sent mail…' : 'Learn my voice'}
+        </button>
+        {v.building && <p className="mt-2 text-[12px] text-ink-faint">This takes a minute: each thread is fetched from HEY, then read once.</p>}
+        {error && <p className="mt-2 text-[13px] text-danger">{error}</p>}
+      </div>
+    )
+  }
+
+  return (
+    <div className="text-[13px]">
+      <p className="leading-relaxed text-ink">{p.summary}</p>
+      <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-ink-soft">
+        <dt className="text-ink-faint">Languages</dt>
+        <dd>{p.languages.join(', ')}</dd>
+        <dt className="text-ink-faint">Length</dt>
+        <dd>{p.length}</dd>
+        <dt className="text-ink-faint">Tone</dt>
+        <dd>{p.tone}</dd>
+        <dt className="text-ink-faint">Greetings</dt>
+        <dd>{p.greetings.join(' · ')}</dd>
+        <dt className="text-ink-faint">Sign-offs</dt>
+        <dd>{p.signOffs.map((x) => x.replace(/\n/g, ' ')).join(' · ')}</dd>
+        {p.habits.length > 0 && (
+          <>
+            <dt className="text-ink-faint">Habits</dt>
+            <dd>{p.habits.join('; ')}</dd>
+          </>
+        )}
+        {p.avoid.length > 0 && (
+          <>
+            <dt className="text-ink-faint">Never</dt>
+            <dd>{p.avoid.join('; ')}</dd>
+          </>
+        )}
+      </dl>
+      <label className="mt-4 block">
+        <span className="text-ink-soft">Your notes for the drafts</span>
+        <textarea
+          value={notes ?? v.notes}
+          onChange={(e) => setNotes(e.target.value)}
+          onBlur={() => notes != null && void api.setVoiceNotes(notes).then(() => setNotes(null))}
+          rows={2}
+          maxLength={2000}
+          placeholder="e.g. Sign off as “Oli” with friends. Never use exclamation marks."
+          className="field mt-1 block h-auto w-full resize-y py-1.5 leading-snug"
+        />
+      </label>
+      <p className="mt-3 text-[12px] text-ink-faint">
+        Learned from {v.voice!.samples} of your emails on {new Date(v.voice!.builtAt).toLocaleDateString()}.{' '}
+        {draftOn ? 'Emails that need a reply get a draft on their own.' : 'Reply drafts are off in “What runs where”: turn them on for drafts.'}
+      </p>
+      <div className="mt-2 flex gap-2">
+        <button type="button" onClick={build} disabled={v.building} className="rounded-ui border border-rule-strong px-2.5 py-1 text-ink-soft hover:bg-pane-sunk hover:text-ink disabled:opacity-60">
+          {v.building ? 'Relearning…' : 'Relearn from my sent mail'}
+        </button>
+        <button type="button" onClick={() => void api.forgetVoice()} className="rounded-ui px-2.5 py-1 text-ink-faint hover:bg-pane-sunk hover:text-ink">
+          Forget my voice
+        </button>
+      </div>
+      {error && <p className="mt-2 text-danger">{error}</p>}
+    </div>
   )
 }
 

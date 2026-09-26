@@ -187,6 +187,19 @@ const MIGRATIONS: string[] = [
   -- Which instructions an analysis was made with: newer ones redo it as the thread comes up.
   ALTER TABLE thread_analysis ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
   `,
+  `
+  -- Reply drafts in the user's voice, one per thread, as of its latest activity. Local until
+  -- the user uses one (then it's theirs to edit and send); never sent from here.
+  CREATE TABLE reply_drafts (
+    topic_id     INTEGER PRIMARY KEY,
+    active_at    TEXT NOT NULL,
+    body         TEXT NOT NULL,
+    placeholders TEXT NOT NULL DEFAULT '[]',
+    instruction  TEXT,
+    model        TEXT NOT NULL,
+    created_at   TEXT NOT NULL
+  );
+  `,
 ]
 
 export type Db = DatabaseSync

@@ -24,9 +24,11 @@ import type {
   TodoItem,
   ActionItem,
   ComingUpItem,
+  ReplyDraftRow,
+  StoredVoice,
 } from '@superhey/core'
 
-export type { OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, HeySearchPage, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId, TodayView, ThreadItem, TodoItem, ActionItem, ComingUpItem }
+export type { OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, HeySearchPage, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId, TodayView, ThreadItem, TodoItem, ActionItem, ComingUpItem, ReplyDraftRow, StoredVoice }
 
 /** Everything Settings shows about AI. API keys themselves never leave the main process. */
 export interface AiStatus {
@@ -108,6 +110,17 @@ export interface Api {
   searchHey(text: string, page: number): Promise<HeySearchPage>
   /** The thread a forwarded email came from, when it's in the cache. */
   forwardedOriginal(fromEmail: string, subject: string, at: string | null, exceptTopic: number | null): Promise<PostingRow | null>
+  /** The user's writing voice, their notes, and whether drafts are written on their own. */
+  voice(): Promise<{ voice: StoredVoice | null; notes: string; automatic: boolean; building: boolean }>
+  /** Learns the voice from mail they wrote (opt-in). */
+  buildVoice(): Promise<StoredVoice>
+  setVoiceNotes(notes: string): Promise<void>
+  forgetVoice(): Promise<void>
+  /** The thread's draft reply, if one was written. */
+  replyDraft(topicId: number): Promise<ReplyDraftRow | null>
+  /** Writes a draft reply now, optionally following an instruction ("say yes but push to Friday"). */
+  draftReply(topicId: number, instruction: string | null): Promise<ReplyDraftRow>
+  discardDraft(topicId: number): Promise<void>
   /** People to suggest for from: and to:. */
   searchPeople(text: string): Promise<Array<{ name: string | null; email: string; count: number }>>
   /** Emails whose subject or sender contains every word of the query (for jumping to one). */
@@ -158,7 +171,7 @@ export interface Api {
   testAi(engine: ProviderId | 'local'): Promise<AiTestResult>
 }
 
-export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'searchHey', 'searchPeople', 'forwardedOriginal', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'analysis', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
+export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'searchHey', 'searchPeople', 'voice', 'buildVoice', 'setVoiceNotes', 'forgetVoice', 'replyDraft', 'draftReply', 'discardDraft', 'forwardedOriginal', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'analysis', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
 export type ApiMethod = (typeof API_METHODS)[number]
 
 export type ApiEvent =
@@ -172,6 +185,10 @@ export type ApiEvent =
   | { type: 'today' }
   /** A thread was analysed (its summary and needs-reply are in). */
   | { type: 'analysis'; topicId: number }
+  /** A reply draft was written or discarded. */
+  | { type: 'draft'; topicId: number }
+  /** The voice profile changed, or started or stopped building. */
+  | { type: 'voice' }
 
 /** Content types the file endpoints serve as themselves; anything else is a download. */
 const INLINE_TYPES = /^(application\/pdf|image\/(png|jpe?g|gif|webp|avif|bmp|svg\+xml))$/

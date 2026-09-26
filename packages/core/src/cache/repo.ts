@@ -715,6 +715,60 @@ export class Repo {
     return rows.map((r) => (r.topicId != null && found.has(r.topicId) ? { ...r, ai: found.get(r.topicId)! } : r))
   }
 
+  // Reply drafts
+
+  saveReplyDraft(d: { topicId: TopicId; activeAt: string; body: string; placeholders: string[]; instruction: string | null; model: string }) {
+    this.run(
+      `INSERT OR REPLACE INTO reply_drafts (topic_id, active_at, body, placeholders, instruction, model, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      d.topicId,
+      d.activeAt,
+      d.body,
+      JSON.stringify(d.placeholders),
+      d.instruction,
+      d.model,
+      now(),
+    )
+  }
+
+  /** The thread's draft, and whether mail has arrived since it was written (then it's stale). */
+  replyDraft(topicId: TopicId): ReplyDraftRow | null {
+    const r = this.get<Record<string, unknown>>('SELECT * FROM reply_drafts WHERE topic_id = ?', topicId)
+    if (!r) return null
+    const latest = this.latestActivity(topicId)
+    return {
+      topicId,
+      body: r.body as string,
+      placeholders: JSON.parse(r.placeholders as string) as string[],
+      instruction: (r.instruction as string | null) ?? null,
+      model: r.model as string,
+      createdAt: r.created_at as string,
+      stale: latest != null && latest > (r.active_at as string),
+    }
+  }
+
+  deleteReplyDraft(topicId: TopicId) {
+    this.run('DELETE FROM reply_drafts WHERE topic_id = ?', topicId)
+  }
+
+  /** Threads the analysis says need a reply, as of their latest mail, newest first. */
+  threadsNeedingReply(limit: number): TopicId[] {
+    return this.all<{ topic_id: number }>(
+      `SELECT a.topic_id FROM thread_analysis a
+       WHERE a.needs_reply = 1 AND a.active_at >= (SELECT max(p.active_at) FROM postings p WHERE p.topic_id = a.topic_id)
+       ORDER BY a.active_at DESC LIMIT ?`,
+      limit,
+    ).map((r) => TopicId(r.topic_id))
+  }
+
+  /** Threads with a draft written as of their latest mail. */
+  draftedTopics(): Set<number> {
+    return new Set(
+      this.all<{ topic_id: number }>(
+        `SELECT d.topic_id FROM reply_drafts d WHERE d.active_at >= (SELECT max(p.active_at) FROM postings p WHERE p.topic_id = d.topic_id)`,
+      ).map((r) => r.topic_id),
+    )
+  }
+
   /** The thread's latest activity across its postings (what an analysis is measured against). */
   latestActivity(topicId: TopicId): string | null {
     return this.get<{ a: string | null }>('SELECT max(active_at) AS a FROM postings WHERE topic_id = ?', topicId)?.a ?? null
@@ -1110,6 +1164,19 @@ export interface AiUsageTotal {
   cacheRead: number
   output: number
   costUsd: number
+}
+
+export interface ReplyDraftRow {
+  topicId: TopicId
+  body: string
+  /** The [bracketed] gaps only the user can fill. */
+  placeholders: string[]
+  /** What the user asked for, when they asked ("say yes but push to Friday"). */
+  instruction: string | null
+  model: string
+  createdAt: string
+  /** Mail arrived after it was written. */
+  stale: boolean
 }
 
 export interface TodoRow {

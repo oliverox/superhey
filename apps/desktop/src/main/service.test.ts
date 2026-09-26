@@ -195,6 +195,19 @@ describe('Search in the service', () => {
   })
 })
 
+describe('Voice and drafts in the service', () => {
+  it('starts with no voice, keeps notes, and checks what it’s given', async () => {
+    const { s } = await service()
+    expect(await s.voice()).toMatchObject({ voice: null, notes: '', building: false })
+    await s.setVoiceNotes('  Sign off as Oli.  ')
+    expect((await s.voice()).notes).toBe('Sign off as Oli.')
+    await expect(s.setVoiceNotes(42)).rejects.toThrow(/text/)
+    expect(await s.replyDraft(900)).toBeNull()
+    await expect(s.draftReply(900, 42)).rejects.toThrow(/instruction must be text/)
+    await expect(s.replyDraft('900; drop')).rejects.toThrow()
+  })
+})
+
 describe('Today in the service', () => {
   it('assembles Today from the cache, with the Screener count', async () => {
     const { s } = await service()

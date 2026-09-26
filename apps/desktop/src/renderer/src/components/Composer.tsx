@@ -12,6 +12,8 @@ export interface ComposeRequest {
   forwardOf?: number | null
   /** Shown above the form, e.g. "Reply to Ana". */
   context?: string
+  /** Start from `message` even if unsent text was kept for this thread (a draft chosen on purpose). */
+  fresh?: boolean
 }
 
 const TITLES: Record<OutgoingKind, string> = { new: 'New message', reply: 'Reply', 'reply-all': 'Reply all', forward: 'Forward' }
@@ -42,7 +44,7 @@ function save(req: ComposeRequest, msg: OutgoingMessage | null) {
  * sent without pressing Send.
  */
 export function Composer({ request, onClose, variant }: { request: ComposeRequest; onClose: () => void; variant: 'inline' | 'dialog' }) {
-  const saved = useMemo(() => loadSaved(request), [request])
+  const saved = useMemo(() => (request.fresh ? null : loadSaved(request)), [request])
   const [to, setTo] = useState<string[]>(saved?.to ?? request.message.to)
   const [cc, setCc] = useState<string[]>(saved?.cc ?? request.message.cc ?? [])
   const [bcc, setBcc] = useState<string[]>(saved?.bcc ?? request.message.bcc ?? [])
