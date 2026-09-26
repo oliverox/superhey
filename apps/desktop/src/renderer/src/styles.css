@@ -66,6 +66,8 @@
   --pane-border: 0px;
   --text: 14px;
   --read-size: 15px;
+  /* The details panel beside a thread: wider on wider windows. */
+  --panel-w: clamp(320px, 24vw, 380px);
   --measure: 33.5em;
   /* With room to spare, lines may run to about 90 characters: still easy to follow. */
   --measure-wide: 41.5em;

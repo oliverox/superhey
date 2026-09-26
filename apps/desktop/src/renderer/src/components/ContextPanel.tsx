@@ -3,9 +3,11 @@ import type { AttachmentRow, PostingRow, ThreadView } from '@shared/api'
 import { api, useLive } from '../api'
 import { AddToCalendar } from './AddToCalendar'
 import { dayName, shortDate } from '../format'
-import { dedupe, shortName, type Addr } from '../mail/people'
+import { dedupe, displayName, hasRealName, shortName, type Addr } from '../mail/people'
 import { extension, formatBytes, visibleAttachments } from './Attachments'
-import { AddressRow } from './People'
+import { CopyButton } from './People'
+import { Avatar } from './Avatar'
+import { Tag } from './Tag'
 
 const PEOPLE_PREVIEW = 6
 
@@ -20,7 +22,7 @@ export function ContextPanel({ thread, onOpenThread }: { thread: ThreadView; onO
   const files = entries.flatMap((e) => visibleAttachments(e.attachments))
 
   return (
-    <aside aria-label="Thread details" className="scroll w-[296px] shrink-0 border-l border-rule bg-pane px-4 pt-6 pb-10 text-[13px]">
+    <aside aria-label="Thread details" className="scroll w-[var(--panel-w)] shrink-0 border-l border-rule bg-pane px-5 pt-6 pb-10 text-[13px]">
       <Understanding topicId={thread.topicId} subject={thread.subject ?? undefined} />
       <People thread={thread} />
       {counterpart && <MoreFrom person={counterpart} topicId={thread.topicId} onOpen={onOpenThread} />}
@@ -29,10 +31,14 @@ export function ContextPanel({ thread, onOpenThread }: { thread: ThreadView; onO
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/** A calm section: a small heading (and count), then its rows; sections are ruled apart. */
+function Section({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
   return (
-    <section className="mb-7">
-      <h2 className="eyebrow mb-1.5 px-2">{title}</h2>
+    <section className="border-t border-rule pt-4 pb-5 first:border-t-0 first:pt-0">
+      <h2 className="eyebrow mb-2 flex items-baseline px-2">
+        {title}
+        {count != null && <span className="ml-auto font-normal tabular-nums">{count}</span>}
+      </h2>
       {children}
     </section>
   )
@@ -48,9 +54,9 @@ function People({ thread }: { thread: ThreadView }) {
   const shown = all ? people : people.slice(0, PEOPLE_PREVIEW)
 
   return (
-    <Section title={`People · ${people.length}`}>
+    <Section title="People" count={people.length}>
       {shown.map((p) => (
-        <AddressRow key={p.email} person={p} />
+        <PersonRow key={p.email} person={p} />
       ))}
       {people.length > PEOPLE_PREVIEW && (
         <button onClick={() => setAll(!all)} className="mt-0.5 px-2 text-[12px] font-medium text-ink-faint hover:text-ink-soft">
@@ -74,9 +80,9 @@ function MoreFrom({ person, topicId, onOpen }: { person: Addr; topicId: number; 
       <ul>
         {threads.data.map((p) => (
           <li key={p.id}>
-            <button onClick={() => onOpen(p)} className="flex w-full items-baseline gap-2 rounded-ui px-2 py-1.5 text-left hover:bg-pane-alt">
-              <span className="min-w-0 flex-1 truncate text-ink">{p.subject || '(no subject)'}</span>
-              <span className="shrink-0 text-[12px] text-ink-faint">{shortDate(p.activeAt)}</span>
+            <button onClick={() => onOpen(p)} className="flex w-full items-baseline gap-3 rounded-ui px-2 py-1.5 text-left text-ink-soft hover:bg-pane-alt hover:text-ink">
+              <span className="min-w-0 flex-1 truncate">{p.subject || '(no subject)'}</span>
+              <span className="shrink-0 text-[12px] text-ink-faint tabular-nums">{shortDate(p.activeAt)}</span>
             </button>
           </li>
         ))}
@@ -87,7 +93,7 @@ function MoreFrom({ person, topicId, onOpen }: { person: Addr; topicId: number; 
 
 function Files({ files }: { files: AttachmentRow[] }) {
   return (
-    <Section title={`Files · ${files.length}`}>
+    <Section title="Files" count={files.length}>
       <ul>
         {files.map((f) => (
           <li key={f.id}>
@@ -129,43 +135,48 @@ const isPast = (ymd: string) => {
   return new Date(y, m - 1, d) < new Date(t.getFullYear(), t.getMonth(), t.getDate())
 }
 
-/** The AI's reading of the thread: what it's about, whether it needs you, what to do and when. */
+/**
+ * What the thread asks of you, from the AI's reading (its one-line summary is under the
+ * title already): whether it needs your reply, what to do, the dates with Add to calendar,
+ * and the sums. Nothing when there's nothing to act on.
+ */
 export function Understanding({ topicId, subject }: { topicId: number; subject?: string }) {
   const a = useLive(() => api.analysis(topicId), [topicId], (e) => e.type === 'analysis' && e.topicId === topicId).data
   if (!a) return null
+  const dates = a.dates
+  if (!a.needsReply && !a.expectsReply && !a.actionItems.length && !dates.length && !a.amounts.length) return null
   return (
-    <Section title="Summary">
-      <div className="space-y-3 px-2">
-        <p className="leading-snug text-ink">{a.summary}</p>
-        {a.needsReply && (
-          <p className="flex items-baseline gap-1.5 text-[13px] font-medium text-accent">
-            <ReplyGlyph />
-            <span>Needs your reply{a.replyReason ? `: ${a.replyReason}` : ''}</span>
-          </p>
+    <Section title="For you">
+      <div className="space-y-4 px-2">
+        {(a.needsReply || a.expectsReply) && (
+          <div className="flex items-start gap-2.5">
+            <Tag kind={a.needsReply ? 'reply' : 'label'}>{a.needsReply ? 'Needs reply' : 'Waiting'}</Tag>
+            <span className="min-w-0 leading-snug text-ink-soft">{a.needsReply ? (a.replyReason ?? 'They’re waiting on you.') : 'You asked; waiting on their answer.'}</span>
+          </div>
         )}
-        {a.expectsReply && <p className="text-[13px] text-ink-soft">You asked; waiting on their answer.</p>}
         {a.actionItems.length > 0 && (
-          <ul className="space-y-1.5" aria-label="Action items">
+          <ul className="space-y-2" aria-label="To do">
             {a.actionItems.map((item, i) => (
-              <li key={i} className="flex gap-2 text-[13px] leading-snug">
-                <span aria-hidden className="mt-[3px] size-[11px] shrink-0 rounded-[3px] border-[1.5px] border-rule-strong" />
+              <li key={i} className="flex gap-2.5 leading-snug">
+                <span aria-hidden className="mt-[2px] size-[13px] shrink-0 rounded-[4px] border-[1.5px] border-rule-strong" />
                 <span className="min-w-0 flex-1 text-ink">
                   {item.text}
-                  {item.due && <span className={`ml-1.5 whitespace-nowrap ${isPast(item.due) ? 'text-danger' : 'text-ink-faint'}`}>{dayName(item.due)}</span>}
+                  {item.due && <span className={`ml-2 whitespace-nowrap text-[12px] ${isPast(item.due) ? 'text-danger' : 'text-ink-faint'}`}>{dayName(item.due)}</span>}
                 </span>
               </li>
             ))}
           </ul>
         )}
-        {a.dates.length > 0 && (
-          <ul className="space-y-1.5 text-[13px]" aria-label="Dates">
-            {a.dates.map((d, i) => (
-              <li key={`d${i}`} className="flex items-baseline gap-2">
-                <span className="min-w-0 flex-1">
-                  <span className="block text-ink-faint">{d.label}</span>
-                  <span className="block text-ink tabular-nums">
+        {dates.length > 0 && (
+          <ul className="-mx-2" aria-label="Dates">
+            {dates.map((d, i) => (
+              <li key={`d${i}`} className="flex items-center gap-3 rounded-ui px-2 py-1.5">
+                <DateBadge ymd={d.date} past={isPast(d.endDate ?? d.date)} />
+                <span className="min-w-0 flex-1 leading-snug">
+                  <span className="block truncate text-ink">{d.label}</span>
+                  <span className="block text-[12px] text-ink-faint tabular-nums">
                     {dayName(d.date)}
-                    {d.time ? `, ${d.time}${d.endTime ? `–${d.endTime}` : ''}` : ''}
+                    {d.time ? ` · ${d.time}${d.endTime ? `–${d.endTime}` : ''}` : ''}
                     {d.endDate ? ` → ${dayName(d.endDate)}` : ''}
                   </span>
                 </span>
@@ -175,7 +186,7 @@ export function Understanding({ topicId, subject }: { topicId: number; subject?:
           </ul>
         )}
         {a.amounts.length > 0 && (
-          <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-[13px]">
+          <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5">
             {a.amounts.map((m, i) => (
               <Fact key={`m${i}`} label={m.label} value={money(m.amount, m.currency)} />
             ))}
@@ -183,6 +194,33 @@ export function Understanding({ topicId, subject }: { topicId: number; subject?:
         )}
       </div>
     </Section>
+  )
+}
+
+const badgeMonth = new Intl.DateTimeFormat(undefined, { month: 'short' })
+/** A date as a small calendar leaf: the month over the day. */
+function DateBadge({ ymd, past }: { ymd: string; past: boolean }) {
+  const [y, m, d] = ymd.split('-').map(Number) as [number, number, number]
+  return (
+    <span aria-hidden className={`flex w-9 shrink-0 flex-col items-center rounded-ui border border-rule py-0.5 leading-none ${past ? 'opacity-50' : ''}`}>
+      <span className="text-[10px] font-semibold tracking-[0.05em] text-danger uppercase">{badgeMonth.format(new Date(y, m - 1, d)).replace('.', '')}</span>
+      <span className="mt-0.5 text-[15px] font-semibold text-ink tabular-nums">{d}</span>
+    </span>
+  )
+}
+
+/** Someone in the thread: their avatar, name and address; copy the address on hover. */
+function PersonRow({ person }: { person: Addr }) {
+  const initials = (displayName(person).match(/\b\p{L}/gu) ?? [person.email[0] ?? '?']).slice(0, 2).join('').toUpperCase()
+  return (
+    <div className="group/row flex items-center gap-2.5 rounded-ui px-2 py-1.5 hover:bg-pane-alt">
+      <Avatar avatar={{ url: null, color: null, initials }} size={28} seed={person.email} />
+      <div className="min-w-0 flex-1 leading-tight">
+        <div className="truncate font-medium text-ink">{hasRealName(person) ? displayName(person) : person.email}</div>
+        {hasRealName(person) && <div className="truncate text-[12px] text-ink-faint">{person.email}</div>}
+      </div>
+      <CopyButton text={person.email} label={`Copy ${person.email}`} className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100" />
+    </div>
   )
 }
 
@@ -196,11 +234,3 @@ function Fact({ label, value }: { label: string; value: string }) {
   )
 }
 
-function ReplyGlyph() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="shrink-0 translate-y-[1px]">
-      <path d="M6.5 3.5 2.5 7.5l4 4" />
-      <path d="M2.5 7.5h7a4 4 0 0 1 4 4V13" />
-    </svg>
-  )
-}
