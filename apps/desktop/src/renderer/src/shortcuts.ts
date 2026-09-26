@@ -25,8 +25,7 @@ export const SHORTCUTS = {
   calendar: { keys: ['7'], label: 'Calendar', group: 'Navigate' },
   search: { keys: ['/'], label: 'Search', group: 'Navigate' },
 
-  expandAll: { keys: [';'], label: 'Expand all messages', group: 'Thread' },
-  collapseAll: { keys: [':'], label: 'Collapse all messages', group: 'Thread' },
+  toggleAll: { keys: [';'], label: 'Expand or collapse all messages', group: 'Thread' },
   details: { keys: ['i'], label: 'Show or hide details', group: 'Thread' },
 
   replyLater: { keys: ['r'], label: 'Reply Later', group: 'Act' },

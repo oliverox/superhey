@@ -159,7 +159,7 @@ Press `?` in the app for the full list. The main ones:
 | --- | --- |
 | **Navigate** | `j` / `k` next and previous · `0` Today · `1`–`6` boxes · `7` Calendar · `/` search · `Esc` close the email or leave search |
 | **Calendar** | `←` / `→` previous and next · `T` today · `D` `W` `M` day, week, month · double-click a time to add an event |
-| **Thread** | `;` expand all · `:` collapse all · `i` details |
+| **Thread** | `;` expand or collapse all · `i` details |
 | **Act** | `r` Reply Later · `s` Set Aside · `b` Bubble Up… · `m` Move to… · `f` The Feed · `p` Paper Trail · `l` Labels… · `u` seen/unseen · `#` Trash · `e` Done (on Today) · `z` undo |
 | **Write** | `⇧R` reply · `a` reply all · `⇧F` forward · `c` new message · `⌘↵` send · `⌘J` draft in your voice |
 | **Screener** | `⇧S` open · `y` let them in · `n` screen out · `!` spam |

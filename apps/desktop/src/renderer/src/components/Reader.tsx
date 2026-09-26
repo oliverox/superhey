@@ -237,8 +237,8 @@ export function Conversation({
     setOpen(new Set(entries.map((e) => e.id)))
     setShowAll(true)
   }
-  useShortcut('expandAll', expandAll, keys && multiple)
-  useShortcut('collapseAll', () => setOpen(new Set()), keys && multiple)
+  // One key both ways: collapse when every message is open, else open them all.
+  useShortcut('toggleAll', () => (entries.every((e) => open.has(e.id)) ? setOpen(new Set()) : expandAll()), keys && multiple)
   const allOpen = multiple && entries.every((e) => open.has(e.id))
   // Signatures the same person repeats under their messages fold away (forwards keep theirs).
   const signatures = useMemo(
@@ -267,7 +267,7 @@ export function Conversation({
               <span aria-hidden>·</span>
               <button
                 onClick={expandAll}
-                title={withShortcut('Expand all', 'expandAll')}
+                title={withShortcut('Expand all', 'toggleAll')}
                 className="rounded-[3px] font-medium text-ink-soft hover:text-ink"
               >
                 Expand all
@@ -279,7 +279,7 @@ export function Conversation({
               <span aria-hidden>·</span>
               <button
                 onClick={() => setOpen(new Set())}
-                title={withShortcut('Collapse all', 'collapseAll')}
+                title={withShortcut('Collapse all', 'toggleAll')}
                 className="rounded-[3px] font-medium text-ink-soft hover:text-ink"
               >
                 Collapse all

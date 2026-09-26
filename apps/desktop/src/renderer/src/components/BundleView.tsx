@@ -48,8 +48,7 @@ export function BundleView({ bundleId, sender, onLeaveBox }: { bundleId: number;
     setOpen(next)
   }
   const many = list.length > 1
-  useShortcut('expandAll', () => setOpen(new Set(list.map((t) => t.id))), many)
-  useShortcut('collapseAll', () => setOpen(new Set()), many)
+  useShortcut('toggleAll', () => setOpen(list.every((t) => expanded.has(t.id)) ? new Set() : new Set(list.map((t) => t.id))), many)
 
   // Everything filed away: the bundle is done, so the list moves on.
   const emptied = ids.length > 0 && fresh != null && list.length === 0
@@ -78,11 +77,11 @@ export function BundleView({ bundleId, sender, onLeaveBox }: { bundleId: number;
                 {many && (
                   <>
                     <span aria-hidden>·</span>
-                    <button onClick={() => setOpen(new Set(list.map((t) => t.id)))} title={withShortcut('Expand all', 'expandAll')} className="font-medium text-ink-soft hover:text-ink">
+                    <button onClick={() => setOpen(new Set(list.map((t) => t.id)))} title={withShortcut('Expand all', 'toggleAll')} className="font-medium text-ink-soft hover:text-ink">
                       Expand all
                     </button>
                     <span aria-hidden>·</span>
-                    <button onClick={() => setOpen(new Set())} title={withShortcut('Collapse all', 'collapseAll')} className="font-medium text-ink-soft hover:text-ink">
+                    <button onClick={() => setOpen(new Set())} title={withShortcut('Collapse all', 'toggleAll')} className="font-medium text-ink-soft hover:text-ink">
                       Collapse all
                     </button>
                   </>
