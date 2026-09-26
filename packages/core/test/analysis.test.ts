@@ -78,6 +78,7 @@ const ANSWER: ThreadAnalysis = {
   summary: 'Alice asks if you’re free for lunch on Friday',
   needsReply: true,
   replyReason: 'asks if Friday works',
+  replyOptions: ['Yes, Friday works', 'Suggest another day'],
   expectsReply: false,
   category: 'personal',
   actionItems: [{ text: 'Answer Alice about Friday lunch', due: '2026-09-26', event: false }],

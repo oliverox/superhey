@@ -22,6 +22,9 @@ export const ThreadAnalysis = z.object({
   summary: z.string().describe('One line, at most 100 characters: what this thread is about and where it stands. Start with the substance, not the sender or a category ("Wise notification:"): the app shows those.'),
   needsReply: z.boolean().describe('True only if a person (not an automated sender) asks the user something or expects them to act, and the user has not answered since.'),
   replyReason: z.string().nullable().describe('When needsReply: in a few words, what they want (e.g. "asks if Friday works"). Otherwise null.'),
+  replyOptions: z
+    .array(z.string())
+    .describe('When needsReply: 2 or 3 short, clearly different replies the user might want to send, as their intent in a few words, first person, in the thread\'s language (e.g. "Yes, I\'ll be there", "Can\'t make it, thank them", "Ask where it is"). Never invent facts. Otherwise empty.'),
   expectsReply: z.boolean().describe('When the user wrote the latest message: whether it asks for an answer or action from the others. Otherwise false.'),
   category: z.enum(CATEGORIES),
   actionItems: z
@@ -83,7 +86,7 @@ Rules:
 - Keep everything short and plain. Start summaries with the substance; the app already shows the sender. Write in the thread's language.`
 
 /** Bumped when the instructions change, so threads are read again as they come up. */
-export const ANALYSIS_VERSION = 5
+export const ANALYSIS_VERSION = 6
 
 /** The prompt: the thread as data, newest messages kept when it's long. */
 export function analysisPrompt(
@@ -273,6 +276,7 @@ function tidy(a: ThreadAnalysis): ThreadAnalysis {
     ...a,
     summary: clipWords(scrub(a.summary.trim()), 140),
     replyReason: a.needsReply ? (a.replyReason ? clipWords(scrub(a.replyReason.trim()), 140) : null) : null,
+    replyOptions: a.needsReply ? (a.replyOptions ?? []).map((o) => clipWords(scrub(o.trim()), 60)).filter(Boolean).slice(0, 3) : [],
     actionItems: a.actionItems.slice(0, 5).map((i) => ({ ...i, text: scrub(i.text) })),
     dates: a.dates.slice(0, 5).map((d) => inLocalTime(d)),
     amounts: a.amounts.slice(0, 5),

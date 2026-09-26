@@ -138,4 +138,22 @@ describe('the reply area with drafts', () => {
     expect(host.textContent).not.toContain('Draft reply·')
     expect(button('Use draft')).toBeUndefined()
   })
+
+  it('offers replies that fit the email, and checks the proposed time against the calendar', async () => {
+    const onDone = vi.fn()
+    answers.draftReply = () => draft()
+    answers.analysis = () => ({ replyOptions: ['Yes, I’ll be there', 'Can’t make it, thank them'], dates: [{ label: 'MDA event', date: '2099-10-03', time: '09:00' }] })
+    const at = (hm: string) => new Date(`2099-10-03T${hm}:00`).toISOString()
+    answers.calendarRange = () => ({ calendars: [], events: [{ key: 'g', id: 1, title: 'Gym', startsAt: at('08:30'), endsAt: at('10:00'), allDay: false }] })
+    act(() => root.render(createElement(Draft.DraftRequest, { thread: thread(), onDone, onCancel: vi.fn() })))
+    await flush()
+    await flush()
+    expect(host.textContent).toContain('clashes with Gym')
+    await act(async () => button('Yes, I’ll be there')!.click())
+    await flush()
+    expect(calls).toContainEqual(['draftReply', [900, 'Yes, I’ll be there']])
+    expect(onDone).toHaveBeenCalled()
+    delete answers.analysis
+    delete answers.calendarRange
+  })
 })
