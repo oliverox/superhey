@@ -67,7 +67,7 @@ function fakeBackend() {
         spentUsd: state.spent,
         budgetUsd: s.monthlyBudgetUsd,
         calls: 3,
-        byTask: [{ task: 'summary', engine: 'claude', model: 'claude-haiku-4-5', calls: 3, input: 12_300, output: 812, costUsd: 0.42 }],
+        byTask: [{ task: 'summary', engine: 'claude', model: 'claude-haiku-4-5', calls: 3, input: 12_300, cacheRead: 9_840, output: 812, costUsd: 0.42 }],
       },
     }
   }
@@ -343,7 +343,7 @@ describe('Settings: tasks, budget and usage', () => {
     expect(text()).toContain('$0.42 of $5.00 in September')
     expect(byLabel('Spent this month').getAttribute('aria-valuenow')).toBe('0.42')
     const row = [...host.querySelectorAll('tbody tr')].at(-1)!.textContent
-    expect(row).toBe('Thread summariesHaiku 4.5312.3k / 812$0.42')
+    expect(row).toBe('Thread summariesHaiku 4.5312.3k / 81280% from cache$0.42')
   })
 
   it('changes the budget on Enter, and can lift it', async () => {

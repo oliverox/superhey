@@ -56,7 +56,7 @@ export interface AiStatus {
     spentUsd: number
     budgetUsd: number | null
     calls: number
-    byTask: Array<{ task: string; engine: string; model: string; calls: number; input: number; output: number; costUsd: number }>
+    byTask: Array<{ task: string; engine: string; model: string; calls: number; input: number; cacheRead: number; output: number; costUsd: number }>
   }
 }
 

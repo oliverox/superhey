@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { APICallError, generateText, Output, type LanguageModel } from 'ai'
+import { APICallError, generateText, Output, type LanguageModel, type SystemModelMessage } from 'ai'
 import type { z } from 'zod'
 import type { Repo } from '../cache/repo'
 import { costOf, maxCostOf } from './models'
@@ -102,7 +102,7 @@ export class AiClient extends EventEmitter<{ usage: [] }> {
     try {
       result = await generateText({
         model,
-        system: req.system,
+        instructions: cachedInstructions(req.system),
         prompt: req.prompt,
         maxOutputTokens,
         maxRetries: 2,
@@ -132,6 +132,18 @@ export class AiClient extends EventEmitter<{ usage: [] }> {
       ms: Date.now() - started,
     }
   }
+}
+
+/**
+ * The instructions, then the varying part (an email thread). The instructions are the same
+ * on every call of a task, so they end in a cache breakpoint: Claude reads them from its
+ * prompt cache for 5 minutes after a call (at a tenth of the price) instead of processing
+ * them again; the thread after the breakpoint never is. (Claude only caches a prefix above
+ * a minimum length per model, silently skipping shorter ones; OpenAI and Grok cache
+ * repeated prefixes on their own and ignore this option.)
+ */
+export function cachedInstructions(system: string): SystemModelMessage {
+  return { role: 'system', content: system, providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } } }
 }
 
 function defaultModel(r: Resolved, apiKey: string | null): LanguageModel {

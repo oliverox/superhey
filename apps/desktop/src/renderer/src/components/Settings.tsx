@@ -679,6 +679,11 @@ function Budget({ status, save }: { status: AiStatus; save: (change: (s: AiSetti
                 <td className="py-1.5 text-right text-ink-soft">{r.calls}</td>
                 <td className="py-1.5 text-right text-ink-soft">
                   {tokens(r.input)} / {tokens(r.output)}
+                  {r.cacheRead > 0 && (
+                    <span className="block text-[12px] text-ink-faint" title="Input read from the provider’s prompt cache, billed at a fraction of the price">
+                      {Math.round((r.cacheRead / Math.max(r.input, 1)) * 100)}% from cache
+                    </span>
+                  )}
                 </td>
                 <td className="py-1.5 text-right text-ink">{r.engine === 'local' ? 'free' : money(r.costUsd)}</td>
               </tr>

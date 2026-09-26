@@ -959,7 +959,7 @@ export class Repo {
   /** Model calls since `sinceIso`, totalled per task, engine and model (most spent first). */
   aiUsageSince(sinceIso: string): AiUsageTotal[] {
     return this.all<Record<string, unknown>>(
-      `SELECT task, engine, model, count(*) AS calls, sum(input) AS input, sum(output) AS output, sum(cost_usd) AS cost
+      `SELECT task, engine, model, count(*) AS calls, sum(input) AS input, sum(cache_read) AS cache_read, sum(output) AS output, sum(cost_usd) AS cost
        FROM ai_usage WHERE at >= ? GROUP BY task, engine, model ORDER BY cost DESC, calls DESC`,
       sinceIso,
     ).map((r) => ({
@@ -968,6 +968,7 @@ export class Repo {
       model: r.model as string,
       calls: Number(r.calls),
       input: Number(r.input),
+      cacheRead: Number(r.cache_read),
       output: Number(r.output),
       costUsd: Number(r.cost),
     }))
@@ -1103,7 +1104,10 @@ export interface AiUsageTotal {
   engine: string
   model: string
   calls: number
+  /** All input tokens, cached ones included. */
   input: number
+  /** Of those, read from the provider's prompt cache (billed at a fraction). */
+  cacheRead: number
   output: number
   costUsd: number
 }
