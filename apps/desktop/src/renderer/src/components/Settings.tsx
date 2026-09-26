@@ -8,9 +8,37 @@ import { Menu, MenuItem, MenuSeparator } from './Menu'
  * Settings, over the app (⌘, or the command bar). For now: AI. Changes apply as they're
  * made, like macOS settings; an API key is saved only when you press Save.
  */
-export function Settings({ onClose }: { onClose: () => void }) {
+export type SettingsTab = 'general' | 'ai' | 'voice' | 'usage'
+const TABS: Array<[SettingsTab, string]> = [
+  ['general', 'General'],
+  ['ai', 'AI'],
+  ['voice', 'Your voice'],
+  ['usage', 'Usage'],
+]
+const TAB_KEY = 'settings:tab'
+
+/** The tab last used on this device (General the first time). */
+function storedTab(): SettingsTab {
+  try {
+    const t = localStorage.getItem(TAB_KEY)
+    return TABS.some(([id]) => id === t) ? (t as SettingsTab) : 'general'
+  } catch {
+    return 'general'
+  }
+}
+
+export function Settings({ onClose, initialTab }: { onClose: () => void; initialTab?: SettingsTab }) {
   const status = useLive(() => api.aiStatus(), [], (e) => e.type === 'ai')
   const [error, setError] = useState<string | null>(null)
+  const [tab, setTabState] = useState<SettingsTab>(() => initialTab ?? storedTab())
+  const setTab = (t: SettingsTab) => {
+    setTabState(t)
+    try {
+      localStorage.setItem(TAB_KEY, t)
+    } catch {
+      // remembered for this visit only
+    }
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -32,21 +60,26 @@ export function Settings({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[72] flex items-start justify-center bg-ink/25 px-4 pt-[6vh]" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div role="dialog" aria-label="Settings" className="settings rise flex max-h-[88vh] w-full max-w-[760px] flex-col overflow-hidden rounded-ui-lg border border-rule-strong bg-pane">
-        <header className="flex items-baseline gap-3 border-b border-rule px-7 pt-5 pb-4">
-          <h2 className="text-[17px] font-semibold tracking-[-0.01em]">Settings</h2>
-          <button onClick={onClose} className="ml-auto rounded-ui px-2 py-0.5 text-[12px] text-ink-faint hover:bg-pane-sunk hover:text-ink" title="Close (Esc)">
-            Done
-          </button>
+        <header className="border-b border-rule px-7 pt-5">
+          <div className="flex items-baseline gap-3">
+            <h2 className="text-[17px] font-semibold tracking-[-0.01em]">Settings</h2>
+            <button onClick={onClose} className="ml-auto rounded-ui px-2 py-0.5 text-[12px] text-ink-faint hover:bg-pane-sunk hover:text-ink" title="Close (Esc)">
+              Done
+            </button>
+          </div>
+          <Tabs tab={tab} onTab={setTab} />
         </header>
 
-        <div className="scroll min-h-0 flex-1 px-7 pb-8">
-          <Section title="Reading" hint="How SuperHey treats email as you go through it.">
-            <Reading />
-          </Section>
-          {status.error && <p className="mt-6 text-danger">Couldn't load the settings: {status.error}</p>}
-          {!s ? (
-            !status.error && <p className="mt-6 text-ink-faint">Loading…</p>
-          ) : (
+        <div className="scroll min-h-0 flex-1 px-7 pb-8" role="tabpanel" id={`settings-${tab}`} aria-labelledby={`settings-tab-${tab}`}>
+          {tab === 'general' ? (
+            <Section title="Reading" hint="How SuperHey treats email as you go through it.">
+              <Reading />
+            </Section>
+          ) : status.error ? (
+            <p className="mt-6 text-danger">Couldn't load the settings: {status.error}</p>
+          ) : !s ? (
+            <p className="mt-6 text-ink-faint">Loading…</p>
+          ) : tab === 'ai' ? (
             <>
               <Section title="AI providers" hint="Your own API keys; each company bills you for what it uses. Automatic tasks use the first provider that’s on.">
                 <div className="-mt-1 mb-4">
@@ -63,15 +96,16 @@ export function Settings({ onClose }: { onClose: () => void }) {
               <Section title="What runs where" hint="Quick tasks can run locally; the rest go to the cloud. Change any of them.">
                 <Tasks status={s} save={save} />
               </Section>
-
-              <Section title="Your voice" hint="Drafts of replies to emails that need one, written the way you write. Never sent without you.">
-                <Voice draftOn={s.settings.tasks.draft?.enabled ?? true} />
-              </Section>
-
-              <Section title="Budget and usage" hint="A hard stop on cloud spending (Claude and OpenAI together) each month. Local models are free and don't count.">
-                <Budget status={s} save={save} />
-              </Section>
             </>
+          ) : tab === 'voice' ? (
+            <Section title="Your voice" hint="Drafts of replies to emails that need one, written the way you write. Never sent without you.">
+              <Voice draftOn={s.settings.tasks.draft?.enabled ?? true} />
+            </Section>
+          ) : (
+            <Section title="Budget and usage" hint="A hard stop on cloud spending (Claude and OpenAI together) each month. Local models are free and don't count.">
+              {error && <p className="mb-3 rounded-ui bg-danger/10 px-3 py-2 text-[13px] text-danger">{error}</p>}
+              <Budget status={s} save={save} />
+            </Section>
           )}
         </div>
       </div>
@@ -118,6 +152,49 @@ function Check({ label }: { label?: string }) {
  * The voice profile: built on request from mail the user wrote, shown as the guide the
  * drafts follow, with their own notes on top. Rebuild and remove are always at hand.
  */
+/** General · AI · Your voice · Usage. ← and → move between them, as in any tab bar. */
+function Tabs({ tab, onTab }: { tab: SettingsTab; onTab: (t: SettingsTab) => void }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const move = (delta: number) => {
+    const i = TABS.findIndex(([id]) => id === tab)
+    const next = TABS[(i + delta + TABS.length) % TABS.length]![0]
+    onTab(next)
+    ref.current?.querySelector<HTMLButtonElement>(`#settings-tab-${next}`)?.focus()
+  }
+  return (
+    <div
+      ref={ref}
+      role="tablist"
+      aria-label="Settings sections"
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+          e.preventDefault()
+          move(e.key === 'ArrowRight' ? 1 : -1)
+        }
+      }}
+      className="-mb-px mt-3 flex gap-5"
+    >
+      {TABS.map(([id, label]) => (
+        <button
+          key={id}
+          id={`settings-tab-${id}`}
+          type="button"
+          role="tab"
+          aria-selected={tab === id}
+          aria-controls={`settings-${id}`}
+          tabIndex={tab === id ? 0 : -1}
+          onClick={() => onTab(id)}
+          className={`border-b-2 pb-2.5 text-[14px] font-medium transition-colors duration-(--dur-1) ${
+            tab === id ? 'border-accent text-ink' : 'border-transparent text-ink-faint hover:text-ink-soft'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function Voice({ draftOn }: { draftOn: boolean }) {
   const state = useLive(() => api.voice(), [], (e) => e.type === 'voice' || e.type === 'ai')
   const [error, setError] = useState<string | null>(null)
