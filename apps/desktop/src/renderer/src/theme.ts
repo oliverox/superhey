@@ -47,7 +47,8 @@ export function storedScheme(): Scheme {
 const storedLook = (): Look => ({
   theme: storedTheme(),
   scheme: storedScheme(),
-  palette: defaultTheme(read('palette') ?? '').id,
+  // "graphite" used to be today's Cobalt; the key changed when Graphite became black and grey.
+  palette: defaultTheme(read('look:palette') ?? (read('palette') === 'graphite' ? 'cobalt' : (read('palette') ?? ''))).id,
   omarchy: omarchyTheme(read('palette:omarchy') ?? '').id,
 })
 
@@ -82,7 +83,7 @@ export function setLook(change: Partial<Look>) {
   applyLook(look)
   save('theme', look.theme)
   save('scheme', look.scheme)
-  save('palette', look.palette)
+  save('look:palette', look.palette)
   save('palette:omarchy', look.omarchy)
   listeners.forEach((l) => l())
 }

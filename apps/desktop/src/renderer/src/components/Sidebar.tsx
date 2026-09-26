@@ -58,7 +58,7 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
                 >
                   <span className="font-medium">{box.name}</span>
                   {box.kind === 'imbox' && box.unseen > 0 && (
-                    <span className="ml-2 rounded-full bg-new px-1.5 text-[11px] leading-[17px] font-semibold text-accent-ink tabular-nums">
+                    <span className="ml-2 rounded-full bg-side-accent px-1.5 text-[11px] leading-[17px] font-semibold text-side-accent-ink tabular-nums">
                       {box.unseen}
                     </span>
                   )}
@@ -119,7 +119,7 @@ function Agenda() {
             <ul className="space-y-2">
               {items.map((e) => (
                 <li key={e.key} className="flex gap-2.5 text-[13px] leading-snug">
-                  <span className="mt-[3px] h-3 w-[2px] shrink-0 bg-accent" />
+                  <span className="mt-[3px] h-3 w-[2px] shrink-0 bg-side-accent" />
                   <span className="min-w-0">
                     <span className="block truncate text-side-ink">{e.title}</span>
                     <span className="text-side-faint">{e.allDay ? 'All day' : clock(e.startsAt)}</span>
@@ -202,7 +202,7 @@ function AppearanceSwitch({ theme, scheme, onTheme, onScheme }: { theme: Theme; 
 function SyncStatus({ status }: { status: AppStatus }) {
   const watch = status.sync?.watch ?? 'connecting'
   const label = { live: 'Live', connecting: 'Connecting', reconnecting: 'Reconnecting', stopped: 'Paused' }[watch]
-  const dot = watch === 'live' ? 'bg-accent' : 'bg-new pulse'
+  const dot = watch === 'live' ? 'bg-side-accent' : 'bg-side-accent pulse'
   return (
     <>
       {status.testInstance && (

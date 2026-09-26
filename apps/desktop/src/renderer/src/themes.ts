@@ -1,7 +1,7 @@
 /**
  * Colour themes. The Default style's themes each come in light and dark (the Light / Dark /
  * System choice picks which shows); the Omarchy style has Omarchy's own themes, one palette
- * each (most dark, a few light). Graphite and Tokyo Night are the styles' own colours in
+ * each (most dark, a few light). Cobalt and Tokyo Night are the styles' own colours in
  * styles.css; the rest are written into a <style> as overrides of the same tokens.
  */
 
@@ -23,6 +23,9 @@ export interface Colors {
   ruleStrong: string
   accent: string
   accentInk: string
+  /** Badges and markers in the sidebar, when the accent wouldn't show on it. */
+  sideAccent?: string
+  sideAccentInk?: string
 }
 
 export interface DefaultTheme {
@@ -41,19 +44,34 @@ export interface OmarchyTheme {
   colors: Colors & { newDot: string; danger: string; ok: string; attn: string }
 }
 
-const graphiteLight: Colors = {
+const cobaltLight: Colors = {
   bg: '#e9ebef', side: '#17191e', sideInk: '#f1f2f5', sideSoft: '#a6abb6', sideFaint: '#6b717d', sideSel: '#262a31',
   pane: '#ffffff', paneAlt: '#f7f8fa', paneSunk: '#eef0f3', ink: '#101217', inkSoft: '#4a505c', inkFaint: '#676d79',
   rule: '#dfe2e7', ruleStrong: '#d3d6dc', accent: '#3355ff', accentInk: '#ffffff',
 }
-const graphiteDark: Colors = {
+const cobaltDark: Colors = {
   bg: '#0b0c0f', side: '#0f1013', sideInk: '#f1f2f5', sideSoft: '#a6abb6', sideFaint: '#6b717d', sideSel: '#1d2026',
   pane: '#14161a', paneAlt: '#181a1f', paneSunk: '#1d2026', ink: '#eceef2', inkSoft: '#a7adb8', inkFaint: '#818794',
   rule: '#23262d', ruleStrong: '#2f333b', accent: '#7b91ff', accentInk: '#0b0c0f',
 }
 
 export const DEFAULT_THEMES: DefaultTheme[] = [
-  { id: 'graphite', name: 'Graphite', blurb: 'Cool greys, cobalt', light: graphiteLight, dark: graphiteDark },
+  { id: 'cobalt', name: 'Cobalt', blurb: 'Cool greys, cobalt blue', light: cobaltLight, dark: cobaltDark },
+  {
+    id: 'graphite',
+    name: 'Graphite',
+    blurb: 'Black and shades of grey',
+    light: {
+      bg: '#e8e8e8', side: '#111111', sideInk: '#f2f2f2', sideSoft: '#a8a8a8', sideFaint: '#707070', sideSel: '#262626',
+      pane: '#ffffff', paneAlt: '#f7f7f7', paneSunk: '#efefef', ink: '#0d0d0d', inkSoft: '#4d4d4d', inkFaint: '#6b6b6b',
+      rule: '#e0e0e0', ruleStrong: '#d2d2d2', accent: '#1a1a1a', accentInk: '#ffffff', sideAccent: '#e6e6e6', sideAccentInk: '#111111',
+    },
+    dark: {
+      bg: '#0a0a0a', side: '#0d0d0d', sideInk: '#f2f2f2', sideSoft: '#a8a8a8', sideFaint: '#707070', sideSel: '#1f1f1f',
+      pane: '#141414', paneAlt: '#181818', paneSunk: '#1f1f1f', ink: '#ededed', inkSoft: '#a8a8a8', inkFaint: '#878787',
+      rule: '#242424', ruleStrong: '#303030', accent: '#e6e6e6', accentInk: '#0d0d0d',
+    },
+  },
   {
     id: 'linen',
     name: 'Linen',
@@ -259,9 +277,11 @@ const vars = (c: Colors, dark: boolean) =>
     `--accent-wash:color-mix(in oklab, ${c.accent} ${dark ? 20 : 11}%, ${c.pane})`,
     `--selection:color-mix(in oklab, ${c.accent} ${dark ? 20 : 11}%, ${c.pane})`,
     `--new:${c.accent}`,
+    `--side-accent:${c.sideAccent ?? c.accent}`,
+    `--side-accent-ink:${c.sideAccentInk ?? c.accentInk}`,
   ].join(';')
 
-/** The CSS for every theme but the styles' own (Graphite, Tokyo Night). */
+/** The CSS for every theme but the styles' own (Cobalt, Tokyo Night). */
 export function themeCss(): string {
   const out: string[] = []
   for (const t of DEFAULT_THEMES.slice(1)) {
@@ -274,7 +294,7 @@ export function themeCss(): string {
     const c = t.colors
     const dark = t.scheme === 'dark'
     out.push(
-      `:root[data-theme='omarchy'][data-omarchy='${t.id}']{${vars(c, dark)};--new:${c.newDot};--danger:${c.danger};--ok:${c.ok};--attn:${c.attn};` +
+      `:root[data-theme='omarchy'][data-omarchy='${t.id}']{${vars(c, dark)};--new:${c.newDot};--side-accent:${c.newDot};--danger:${c.danger};--ok:${c.ok};--attn:${c.attn};` +
         `--attn-wash:color-mix(in oklab, ${c.attn} 16%, ${c.pane});--tip-bg:${c.paneSunk};--tip-ink:${c.ink};--tip-rule:${c.ruleStrong};--tip-key-rule:${c.ruleStrong};color-scheme:${t.scheme}}`,
     )
   }

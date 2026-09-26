@@ -199,6 +199,9 @@
   --color-rule-strong: var(--rule-strong);
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
+  /* The sidebar's own accent (badges, markers); the accent unless a theme needs it to differ. */
+  --color-side-accent: var(--side-accent, var(--new));
+  --color-side-accent-ink: var(--side-accent-ink, var(--accent-ink));
   --color-accent-wash: var(--accent-wash);
   --color-new: var(--new);
   --color-danger: var(--danger);
