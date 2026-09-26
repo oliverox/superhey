@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { dedupe, displayName, formatAddressList, hasRealName, recipientSummaries, type Addr } from '../mail/people'
 
 // Copying works in Electron and browsers; the textarea fallback covers contexts where the
@@ -68,6 +69,8 @@ function HoverCard({
   const [pinned, setPinned] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const root = useRef<HTMLSpanElement>(null)
+  const card = useRef<HTMLDivElement>(null)
+  const [place, setPlace] = useState<{ left: number; top?: number; bottom?: number } | null>(null)
   const id = useId()
 
   const schedule = (next: boolean, ms: number) => {
@@ -78,7 +81,8 @@ function HoverCard({
   useEffect(() => {
     if (!open) return
     const onDown = (e: MouseEvent) => {
-      if (!root.current?.contains(e.target as Node)) {
+      const t = e.target as Node
+      if (!root.current?.contains(t) && !card.current?.contains(t)) {
         setOpen(false)
         setPinned(false)
       }
@@ -98,6 +102,31 @@ function HoverCard({
   }, [open])
 
   useEffect(() => () => clearTimeout(timer.current), [])
+
+  // The card lives on document.body (so later messages, which animate in their own stacking
+  // contexts, can't paint over it or clip it), placed under the trigger, or above it near the bottom.
+  useLayoutEffect(() => {
+    if (!open) return setPlace(null)
+    const measure = () => {
+      const r = root.current?.getBoundingClientRect()
+      if (!r) return
+      const h = card.current?.offsetHeight ?? 0
+      const w = card.current?.offsetWidth ?? 260
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8))
+      const below = window.innerHeight - r.bottom
+      setPlace(below < h + 8 && r.top > below ? { left, bottom: window.innerHeight - r.top } : { left, top: r.bottom })
+    }
+    measure()
+    // Once more with the card's real size, then follow scrolling and resizing.
+    const frame = requestAnimationFrame(measure)
+    window.addEventListener('resize', measure)
+    document.addEventListener('scroll', measure, true)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('resize', measure)
+      document.removeEventListener('scroll', measure, true)
+    }
+  }, [open])
 
   return (
     <span
@@ -121,25 +150,30 @@ function HoverCard({
       >
         {trigger}
       </button>
-      {open && (
-        // The padding bridges the gap so the card stays open while the mouse moves onto it.
-        <div
-          id={id}
-          role="dialog"
-          aria-label={label}
-          className="absolute top-full left-0 z-40 pt-1.5 select-text"
-          // Being over the card, or using something in it, keeps it open.
-          onMouseEnter={() => clearTimeout(timer.current)}
-          onMouseDown={() => {
-            clearTimeout(timer.current)
-            setPinned(true)
-          }}
-        >
-          <div className="w-max max-w-[360px] min-w-[260px] rounded-ui-lg border border-rule-strong bg-pane p-1.5 text-[13px] font-normal text-ink shadow-[0_12px_32px_-12px_rgba(0,0,0,0.28)]">
-            {children}
-          </div>
-        </div>
-      )}
+      {open &&
+        createPortal(
+          // The padding bridges the gap so the card stays open while the mouse moves onto it.
+          <div
+            ref={card}
+            id={id}
+            role="dialog"
+            aria-label={label}
+            className={`fixed z-50 select-text ${place?.bottom != null ? 'pb-1.5' : 'pt-1.5'}`}
+            style={place ? { left: place.left, top: place.top, bottom: place.bottom } : { left: 0, top: 0, visibility: 'hidden' }}
+            // Being over the card, or using something in it, keeps it open.
+            onMouseEnter={() => clearTimeout(timer.current)}
+            onMouseLeave={() => !pinned && schedule(false, 180)}
+            onMouseDown={() => {
+              clearTimeout(timer.current)
+              setPinned(true)
+            }}
+          >
+            <div className="max-h-[min(420px,calc(100vh-24px))] w-max max-w-[360px] min-w-[260px] overflow-y-auto rounded-ui-lg border border-rule-strong bg-pane p-1.5 text-[13px] font-normal text-ink shadow-[0_12px_32px_-12px_rgba(0,0,0,0.28)]">
+              {children}
+            </div>
+          </div>,
+          document.body,
+        )}
     </span>
   )
 }
