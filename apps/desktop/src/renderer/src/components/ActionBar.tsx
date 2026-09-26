@@ -1,3 +1,4 @@
+import { BubbleIcon, icon, LabelIcon, MoveIcon, ReplyLaterIcon, SetAsideIcon, TrashIcon } from './icons'
 import { useEffect, useState } from 'react'
 import type { Action, PostingRow } from '@shared/api'
 import { api, useLive } from '../api'
@@ -193,17 +194,5 @@ export function ActionBar({
   )
 }
 
-// 16px line icons, drawn to match the rest of the UI.
-const icon = (d: React.ReactNode) => (
-  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-    {d}
-  </svg>
-)
-const ReplyLaterIcon = () => icon(<><circle cx="8" cy="8" r="5.75" /><path d="M8 5v3l2 1.5" /></>)
-const SetAsideIcon = () => icon(<path d="M4.5 2.5h7v11L8 11l-3.5 2.5z" />)
-const BubbleIcon = () => icon(<><path d="M8 12.5v-8" /><path d="m4.5 7.5 3.5-3.5 3.5 3.5" /><path d="M3.5 14h9" /></>)
-const MoveIcon = () => icon(<><path d="M2.5 5.5h11v7a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z" /><path d="M2.5 5.5 4 2.5h8l1.5 3" /><path d="M8 7.5v4M6 9.5l2 2 2-2" /></>)
-const LabelIcon = () => icon(<><path d="M2.5 3.5v4l6 6 5-5-6-6h-4a1 1 0 0 0-1 1z" /><circle cx="5.5" cy="5.5" r=".8" fill="currentColor" /></>)
-const TrashIcon = () => icon(<><path d="M3 4.5h10" /><path d="M6 4.5v-2h4v2" /><path d="M4.5 4.5l.6 8.6a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-8.6" /></>)
 const SeenIcon = ({ seen }: { seen: boolean }) =>
   icon(seen ? <><circle cx="8" cy="8" r="3" fill="currentColor" stroke="none" /><circle cx="8" cy="8" r="5.75" /></> : <circle cx="8" cy="8" r="5.75" />)
