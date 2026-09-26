@@ -42,62 +42,111 @@ export function QuickLook({ files, index, onIndex, onClose }: { files: Attachmen
     return () => window.removeEventListener('keydown', onKey, true)
   }, [files.length, index, onClose, onIndex])
 
+  // The page you're on, from where the reading is scrolled (PDFs).
+  const scroller = useRef<HTMLDivElement>(null)
+  const [page, setPage] = useState({ at: 1, of: 0 })
+  const onScroll = () => {
+    const root = scroller.current
+    if (!root) return
+    const sheets = [...root.querySelectorAll<HTMLElement>('[data-page]')]
+    const middle = root.scrollTop + root.clientHeight / 2
+    const at = sheets.filter((el) => el.offsetTop <= middle).length || 1
+    setPage((p) => (p.at === at ? p : { ...p, at }))
+  }
+  const previous = () => onIndex((index - 1 + files.length) % files.length)
+  const next = () => onIndex((index + 1) % files.length)
+
   // Drawn at the top of the page: inside a message, an animated (transformed) ancestor would
   // hold "fixed" to itself and trap the preview in the reading column.
+  // A reading desk: the app stays behind, blurred and dimmed, and the document lies on it as
+  // sheets of paper, with a slim toolbar floating above. Clicking the desk puts it away.
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-6" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div ref={dialog} role="dialog" aria-label={`Preview of ${a.filename}`} tabIndex={-1} className="ql-desk fade-in fixed inset-0 z-[70] outline-none">
       <div
-        ref={dialog}
-        role="dialog"
-        aria-label={`Preview of ${a.filename}`}
-        tabIndex={-1}
-        className="rise flex h-[90vh] w-[min(1040px,94vw)] flex-col overflow-hidden rounded-ui-lg border border-rule-strong bg-pane shadow-[0_24px_64px_-24px_rgba(0,0,0,0.6)] outline-none"
+        ref={scroller}
+        onScroll={onScroll}
+        onMouseDown={(e) => !(e.target as HTMLElement).closest('[data-page], [data-sheet]') && onClose()}
+        className="scroll absolute inset-0 overflow-y-auto px-6 pt-[76px] pb-16"
       >
-        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-rule px-4">
-          <div className="min-w-0 flex-1">
-            <div className="truncate font-medium text-ink">{a.filename}</div>
-          </div>
-          {files.length > 1 && (
-            <div className="flex items-center gap-1 text-[12px] text-ink-faint">
-              <button onClick={() => onIndex((index - 1 + files.length) % files.length)} aria-label="Previous file" title="Previous (←)" className="rounded-ui px-1.5 py-0.5 hover:bg-pane-sunk hover:text-ink">
-                ←
-              </button>
-              <span className="tabular-nums">
-                {index + 1} of {files.length}
-              </span>
-              <button onClick={() => onIndex((index + 1) % files.length)} aria-label="Next file" title="Next (→)" className="rounded-ui px-1.5 py-0.5 hover:bg-pane-sunk hover:text-ink">
-                →
-              </button>
-            </div>
-          )}
-          <button
-            onClick={() => api.openAttachment(a.id).then(() => setOpenError(null), (e: unknown) => setOpenError(e instanceof Error ? e.message : String(e)))}
-            title={openError ?? 'Open in its own app'}
-            className={`rounded-ui border px-2.5 py-1 text-[13px] font-medium hover:bg-pane-sunk ${openError ? 'border-danger text-danger' : 'border-rule-strong text-ink-soft hover:text-ink'}`}
-          >
-            {openError ? "Couldn't open" : 'Open in app'}
-          </button>
-          <button onClick={onClose} aria-label="Close preview" title="Close (Space)" className="rounded-ui px-2 py-1 text-[15px] leading-none text-ink-faint hover:bg-pane-sunk hover:text-ink">
-            ×
-          </button>
-        </header>
-        <div className="scroll min-h-0 flex-1 bg-pane-sunk">{isPdf(a) ? <PdfPages key={a.id} id={a.id} /> : <ImageView key={a.id} id={a.id} name={a.filename} />}</div>
+        {isPdf(a) ? <PdfPages key={a.id} id={a.id} onPages={(of) => setPage({ at: 1, of })} /> : <ImageView key={a.id} id={a.id} name={a.filename} />}
       </div>
+
+      <header className="ql-bar pop-in absolute top-4 left-1/2 flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-1 rounded-full py-1 pr-1 pl-3.5 text-[13px]">
+        <FileGlyph pdf={isPdf(a)} />
+        <span className="ml-1.5 min-w-0 truncate font-medium text-ink" title={a.filename}>
+          {a.filename}
+        </span>
+        {isPdf(a) && page.of > 0 && (
+          <span className="ml-2 shrink-0 text-[12px] text-ink-faint tabular-nums">
+            Page {page.at} of {page.of}
+          </span>
+        )}
+        <span className="mx-2 h-4 w-px shrink-0 bg-rule" aria-hidden />
+        {files.length > 1 && (
+          <span className="flex shrink-0 items-center text-[12px] text-ink-faint">
+            <BarButton onClick={previous} label="Previous file" title="Previous (←)">
+              <path d="M10 3.5 5.5 8l4.5 4.5" />
+            </BarButton>
+            <span className="px-0.5 tabular-nums">
+              {index + 1} of {files.length}
+            </span>
+            <BarButton onClick={next} label="Next file" title="Next (→)">
+              <path d="m6 3.5 4.5 4.5L6 12.5" />
+            </BarButton>
+          </span>
+        )}
+        <button
+          onClick={() => api.openAttachment(a.id).then(() => setOpenError(null), (e: unknown) => setOpenError(e instanceof Error ? e.message : String(e)))}
+          title={openError ?? 'Open in its own app'}
+          className={`shrink-0 rounded-full px-3 py-1 font-medium ${openError ? 'text-danger' : 'text-ink-soft hover:bg-pane-sunk hover:text-ink'}`}
+        >
+          {openError ? "Couldn't open" : 'Open in app'}
+        </button>
+        <BarButton onClick={onClose} label="Close preview" title="Close (Space or Esc)">
+          <path d="m4 4 8 8m0-8-8 8" />
+        </BarButton>
+      </header>
     </div>,
     document.body,
   )
 }
 
+function BarButton({ onClick, label, title, children }: { onClick: () => void; label: string; title: string; children: React.ReactNode }) {
+  return (
+    <button onClick={onClick} aria-label={label} title={title} className="flex size-7 shrink-0 items-center justify-center rounded-full text-ink-faint hover:bg-pane-sunk hover:text-ink">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        {children}
+      </svg>
+    </button>
+  )
+}
+
+/** A folded-corner sheet (PDF, marked red) or a picture frame. */
+function FileGlyph({ pdf }: { pdf: boolean }) {
+  return pdf ? (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden className="shrink-0">
+      <path d="M4 1.75h5.25L12.5 5v9.25H4z" fill="var(--pane)" stroke="var(--ink-faint)" strokeWidth="1.2" strokeLinejoin="round" />
+      <path d="M9.25 1.75V5h3.25" stroke="var(--ink-faint)" strokeWidth="1.2" strokeLinejoin="round" />
+      <rect x="2.5" y="8.25" width="7.5" height="4" rx="1" fill="#d93a30" />
+    </svg>
+  ) : (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden className="shrink-0 text-ink-faint">
+      <rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+      <path d="m3 11.5 3.5-3.5 2.5 2.5 1.5-1.5 2.5 2.5" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 function ImageView({ id, name }: { id: string; name: string }) {
   return (
-    <div className="checker flex min-h-full items-center justify-center p-6">
-      <img src={fileUrl(id)} alt={name} className="max-h-[calc(90vh-96px)] max-w-full object-contain shadow-sm" draggable={false} />
+    <div className="flex min-h-full items-center justify-center">
+      <img data-sheet src={fileUrl(id)} alt={name} className="ql-sheet checker rise max-h-[calc(100vh-140px)] max-w-full object-contain" draggable={false} />
     </div>
   )
 }
 
 /** Every page (up to MAX_PAGES), rendered at the preview's width for this screen. */
-function PdfPages({ id }: { id: string }) {
+function PdfPages({ id, onPages }: { id: string; onPages: (count: number) => void }) {
   const box = useRef<HTMLDivElement>(null)
   const [state, setState] = useState<{ pages: number; shown: number; error: string | null }>({ pages: 0, shown: 0, error: null })
 
@@ -115,7 +164,9 @@ function PdfPages({ id }: { id: string }) {
       const doc = await task.promise
       const count = Math.min(doc.numPages, MAX_PAGES)
       setState({ pages: doc.numPages, shown: 0, error: null })
-      const width = Math.min(host.clientWidth - 48, 900)
+      onPages(count)
+      // A comfortable reading width for a page: not the whole window.
+      const width = Math.min(host.clientWidth, 860)
       for (let n = 1; n <= count && !controller.signal.aborted; n++) {
         const page = await doc.getPage(n)
         const base = page.getViewport({ scale: 1 })
@@ -125,11 +176,22 @@ function PdfPages({ id }: { id: string }) {
         canvas.width = Math.floor(viewport.width)
         canvas.height = Math.floor(viewport.height)
         canvas.style.width = `${width}px`
-        canvas.className = 'mx-auto mb-4 block bg-white shadow-sm'
+        canvas.className = 'block bg-white'
         canvas.setAttribute('aria-label', `Page ${n}`)
         await page.render({ canvas, viewport }).promise
         if (controller.signal.aborted) return
-        host.querySelector('[data-pages]')!.append(canvas)
+        // A sheet on the desk, with its number underneath.
+        const sheet = document.createElement('figure')
+        sheet.dataset.page = String(n)
+        sheet.className = 'ql-page rise mx-auto mb-3 w-fit'
+        const paper = document.createElement('div')
+        paper.className = 'ql-sheet'
+        paper.append(canvas)
+        const number = document.createElement('figcaption')
+        number.className = 'ql-number'
+        number.textContent = String(n)
+        sheet.append(paper, number)
+        host.querySelector('[data-pages]')!.append(sheet)
         setState((s) => ({ ...s, shown: n }))
       }
     })().catch((e: unknown) => {
@@ -142,14 +204,14 @@ function PdfPages({ id }: { id: string }) {
   }, [id])
 
   return (
-    <div ref={box} className="px-6 py-6">
+    <div ref={box} className="mx-auto max-w-[860px]">
       <div data-pages />
       {state.error ? (
-        <p className="py-10 text-center text-danger">Couldn't show this PDF: {state.error}. Try “Open in app”.</p>
+        <p data-sheet className="ql-note mx-auto w-fit text-danger">Couldn't show this PDF: {state.error}. Try “Open in app”.</p>
       ) : state.shown < Math.min(state.pages, MAX_PAGES) || !state.pages ? (
-        <p className="py-6 text-center text-[13px] text-ink-faint">Loading{state.pages ? ` page ${state.shown + 1} of ${state.pages}` : '…'}</p>
+        <p className="ql-note mx-auto w-fit text-[13px]">Loading{state.pages ? ` page ${state.shown + 1} of ${state.pages}` : '…'}</p>
       ) : state.pages > MAX_PAGES ? (
-        <p className="py-4 text-center text-[13px] text-ink-faint">
+        <p data-sheet className="ql-note mx-auto w-fit text-[13px]">
           Showing the first {MAX_PAGES} of {state.pages} pages. “Open in app” for the rest.
         </p>
       ) : null}
