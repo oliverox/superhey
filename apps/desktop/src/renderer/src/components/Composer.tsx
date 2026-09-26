@@ -4,6 +4,7 @@ import { api, useLive } from '../api'
 import { keyLabel } from '../shortcuts'
 import { isEmail, RecipientField } from './RecipientField'
 import { Spinner } from './Spinner'
+import { DraftSuggestions } from './DraftReply'
 
 export interface ComposeRequest {
   kind: OutgoingKind
@@ -17,6 +18,8 @@ export interface ComposeRequest {
   fresh?: boolean
   /** The earlier message a reply answers (not the thread's latest); its unsent text is kept apart. */
   replyTo?: number
+  /** The message a draft in your voice answers (the thread's latest, or `replyTo`). */
+  draftFrom?: number
 }
 
 const TITLES: Record<OutgoingKind, string> = { new: 'New message', reply: 'Reply', 'reply-all': 'Reply all', forward: 'Forward' }
@@ -65,7 +68,8 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
   const isNew = request.kind === 'new'
   const canAttach = request.kind !== 'forward' && !!window.bridge
   // A reply to an earlier message can be drafted in the user's voice, right here.
-  const canDraft = request.replyTo != null && request.message.threadId != null
+  const draftFrom = request.replyTo ?? request.draftFrom
+  const canDraft = draftFrom != null && request.message.threadId != null
   const [drafting, setDrafting] = useState(false)
   /** What the box held before a draft replaced it, until the user edits it. */
   const [beforeDraft, setBeforeDraft] = useState<string | null>(null)
@@ -133,14 +137,14 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
   }
 
   // What's in the box is the instruction ("say yes, Monday works"); the draft replaces it.
-  const writeDraft = async () => {
+  const writeDraft = async (instruction?: string) => {
     if (!canDraft || drafting) return
     setDrafting(true)
     setError(null)
     try {
       // Redrafting follows the same instruction, not the draft now in the box.
-      const asked = beforeDraft ?? body
-      const draft = await api.draftReplyTo(request.message.threadId!, request.replyTo!, asked.trim() || null)
+      const asked = instruction ?? beforeDraft ?? body
+      const draft = await api.draftReplyTo(request.message.threadId!, draftFrom!, asked.trim() || null)
       setBeforeDraft(asked)
       setBody(draft.body)
       setNote(draft.placeholders.length ? `Fill in before sending: ${draft.placeholders.join(', ')}` : null)
@@ -234,6 +238,7 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
         />
       )}
 
+      {canDraft && !body.trim() && beforeDraft == null && <DraftSuggestions topicId={request.message.threadId!} disabled={drafting} onPick={(o) => void writeDraft(o)} />}
       <textarea
         ref={bodyRef}
         value={body}

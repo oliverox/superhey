@@ -177,89 +177,35 @@ function WithPlaceholders({ text, placeholders }: { text: string; placeholders: 
   )
 }
 
-/**
- * Asking for a draft: what it should say, in a few words (optional). Drafting takes a few
- * seconds on the quality model; errors (no AI, budget) show in place.
- */
-export function DraftRequest({ thread, initial = '', onDone, onCancel }: { thread: ThreadView; initial?: string; onDone: () => void; onCancel: () => void }) {
-  const [text, setText] = useState(initial)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const input = useRef<HTMLInputElement>(null)
-  useEffect(() => input.current?.focus(), [])
 
-  // What the AI made of the thread: replies that fit it, and the dates it proposes.
-  const analysis = useLive(() => api.analysis(thread.topicId), [thread.topicId], (e) => e.type === 'analysis' && e.topicId === thread.topicId).data
+/**
+ * Above an empty reply: whether you're free when the email proposes, and replies that fit it
+ * (from the AI's reading of the thread), each drafted in your voice with one click.
+ */
+export function DraftSuggestions({ topicId, disabled, onPick }: { topicId: number; disabled: boolean; onPick: (instruction: string) => void }) {
+  const analysis = useLive(() => api.analysis(topicId), [topicId], (e) => e.type === 'analysis' && e.topicId === topicId).data
   const options = analysis?.replyOptions ?? []
   const when = nextTimedDate(analysis?.dates ?? [])
-
-  const go = async (instruction = text) => {
-    setBusy(true)
-    setError(null)
-    try {
-      await api.draftReply(thread.topicId, instruction.trim() || null)
-      onDone()
-    } catch (e) {
-      setError(e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
+  if (!options.length && !when) return null
   return (
-    <div className="rise mt-5 rounded-ui-lg border border-rule bg-pane px-4 py-3">
+    <div className="border-b border-rule px-4 pt-2.5 pb-2">
       {when && <Availability date={when} />}
       {options.length > 0 && (
-        <div className="mb-2.5 flex flex-wrap gap-1.5" role="group" aria-label="Suggested replies">
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Suggested replies">
+          <AiSparkle size={12} />
           {options.map((o) => (
             <button
               key={o}
               type="button"
-              disabled={busy}
-              onClick={() => {
-                setText(o)
-                void go(o)
-              }}
-              className="rounded-full border border-rule px-3 py-1 text-[13px] text-ink-soft transition-colors hover:border-accent hover:bg-accent-wash hover:text-accent disabled:opacity-50"
+              disabled={disabled}
+              onClick={() => onPick(o)}
+              className="rounded-full border border-rule px-2.5 py-0.5 text-[13px] text-ink-soft transition-colors hover:border-accent hover:bg-accent-wash hover:text-accent disabled:opacity-50"
             >
               {o}
             </button>
           ))}
         </div>
       )}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          if (!busy) void go()
-        }}
-        className="flex items-center gap-2"
-      >
-        <input
-          ref={input}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              e.preventDefault()
-              onCancel()
-            }
-          }}
-          disabled={busy}
-          maxLength={500}
-          placeholder={options.length ? 'Or say it your way…' : 'What should it say? Optional, e.g. yes, but Friday instead'}
-          aria-label="What the reply should say"
-          className="field min-w-0 flex-1"
-        />
-        <button type="submit" disabled={busy} className="btn-primary inline-flex items-center gap-2 disabled:opacity-60">
-          {busy && <Spinner size={12} />}
-          {busy ? 'Drafting…' : 'Draft'}
-        </button>
-        <button type="button" onClick={onCancel} disabled={busy} className="rounded-ui px-2 py-1.5 text-[13px] text-ink-faint hover:bg-pane-sunk hover:text-ink">
-          Cancel
-        </button>
-      </form>
-      {busy && <p className="mt-2 text-[12px] text-ink-faint">Writing it in your voice. This takes a few seconds.</p>}
-      {error && <p className="mt-2 text-[13px] text-danger">{error}</p>}
     </div>
   )
 }
@@ -284,7 +230,7 @@ function Availability({ date: d }: { date: MailDateLike }) {
   if (!range.data) return null
   // Context, not a badge: quiet when the time is free, amber only when it clashes.
   return (
-    <p className={`mb-2.5 flex items-center gap-1.5 text-[13px] ${clash ? 'text-attn' : 'text-ink-faint'}`}>
+    <p className={`mb-2 flex items-center gap-1.5 text-[13px] last:mb-0 ${clash ? 'text-attn' : 'text-ink-faint'}`}>
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden className="shrink-0">
         <rect x="2" y="3" width="12" height="11" rx="2" />
         <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" />

@@ -4,7 +4,7 @@ import { displayName, replyRecipients, shortName } from '../mail/people'
 import { useShortcut, withShortcut } from '../shortcuts'
 import { api } from '../api'
 import { Composer, type ComposeRequest } from './Composer'
-import { AiSparkle, DraftCard, DraftRequest, useDraft } from './DraftReply'
+import { AiSparkle, DraftCard, useDraft } from './DraftReply'
 
 /**
  * Under a conversation: Reply (⇧R), Reply all (a) and Forward (⇧F). The composer opens in
@@ -19,14 +19,10 @@ export function ReplyArea({
   keys?: boolean
 }) {
   const [request, setRequest] = useState<ComposeRequest | null>(null)
-  const [asking, setAsking] = useState(false)
-  const drafts = useDraft(thread.topicId)
-  const draft = drafts.data ?? null
+  const draft = useDraft(thread.topicId).data ?? null
   const latest = thread.entries.at(-1)
-  // Once your own message is the latest, there's nothing to answer: no draft, unless you
-  // just asked for one (a follow-up to your own message).
-  const [asked, setAsked] = useState(false)
-  const shownDraft = draft && (!latest?.from?.isMe || asked) ? draft : null
+  // Once your own message is the latest, there's nothing to answer: no ready-made draft.
+  const shownDraft = draft && !latest?.from?.isMe ? draft : null
   const others = latest ? [latest.from, ...latest.to, ...latest.cc].filter((p) => p && !p.isMe).length : 0
 
   const open = (kind: 'reply' | 'reply-all' | 'forward') => {
@@ -36,7 +32,7 @@ export function ReplyArea({
       setRequest({ kind, message: { to: [], body: '' }, forwardOf: thread.topicId, context: `“${thread.subject ?? ''}”` })
     } else {
       const { to, cc } = replyRecipients(latest, kind)
-      setRequest({ kind, message: { to, cc, body: '', threadId: thread.topicId }, context: `to ${who}` })
+      setRequest({ kind, message: { to, cc, body: '', threadId: thread.topicId }, context: `to ${who}`, draftFrom: latest.id })
     }
   }
 
@@ -58,7 +54,7 @@ export function ReplyArea({
     if (!latest || !shownDraft) return
     const who = latest.from ? (latest.from.isMe ? 'your message' : displayName(latest.from)) : 'the thread'
     const { to, cc } = replyRecipients(latest, 'reply')
-    setRequest({ kind: 'reply', message: { to, cc, body, threadId: thread.topicId }, context: `to ${who}`, fresh: true })
+    setRequest({ kind: 'reply', message: { to, cc, body, threadId: thread.topicId }, context: `to ${who}`, fresh: true, draftFrom: latest.id })
     // From here the text is the composer's (kept on this device until sent or discarded).
     void api.discardDraft(thread.topicId)
   }
@@ -73,20 +69,7 @@ export function ReplyArea({
   }
   return (
     <>
-    {asking ? (
-      <DraftRequest
-        thread={thread}
-        initial={shownDraft?.instruction ?? ''}
-        onDone={() => {
-          setAsked(true)
-          setAsking(false)
-          drafts.reload()
-        }}
-        onCancel={() => setAsking(false)}
-      />
-    ) : (
-      shownDraft && <DraftCard draft={shownDraft} sendTo={sendTo} onSend={sendDraft} onUse={useDraftText} onRedraft={() => setAsking(true)} onDiscard={() => void api.discardDraft(thread.topicId)} />
-    )}
+    {shownDraft && <DraftCard draft={shownDraft} sendTo={sendTo} onSend={sendDraft} onUse={useDraftText} onRedraft={() => open('reply')} onDiscard={() => void api.discardDraft(thread.topicId)} />}
     <div className="mt-5 flex gap-2">
       <ReplyButton onClick={() => open('reply')} title={withShortcut('Reply', 'reply')}>
         Reply
@@ -99,8 +82,8 @@ export function ReplyArea({
       <ReplyButton onClick={() => open('forward')} title={withShortcut('Forward', 'forward')}>
         Forward
       </ReplyButton>
-      {!asking && !shownDraft && (
-        <ReplyButton onClick={() => setAsking(true)} title="Draft a reply in your voice, with AI">
+      {!shownDraft && (
+        <ReplyButton onClick={() => open('reply')} title="Reply, drafted in your voice: say what it should say and press ⌘J">
           <span className="inline-flex items-center gap-1.5">
             <AiSparkle />
             Draft reply

@@ -86,28 +86,6 @@ describe('a draft reply', () => {
     expect(host.textContent).toContain('“say yes”')
   })
 
-  it('asks for a draft with an optional instruction, and shows why it couldn’t', async () => {
-    const onDone = vi.fn()
-    answers.draftReply = () => draft()
-    act(() => root.render(createElement(Draft.DraftRequest, { thread: thread(), onDone, onCancel: vi.fn() })))
-    const input = host.querySelector('input')!
-    act(() => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '  yes, but Friday  ')
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    await act(async () => void host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
-    await flush()
-    expect(calls).toContainEqual(['draftReply', [900, 'yes, but Friday']])
-    expect(onDone).toHaveBeenCalled()
-
-    answers.draftReply = () => {
-      throw new Error('This month’s AI budget is used up.')
-    }
-    act(() => root.render(createElement(Draft.DraftRequest, { thread: thread(), onDone: vi.fn(), onCancel: vi.fn() })))
-    await act(async () => void host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
-    await flush()
-    expect(host.textContent).toContain('budget is used up')
-  })
 })
 
 describe('the reply area with drafts', () => {
@@ -142,25 +120,21 @@ describe('the reply area with drafts', () => {
     expect(calls).toContainEqual(['discardDraft', [900]])
   })
 
-  it('shows a draft you asked for even when your own message is the latest (a follow-up)', async () => {
+  it('drafts in the reply itself: suggested replies and ⌘J, and hides a draft your own reply made moot', async () => {
     answers.replyDraft = () => null
-    answers.draftReply = () => draft()
-    act(() => root.render(createElement(Reply.ReplyArea, { thread: thread(true) })))
-    await flush()
-    act(() => button('Draft reply')!.click())
-    answers.replyDraft = () => draft()
-    await act(async () => void host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
-    await flush()
-    expect(host.textContent).toContain('Friday works')
-  })
-
-  it('offers “Draft reply” when there’s no draft, and hides one your own reply made moot', async () => {
-    answers.replyDraft = () => null
+    answers.analysis = () => ({ replyOptions: ['Yes, Friday works'], dates: [] })
+    answers.draftReplyTo = () => ({ body: 'Hi Alice,\n\nYes, Friday works.\n\nOliver', placeholders: [] })
     act(() => root.render(createElement(Reply.ReplyArea, { thread: thread() })))
     await flush()
-    expect(button('Draft reply')).toBeTruthy()
     act(() => button('Draft reply')!.click())
-    expect(host.querySelector('input[aria-label="What the reply should say"]')).toBeTruthy()
+    await flush()
+    const box = host.querySelector('textarea') as HTMLTextAreaElement
+    expect(box.placeholder).toMatch(/(⌘|Ctrl\+)J to draft it in your voice/)
+    await act(async () => button('Yes, Friday works')!.click())
+    await flush()
+    expect(calls).toContainEqual(['draftReplyTo', [900, 1, 'Yes, Friday works']])
+    expect((host.querySelector('textarea') as HTMLTextAreaElement).value).toContain('Yes, Friday works.')
+    delete answers.analysis
 
     act(() => root.unmount())
     root = createRoot(host)
@@ -171,21 +145,4 @@ describe('the reply area with drafts', () => {
     expect(button('Use draft')).toBeUndefined()
   })
 
-  it('offers replies that fit the email, and checks the proposed time against the calendar', async () => {
-    const onDone = vi.fn()
-    answers.draftReply = () => draft()
-    answers.analysis = () => ({ replyOptions: ['Yes, I’ll be there', 'Can’t make it, thank them'], dates: [{ label: 'MDA event', date: '2099-10-03', time: '09:00' }] })
-    const at = (hm: string) => new Date(`2099-10-03T${hm}:00`).toISOString()
-    answers.calendarRange = () => ({ calendars: [], events: [{ key: 'g', id: 1, title: 'Gym', startsAt: at('08:30'), endsAt: at('10:00'), allDay: false }] })
-    act(() => root.render(createElement(Draft.DraftRequest, { thread: thread(), onDone, onCancel: vi.fn() })))
-    await flush()
-    await flush()
-    expect(host.textContent).toContain('clashes with Gym')
-    await act(async () => button('Yes, I’ll be there')!.click())
-    await flush()
-    expect(calls).toContainEqual(['draftReply', [900, 'Yes, I’ll be there']])
-    expect(onDone).toHaveBeenCalled()
-    delete answers.analysis
-    delete answers.calendarRange
-  })
 })
