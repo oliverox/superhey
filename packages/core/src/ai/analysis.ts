@@ -173,6 +173,11 @@ export class ThreadAnalyzer extends EventEmitter<{ analysis: [TopicId]; error: [
     this.pump()
   }
 
+  /** Reads one thread now, when asked to (Summarize): errors come back to the caller. */
+  async analyseNow(topicId: TopicId) {
+    await this.analyse(topicId)
+  }
+
   /** Waits for everything queued now to finish (for tests and shutdown). */
   async idle() {
     while (this.running > 0 || (this.queue.length > 0 && !this.paused)) await new Promise((r) => setTimeout(r, 5))

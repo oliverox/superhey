@@ -6,7 +6,7 @@ import { stripSubjectPrefixes } from '../mail/forwarded'
 import { useShortcut, withShortcut } from '../shortcuts'
 import { ActionBar } from './ActionBar'
 import { Avatar } from './Avatar'
-import { Conversation, OutgoingReplies, Time, ThreadTopic } from './Reader'
+import { Conversation, OutgoingReplies, SummaryStrip, Time, ThreadTopic } from './Reader'
 import { ReplyArea } from './ReplyArea'
 
 /**
@@ -130,7 +130,7 @@ function BundleItem({
 }) {
   const subject = stripSubjectPrefixes(p.subject) || '(no subject)'
   // HEY's summary often opens with the subject again; the preview is what follows it.
-  const preview = afterSubject(p.summary, subject)
+  const preview = p.ai?.summary ?? afterSubject(p.summary, subject)
   return (
     <li
       className="bundle-item rise relative pb-7 pl-9 last:pb-2"
@@ -167,7 +167,7 @@ function BundleItem({
 /** One bundled email, read in place exactly as the thread view draws it; fetched on first open. */
 function BundleEmail({ posting: p, focused }: { posting: PostingRow; focused: boolean }) {
   const thread = useLive<ThreadView | null>(
-    () => (p.topicId == null ? Promise.resolve(null) : api.thread(p.topicId, p.entryCount)),
+    () => (p.topicId == null ? Promise.resolve(null) : api.thread(p.topicId, p.entryCount, { analyze: false })),
     [p.topicId, p.entryCount],
     (e) => e.type === 'change' && e.change.kind === 'thread' && e.change.topicId === p.topicId,
   )
@@ -189,6 +189,10 @@ function BundleEmail({ posting: p, focused }: { posting: PostingRow; focused: bo
     )
   return (
     <>
+      {/* What the AI made of it, as under a thread's title (a bundle has no details panel). */}
+      <div className="mt-3">
+        <SummaryStrip topicId={thread.data.topicId} />
+      </div>
       <ThreadTopic.Provider value={thread.data.topicId}>
         <Conversation entries={thread.data.entries} subject={thread.data.subject ?? p.subject ?? ''} htmlByEntry={html.data ?? {}} keys={false} canReply />
         <OutgoingReplies topicId={thread.data.topicId} entries={thread.data.entries} />
