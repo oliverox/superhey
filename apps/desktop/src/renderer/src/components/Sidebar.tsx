@@ -6,6 +6,18 @@ import { withShortcut } from '../shortcuts'
 import { useEffect, useState, type ReactNode } from 'react'
 import type { Scheme, Theme } from '../theme'
 import { OmarchyLogo } from './OmarchyLogo'
+import { BubbleIcon, CalendarIcon, FeedIcon, ImboxIcon, PaperTrailIcon, ReplyLaterIcon, SetAsideIcon, TodayIcon } from './icons'
+
+/** Each HEY box's icon; the ones the toolbar also acts with are drawn the same way there. */
+const BOX_ICONS: Record<string, () => React.ReactNode> = {
+  imbox: ImboxIcon,
+  feedbox: FeedIcon,
+  trailbox: PaperTrailIcon,
+  laterbox: ReplyLaterIcon,
+  asidebox: SetAsideIcon,
+  bubblebox: BubbleIcon,
+}
+const boxIcon = (kind: string) => (BOX_ICONS[kind] ?? ImboxIcon)()
 
 interface Props {
   boxes: BoxRow[]
@@ -41,6 +53,7 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
                 today.active ? 'bg-side-sel text-side-ink' : 'text-side-soft hover:bg-side-sel/60 hover:text-side-ink'
               }`}
             >
+              <span className="mr-2.5 flex shrink-0 opacity-80"><TodayIcon /></span>
               <span className="font-medium">Today</span>
               {!!today.count && <span className="ml-2 text-[12px] text-side-faint tabular-nums">{today.count}</span>}
               <kbd className={`sidebar-key ml-auto ${today.active ? 'is-selected' : ''}`} title="Press 0">
@@ -59,6 +72,7 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
                     selected ? 'bg-side-sel text-side-ink' : 'text-side-soft hover:bg-side-sel/60 hover:text-side-ink'
                   }`}
                 >
+                  <span className="mr-2.5 flex shrink-0 opacity-80">{boxIcon(box.kind)}</span>
                   <span className="font-medium">{box.name}</span>
                   {box.kind === 'imbox' && box.unseen > 0 && (
                     <span className="ml-2 rounded-full bg-side-accent px-1.5 text-[11px] leading-[17px] font-semibold text-side-accent-ink tabular-nums">
@@ -80,6 +94,7 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
                 calendar.active ? 'bg-side-sel text-side-ink' : 'text-side-soft hover:bg-side-sel/60 hover:text-side-ink'
               }`}
             >
+              <span className="mr-2.5 flex shrink-0 opacity-80"><CalendarIcon /></span>
               <span className="font-medium">Calendar</span>
               <kbd className={`sidebar-key ml-auto ${calendar.active ? 'is-selected' : ''}`} title="Press 7">
                 7
