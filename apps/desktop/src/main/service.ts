@@ -39,6 +39,14 @@ import {
   localBounds,
   parseQuery,
   searchHey,
+  buildVoice,
+  collectSamples,
+  Drafter,
+  saveVoice,
+  saveVoiceNotes,
+  storedVoice,
+  voiceNotes,
+  type StoredVoice,
 } from '@superhey/core'
 import { API_METHODS, type AiStatus, type AiTestResult, type ThreadAnalysisView, type Api, type ApiEvent, type ApiMethod, type AppStatus, type SetupProblem } from '../shared/api'
 
@@ -82,6 +90,8 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
   private aiSettings: AiSettings
   private ai: AiClient | null = null
   private analyzer: ThreadAnalyzer | null = null
+  private drafter: Drafter | null = null
+  private buildingVoice: Promise<StoredVoice> | null = null
   private get aiSettingsPath() {
     return join(dirname(this.opts.dbPath), 'ai-settings.json')
   }
@@ -286,6 +296,62 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     return { ...view, screener: core.engine.screenerEntries().length }
   }
 
+  // Voice and reply drafts
+
+  async voice() {
+    const repo = this.need().repo
+    return { voice: storedVoice(repo), notes: voiceNotes(repo), automatic: this.drafter?.automatic ?? false, building: this.buildingVoice != null }
+  }
+
+  /** Learns the user's voice from mail they wrote (opt-in: only when asked). */
+  async buildVoice() {
+    const core = this.need()
+    const ai = this.needAi()
+    if (!ai.canRun('draft')) throw new Error('Turn on a cloud provider for reply drafts first (Settings → AI).')
+    this.buildingVoice ??= (async () => {
+      this.emit('event', { type: 'voice' })
+      const myEmails = await this.senders().then((s) => s.map((x) => x.email), () => [])
+      if (!myEmails.length) throw new Error('Couldn’t tell which addresses are yours.')
+      const samples = await collectSamples({ client: core.client, fetchThread: (id, priority) => core.engine.ensureThread(id, null, priority), myEmails })
+      return buildVoice({ ai, repo: core.repo, samples, me: { name: null } })
+    })().finally(() => {
+      this.buildingVoice = null
+      this.emit('event', { type: 'voice' })
+    })
+    const voice = await this.buildingVoice
+    // Now there's a voice: draft what's waiting for a reply.
+    for (const topicId of core.repo.threadsNeedingReply(10)) this.drafter?.enqueue(topicId)
+    return voice
+  }
+
+  async setVoiceNotes(notes: unknown) {
+    if (typeof notes !== 'string') throw new Error('notes must be text')
+    saveVoiceNotes(this.need().repo, notes)
+    this.emit('event', { type: 'voice' })
+  }
+
+  async forgetVoice() {
+    saveVoice(this.need().repo, null)
+    this.emit('event', { type: 'voice' })
+  }
+
+  async replyDraft(topicId: unknown) {
+    return this.need().repo.replyDraft(TopicId(int(topicId)))
+  }
+
+  /** Writes a draft now, following the user's instruction if they gave one. */
+  async draftReply(topicId: unknown, instruction: unknown = null) {
+    if (instruction !== null && typeof instruction !== 'string') throw new Error('instruction must be text')
+    if (!this.drafter) throw new Error('AI isn’t ready yet')
+    const text = typeof instruction === 'string' ? instruction.trim().slice(0, 500) || null : null
+    return this.drafter.draft(TopicId(int(topicId)), text)
+  }
+
+  async discardDraft(topicId: unknown) {
+    this.need().repo.deleteReplyDraft(TopicId(int(topicId)))
+    this.emit('event', { type: 'draft', topicId: int(topicId) })
+  }
+
   /** "Not now": off Today until tomorrow, or until the thread has something new. */
   async hideFromToday(key: unknown, activeAt: unknown) {
     if (typeof key !== 'string' || !/^thread:\d{1,20}$/.test(key)) throw new Error('bad key')
@@ -447,11 +513,25 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
       me: async () => ({ name: null, emails: await this.senders().then((s) => s.map((x) => x.email), () => []) }),
     })
     this.analyzer = analyzer
-    analyzer.on('analysis', (topicId) => this.emit('event', { type: 'analysis', topicId }))
+    const drafter = new Drafter({
+      repo: core.repo,
+      ai,
+      fetchThread: (topicId, entryCount, priority) => core.engine.ensureThread(topicId, entryCount, priority),
+      me: async () => ({ name: null, emails: await this.senders().then((s) => s.map((x) => x.email), () => []) }),
+    })
+    this.drafter = drafter
+    drafter.on('draft', (topicId) => this.emit('event', { type: 'draft', topicId }))
+    drafter.on('error', (err) => console.error('[drafts]', err.message))
+    analyzer.on('analysis', (topicId) => {
+      this.emit('event', { type: 'analysis', topicId })
+      // A thread that needs a reply gets a draft in the user's voice (when they have one).
+      if ((core.repo.analysis(topicId) as { needsReply?: boolean } | null)?.needsReply) drafter.enqueue(topicId)
+    })
     analyzer.on('error', (err) => console.error('[analysis]', err.message))
     core.engine.on('mail', ({ topicId, boxKind }) => topicId != null && boxKind === 'imbox' && analyzer.enqueue(topicId))
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
     for (const topicId of core.repo.unanalysedUnread('imbox', weekAgo, 25, ANALYSIS_VERSION)) analyzer.enqueue(topicId)
+    for (const topicId of core.repo.threadsNeedingReply(10)) drafter.enqueue(topicId)
   }
 
   private needAi(): AiClient {

@@ -2,7 +2,9 @@ import { useState } from 'react'
 import type { ThreadView } from '@shared/api'
 import { displayName, replyRecipients } from '../mail/people'
 import { useShortcut, withShortcut } from '../shortcuts'
+import { api } from '../api'
 import { Composer, type ComposeRequest } from './Composer'
+import { DraftCard, DraftRequest, useDraft } from './DraftReply'
 
 /**
  * Under a conversation: Reply (⇧R), Reply all (a) and Forward (⇧F). The composer opens in
@@ -17,7 +19,11 @@ export function ReplyArea({
   keys?: boolean
 }) {
   const [request, setRequest] = useState<ComposeRequest | null>(null)
+  const [asking, setAsking] = useState(false)
+  const draft = useDraft(thread.topicId).data ?? null
   const latest = thread.entries.at(-1)
+  // A draft outdated by the user's own reply has nothing left to answer.
+  const shownDraft = draft && !(draft.stale && latest?.from?.isMe) ? draft : null
   const others = latest ? [latest.from, ...latest.to, ...latest.cc].filter((p) => p && !p.isMe).length : 0
 
   const open = (kind: 'reply' | 'reply-all' | 'forward') => {
@@ -35,6 +41,15 @@ export function ReplyArea({
   useShortcut('replyAll', () => open('reply-all'), keys && !request && !!latest)
   useShortcut('forward', () => open('forward'), keys && !request && !!latest)
 
+  const useDraftText = () => {
+    if (!latest || !shownDraft) return
+    const who = latest.from ? (latest.from.isMe ? 'your message' : displayName(latest.from)) : 'the thread'
+    const { to, cc } = replyRecipients(latest, 'reply')
+    setRequest({ kind: 'reply', message: { to, cc, body: shownDraft.body, threadId: thread.topicId }, context: `to ${who}`, fresh: true })
+    // From here the text is the composer's (kept on this device until sent or discarded).
+    void api.discardDraft(thread.topicId)
+  }
+
   if (!latest) return null
   if (request) {
     return (
@@ -44,6 +59,12 @@ export function ReplyArea({
     )
   }
   return (
+    <>
+    {asking ? (
+      <DraftRequest thread={thread} initial={shownDraft?.instruction ?? ''} onDone={() => setAsking(false)} onCancel={() => setAsking(false)} />
+    ) : (
+      shownDraft && <DraftCard draft={shownDraft} onUse={useDraftText} onRedraft={() => setAsking(true)} onDiscard={() => void api.discardDraft(thread.topicId)} />
+    )}
     <div className="mt-5 flex gap-2">
       <ReplyButton onClick={() => open('reply')} title={withShortcut('Reply', 'reply')}>
         Reply
@@ -56,7 +77,13 @@ export function ReplyArea({
       <ReplyButton onClick={() => open('forward')} title={withShortcut('Forward', 'forward')}>
         Forward
       </ReplyButton>
+      {!asking && !shownDraft && (
+        <ReplyButton onClick={() => setAsking(true)} title="Draft a reply in your voice">
+          Draft reply
+        </ReplyButton>
+      )}
     </div>
+    </>
   )
 }
 

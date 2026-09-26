@@ -45,3 +45,5 @@ export async function createCore(opts: { dbPath: string; cliPath?: string; accou
 export type Core = Awaited<ReturnType<typeof createCore>>
 export { ATTACHMENT_KINDS, OPERATORS, highlightTerms, isEmptyQuery, operatorValue, parseQuery, withOperator, type AttachmentKind, type Operator, type SearchQuery } from './search/query'
 export { HEY_PAGE_SIZE, heyArgs, localBounds, searchHey, type HeySearchPage } from './search/search'
+export { buildVoice, collectSamples, freshText, renderVoice, saveVoice, saveVoiceNotes, storedVoice, voiceNotes, VoiceProfile, type Sample, type StoredVoice } from './ai/voice'
+export { Drafter, DRAFT_RULES, draftPrompt, draftSystem, ReplyDraft } from './ai/drafts'

@@ -2,9 +2,26 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AiSettings, AiStatus, AiTestResult, ApiEvent, ProviderId } from '@shared/api'
+import type { AiSettings, AiStatus, AiTestResult, ApiEvent, ProviderId, StoredVoice } from '@shared/api'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+const VOICE: StoredVoice = {
+  profile: {
+    languages: ['English', 'French'],
+    summary: 'Warm, brief and a little formal with institutions.',
+    greetings: ['Dear friends,', 'Hi Sam,'],
+    signOffs: ['With warm regards,\nOliver'],
+    length: 'Two to four sentences.',
+    tone: 'Warm.',
+    habits: ['Thanks people first'],
+    avoid: ['No exclamation marks'],
+    examples: [],
+  },
+  builtAt: '2026-09-26T08:00:00Z',
+  model: 'claude-sonnet-5',
+  samples: 38,
+}
 
 /** A stand-in for the main process: holds the settings and key, and says what changed. */
 const REGISTRY = [
@@ -37,6 +54,8 @@ function fakeBackend() {
     spent: 0.42,
     localModels: ['llama3.2', 'qwen3:8b'] as string[] | Error,
     test: { ok: true, engine: 'claude', model: 'claude-haiku-4-5', ms: 812, reply: 'OK', costUsd: 0.0001 } as AiTestResult,
+    voice: null as StoredVoice | null,
+    voiceNotes: '',
   }
   const def = (id: ProviderId) => REGISTRY.find((r) => r.id === id)!
   const on = (id: ProviderId) => state.settings.providers[id]?.enabled ?? true
@@ -88,6 +107,20 @@ function fakeBackend() {
       return state.localModels
     },
     testAi: () => state.test,
+    voice: () => ({ voice: state.voice, notes: state.voiceNotes, automatic: !!state.voice, building: false }),
+    buildVoice: () => {
+      state.voice = VOICE
+      listeners.forEach((l) => l({ type: 'voice' }))
+      return VOICE
+    },
+    setVoiceNotes: (n: string) => {
+      state.voiceNotes = n
+      listeners.forEach((l) => l({ type: 'voice' }))
+    },
+    forgetVoice: () => {
+      state.voice = null
+      listeners.forEach((l) => l({ type: 'voice' }))
+    },
   }
   const bridge = {
     call: async (method: string, args: unknown[]) => {
@@ -385,5 +418,28 @@ describe('formatting', () => {
   })
   it('writes token counts compactly', () => {
     expect([tokens(812), tokens(12_345), tokens(123_456), tokens(1_234_567)]).toEqual(['812', '12.3k', '123k', '1.2M'])
+  })
+})
+
+describe('Settings: your voice', () => {
+  it('learns your voice on request, then shows it with your notes and a way to forget it', async () => {
+    backend.state.keys.claude = 'sk-ant-api03-test'
+    await open()
+    expect(text()).toContain('Learn my voice')
+    await click(button('Learn my voice'))
+    expect(backend.called('buildVoice')).toHaveLength(1)
+    expect(text()).toContain('Warm, brief and a little formal with institutions.')
+    expect(text()).toContain('With warm regards, Oliver')
+    expect(text()).toContain('Learned from 38 of your emails')
+    const notes = host.querySelector('textarea')!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(notes, 'Sign off as Oli with friends.')
+      notes.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => void notes.dispatchEvent(new FocusEvent('focusout', { bubbles: true })))
+    await flush()
+    expect(backend.called('setVoiceNotes')).toEqual([['Sign off as Oli with friends.']])
+    await click(button('Forget my voice'))
+    expect(text()).toContain('Learn my voice')
   })
 })
