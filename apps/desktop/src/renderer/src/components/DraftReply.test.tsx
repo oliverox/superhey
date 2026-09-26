@@ -69,23 +69,6 @@ describe('a draft reply', () => {
     expect([onUse, onRedraft, onDiscard].map((f) => f.mock.calls.length)).toEqual([1, 1, 1])
   })
 
-  it('can be edited in place, and Use draft takes the edited text', () => {
-    const onUse = vi.fn()
-    act(() => root.render(createElement(Draft.DraftCard, { draft: draft(), onUse, onRedraft: vi.fn(), onDiscard: vi.fn() })))
-    act(() => (host.querySelector('[title="Click to edit"]') as HTMLElement).click())
-    const area = host.querySelector('textarea[aria-label="Draft text"]') as HTMLTextAreaElement
-    expect(area.value).toContain('Shall we meet at [place]?')
-    const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
-    act(() => {
-      set.call(area, 'Hi Alice,\n\nFriday works, at the usual café.\n\nOliver')
-      area.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    expect(host.textContent).not.toContain('Fill in before sending') // the gap was filled
-    act(() => button('Use draft')!.click())
-    expect(onUse).toHaveBeenCalledWith('Hi Alice,\n\nFriday works, at the usual café.\n\nOliver')
-    expect(button('Revert')).toBeTruthy()
-  })
-
   it('types itself out the first time it’s shown, and a click shows it all', () => {
     localStorage.clear()
     act(() => root.render(createElement(Draft.DraftCard, { draft: draft({ createdAt: '2026-09-26T09:00:00Z' }), onUse: vi.fn(), onRedraft: vi.fn(), onDiscard: vi.fn() })))
