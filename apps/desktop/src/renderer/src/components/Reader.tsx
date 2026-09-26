@@ -98,7 +98,7 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose }: Rea
   const showPanel = panel.open && !!thread.data && !target.isBundle
 
   return (
-    <main ref={mainRef} className="pane flex min-h-0 flex-col bg-pane-alt" data-active={active}>
+    <main ref={mainRef} className="pane flex min-h-0 flex-col bg-pane-alt [view-transition-name:reader]" data-active={active}>
       <header className="drag flex h-[52px] shrink-0 items-center justify-end gap-1 border-b border-rule bg-pane px-4">
         {onClose && (
           <button

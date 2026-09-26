@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
+import { motionOff } from './motion'
 import type { AppStatus, BoxRow, PostingRow } from '@shared/api'
 import { api, useLive } from './api'
 import { useAppStatus } from './hooks'
@@ -69,7 +71,19 @@ function Workspace({ status }: { status: AppStatus }) {
   const [searchRows, setSearchRows] = useState<PostingRow[]>([])
   const searching = !!query.trim()
   const searchExpanded = searchFocused || !!query
-  const [target, setTarget] = useState<ReaderTarget | null>(null)
+  const [target, setTargetNow] = useState<ReaderTarget | null>(null)
+  const targetRef = useRef(target)
+  targetRef.current = target
+  /**
+   * Opening the reader from the list alone, or closing it, animates: the reader slides in
+   * from the right as the list narrows, and back out as it widens. Moving between threads
+   * doesn't.
+   */
+  const setTarget = useCallback((next: ReaderTarget | null) => {
+    const opening = (targetRef.current == null) !== (next == null)
+    if (!opening || motionOff() || !document.startViewTransition) return setTargetNow(next)
+    document.startViewTransition(() => flushSync(() => setTargetNow(next)))
+  }, [])
   const waiting = useScreener()
   const [screening, setScreening] = useState(false)
   const screeningRef = useRef(screening)
@@ -264,7 +278,7 @@ function Workspace({ status }: { status: AppStatus }) {
         onOpenSettings={() => setShowSettings(true)}
       />
 
-      <section className="pane relative flex min-w-0 flex-col bg-pane" data-pane="list" data-active={activePane === 'list'}>
+      <section className="pane relative flex min-w-0 flex-col bg-pane [view-transition-name:list]" data-pane="list" data-active={activePane === 'list'}>
         {!listAlone && <ListResizer gridRef={gridRef} width={listWidth.width} onResize={listWidth.save} />}
         <header className="drag flex h-[52px] shrink-0 items-center border-b border-rule px-4">
           {/* The title makes way while the search box is in use. */}
