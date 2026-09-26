@@ -67,6 +67,8 @@
   --text: 14px;
   --read-size: 15px;
   --measure: 33.5em;
+  /* With room to spare, lines may run to about 90 characters: still easy to follow. */
+  --measure-wide: 41.5em;
   color-scheme: light;
 }
 
@@ -171,6 +173,7 @@
   --text: 13px;
   --read-size: 14px;
   --measure: 43em;
+  --measure-wide: 53em;
   color-scheme: dark;
 }
 
@@ -527,15 +530,16 @@ kbd.tooltip-key {
   border-radius: 0;
 }
 
-/* The reading column: about 72 characters of body text per line, whatever the window
-   width. Set in em of the body font, since ch (the width of "0") overstates Inter's
+/* The reading column: about 72 characters of body text per line in a narrow pane, growing
+   with a wide one (three quarters of it) up to about 90. Set in em of the body font, since ch (the width of "0") overstates Inter's
    average character by about a third. Inter averages 0.46em a character in email prose
    (measured); monospace is 0.6em. */
 .reading-column {
   font-family: var(--font-read);
   font-size: var(--read-size);
-  /* the measure + the message card's padding (3.5rem) + the column's padding (5rem) + borders */
-  max-width: calc(var(--measure) + 8.5rem + 2px);
+  /* the measure + the message card's padding (3.5rem) + the column's padding (5rem) + borders;
+     cqw is the reading pane's width (it's the size container). */
+  max-width: clamp(calc(var(--measure) + 8.5rem + 2px), 76cqw, calc(var(--measure-wide) + 8.5rem + 2px));
 }
 
 /* Designed emails: up to 724px (a 700px email plus the frame's padding), centred on the
