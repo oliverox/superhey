@@ -111,6 +111,10 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
       core.engine.on('error', (err) => console.error('[sync]', err.message))
       core.actions.on('action', (action) => this.emit('event', { type: 'action', action }))
       core.outbox.on('outgoing', (record) => this.emit('event', { type: 'outgoing', record }))
+      // A reply that has gone out is fetched into its thread right away, not at the next sync.
+      core.outbox.on('sent', (record) => {
+        if (record.message.threadId != null) void this.fetchAfterSend(core, TopicId(int(record.message.threadId)))
+      })
       this.ai = new AiClient({ settings: () => this.aiSettings, apiKey: (p) => this.apiKey(p), repo: core.repo })
       this.ai.on('usage', () => this.emit('event', { type: 'ai' }))
       this.startAnalysis(core, this.ai)
@@ -164,6 +168,16 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     // Drafts are written for what you open, not for every email that needs a reply.
     if ((core.repo.analysis(id) as { needsReply?: boolean } | null)?.needsReply) this.drafter?.enqueue(id)
     return view
+  }
+
+  /** Refetches a thread once HEY lists the message just sent in it (it can take a moment). */
+  private async fetchAfterSend(core: Core, topicId: TopicId) {
+    const before = core.repo.entryCount(topicId) ?? 0
+    for (const wait of [800, 2500, 6000]) {
+      await new Promise((r) => setTimeout(r, wait))
+      const view = await core.engine.ensureThread(topicId, before + 1, 'high').catch(() => null)
+      if ((view?.entries.length ?? 0) > before) return
+    }
   }
 
   /** What the AI made of a thread (summary, action items, dates, amounts), or null. */

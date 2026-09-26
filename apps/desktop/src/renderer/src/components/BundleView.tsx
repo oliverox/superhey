@@ -6,7 +6,7 @@ import { stripSubjectPrefixes } from '../mail/forwarded'
 import { useShortcut, withShortcut } from '../shortcuts'
 import { ActionBar } from './ActionBar'
 import { Avatar } from './Avatar'
-import { Conversation, Time, ThreadTopic } from './Reader'
+import { Conversation, OutgoingReplies, Time, ThreadTopic } from './Reader'
 import { ReplyArea } from './ReplyArea'
 
 /**
@@ -192,6 +192,7 @@ function BundleEmail({ posting: p, focused }: { posting: PostingRow; focused: bo
     <>
       <ThreadTopic.Provider value={thread.data.topicId}>
         <Conversation entries={thread.data.entries} subject={thread.data.subject ?? p.subject ?? ''} htmlByEntry={html.data ?? {}} keys={false} canReply />
+        <OutgoingReplies topicId={thread.data.topicId} entries={thread.data.entries} />
       </ThreadTopic.Provider>
       <ReplyArea thread={thread.data} keys={focused} />
     </>
