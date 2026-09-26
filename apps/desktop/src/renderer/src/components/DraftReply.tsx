@@ -71,13 +71,10 @@ export function useTyped(text: string, key: string) {
 export function DraftCard({ draft, onUse, onRedraft, onDiscard }: { draft: ReplyDraftRow; onUse: (body: string) => void; onRedraft: () => void; onDiscard: () => void }) {
   const [all, setAll] = useState(false)
   const typed = useTyped(draft.body, `${draft.topicId}:${draft.createdAt}`)
-  // Your edits to the draft, kept while it's shown; Use draft takes them to the composer.
-  const [body, setBody] = useState(draft.body)
-  const [editing, setEditing] = useState(false)
-  useEffect(() => setBody(draft.body), [draft.body])
-  const edited = body !== draft.body
-  const placeholders = draft.placeholders.filter((p) => body.includes(p))
-  const long = !editing && (body.split('\n').length > 8 || body.length > 520)
+  // Read-only here: Use draft takes it to the composer, where it's edited and sent.
+  const body = draft.body
+  const placeholders = draft.placeholders
+  const long = body.split('\n').length > 8 || body.length > 520
   return (
     // A draft waiting for you: its border shimmers until you use it or throw it away, so it
     // never passes for mail that's been sent.
@@ -86,33 +83,15 @@ export function DraftCard({ draft, onUse, onRedraft, onDiscard }: { draft: Reply
         <h3 className="text-[13px] font-semibold text-ink">Draft reply</h3>
         <span className="min-w-0 truncate text-[12px] text-ink-faint">{draft.stale ? 'written before the latest message' : draft.instruction ? `“${draft.instruction}”` : 'in your voice'}</span>
       </header>
-      {editing ? (
-        <textarea
-          autoFocus
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          onBlur={() => setEditing(false)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              e.preventDefault()
-              e.stopPropagation()
-              setEditing(false)
-            }
-          }}
-          aria-label="Draft text"
-          className="ghost-field mt-2 block max-h-[60vh] w-full resize-none [field-sizing:content] font-body text-[15px] leading-relaxed text-ink"
-        />
-      ) : (
       <div
-        onClick={typed.typing ? typed.skip : () => setEditing(true)}
-        title={typed.typing ? 'Show it all' : 'Click to edit'}
-        className={`relative mt-2 -mx-2 cursor-text overflow-hidden rounded-ui px-2 py-[3px] text-[15px] leading-relaxed whitespace-pre-wrap text-ink transition-colors duration-(--dur-1) hover:bg-pane-sunk ${long && !all ? 'max-h-[12.5em]' : ''}`}
+        onClick={typed.typing ? typed.skip : undefined}
+        title={typed.typing ? 'Show it all' : undefined}
+        className={`relative mt-2 overflow-hidden text-[15px] leading-relaxed whitespace-pre-wrap text-ink ${long && !all ? 'max-h-[12.5em]' : ''}`}
       >
         <WithPlaceholders text={typed.typing ? typed.text : body} placeholders={placeholders} />
         {typed.typing && <span aria-hidden className="type-caret" />}
         {long && !all && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-pane" />}
       </div>
-      )}
       {long && (
         <button type="button" onClick={() => setAll(!all)} className="mt-1 text-[12px] font-medium text-ink-faint hover:text-ink-soft">
           {all ? 'Show less' : 'Show all'}
@@ -127,11 +106,6 @@ export function DraftCard({ draft, onUse, onRedraft, onDiscard }: { draft: Reply
         <button type="button" onClick={() => onUse(body)} className="btn-primary">
           Use draft
         </button>
-        {edited && (
-          <button type="button" onClick={() => setBody(draft.body)} className="rounded-ui px-2.5 py-1.5 text-[13px] text-ink-faint hover:bg-pane-sunk hover:text-ink">
-            Revert
-          </button>
-        )}
         <button type="button" onClick={onRedraft} className="rounded-ui px-2.5 py-1.5 text-[13px] text-ink-soft hover:bg-pane-sunk hover:text-ink">
           Redraft…
         </button>
