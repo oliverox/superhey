@@ -994,3 +994,7 @@ mark {
     opacity: 0;
   }
 }
+
+[data-theme='omarchy'] .ai-sparkle path {
+  fill: var(--accent);
+}

@@ -145,7 +145,8 @@ export function DraftCard({
         <button type="button" onClick={() => onUse(body)} className={onSend ? 'rounded-ui px-2.5 py-1.5 text-[13px] font-medium text-ink-soft hover:bg-pane-sunk hover:text-ink' : 'btn-primary'}>
           {onSend ? 'Edit' : 'Use draft'}
         </button>
-        <button type="button" onClick={onRedraft} className="rounded-ui px-2.5 py-1.5 text-[13px] text-ink-soft hover:bg-pane-sunk hover:text-ink">
+        <button type="button" onClick={onRedraft} title="Write it again with AI, optionally saying what to change" className="inline-flex items-center gap-1.5 rounded-ui px-2.5 py-1.5 text-[13px] text-ink-soft hover:bg-pane-sunk hover:text-ink">
+          <AiSparkle />
           Redraft…
         </button>
         <button type="button" onClick={onDiscard} className="ml-auto rounded-ui px-2.5 py-1.5 text-[13px] text-ink-faint hover:bg-pane-sunk hover:text-ink">
@@ -289,5 +290,24 @@ function Availability({ date: d }: { date: MailDateLike }) {
         {clash ? `clashes with ${clash.title} (${clockOf(clash.startsAt)}–${clockOf(clash.endsAt!)})` : 'you’re free'}
       </span>
     </p>
+  )
+}
+
+/**
+ * The mark for anything that asks the AI to write: a four-pointed sparkle in the colours
+ * of a draft's border (the theme's accent in Omarchy).
+ */
+export function AiSparkle({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden className="ai-sparkle shrink-0">
+      <defs>
+        <linearGradient id="ai-sparkle-fill" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#5b7cff" />
+          <stop offset="0.5" stopColor="#a45cff" />
+          <stop offset="1" stopColor="#ff5fa8" />
+        </linearGradient>
+      </defs>
+      <path fill="url(#ai-sparkle-fill)" d="M7 1c.4 3.3 2.2 5.1 5.5 5.5C9.2 6.9 7.4 8.7 7 12c-.4-3.3-2.2-5.1-5.5-5.5C4.8 6.1 6.6 4.3 7 1Zm6 8.5c.2 1.5.9 2.2 2.5 2.4-1.6.2-2.3 1-2.5 2.6-.2-1.6-1-2.4-2.5-2.6 1.5-.2 2.3-.9 2.5-2.4Z" />
+    </svg>
   )
 }

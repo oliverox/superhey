@@ -4,7 +4,7 @@ import { displayName, replyRecipients, shortName } from '../mail/people'
 import { useShortcut, withShortcut } from '../shortcuts'
 import { api } from '../api'
 import { Composer, type ComposeRequest } from './Composer'
-import { DraftCard, DraftRequest, useDraft } from './DraftReply'
+import { AiSparkle, DraftCard, DraftRequest, useDraft } from './DraftReply'
 
 /**
  * Under a conversation: Reply (⇧R), Reply all (a) and Forward (⇧F). The composer opens in
@@ -88,8 +88,11 @@ export function ReplyArea({
         Forward
       </ReplyButton>
       {!asking && !shownDraft && (
-        <ReplyButton onClick={() => setAsking(true)} title="Draft a reply in your voice">
-          Draft reply
+        <ReplyButton onClick={() => setAsking(true)} title="Draft a reply in your voice, with AI">
+          <span className="inline-flex items-center gap-1.5">
+            <AiSparkle />
+            Draft reply
+          </span>
         </ReplyButton>
       )}
     </div>
