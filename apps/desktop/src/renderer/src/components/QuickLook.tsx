@@ -11,6 +11,12 @@ export const isImage = (a: AttachmentRow) => /^image\/(png|jpe?g|gif|webp|avif|b
 /** Pages rendered in the preview; a longer PDF says so and offers its own app. */
 const MAX_PAGES = 40
 
+/** Zoom steps, relative to the page at its reading width (100%). */
+export const ZOOMS = [0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 2.5, 3]
+export function nextZoom(z: number, dir: 1 | -1): number {
+  return dir > 0 ? (ZOOMS.find((s) => s > z + 0.001) ?? ZOOMS.at(-1)!) : ([...ZOOMS].reverse().find((s) => s < z - 0.001) ?? ZOOMS[0]!)
+}
+
 /**
  * Quick Look for attachments: a PDF's pages or an image, full size, over the app. Space or
  * Esc closes it; ← and → move through the message's files; "Open in app" hands it over.
@@ -18,7 +24,28 @@ const MAX_PAGES = 40
 export function QuickLook({ files, index, onIndex, onClose }: { files: AttachmentRow[]; index: number; onIndex: (i: number) => void; onClose: () => void }) {
   const a = files[index]!
   const dialog = useRef<HTMLDivElement>(null)
+  const scroller = useRef<HTMLDivElement>(null)
   const [openError, setOpenError] = useState<string | null>(null)
+  const [zoom, setZoomNow] = useState(1)
+  const zoomRef = useRef(zoom)
+  zoomRef.current = zoom
+  useEffect(() => setZoomNow(1), [a.id])
+  /** Zooms keeping the middle of what you're reading in the middle. */
+  const setZoom = (z: number) => {
+    const root = scroller.current
+    const from = zoomRef.current
+    if (z === from) return
+    const cx = root ? root.scrollLeft + root.clientWidth / 2 : 0
+    const cy = root ? root.scrollTop + root.clientHeight / 2 : 0
+    setZoomNow(z)
+    requestAnimationFrame(() => {
+      if (!root) return
+      root.scrollLeft = cx * (z / from) - root.clientWidth / 2
+      root.scrollTop = cy * (z / from) - root.clientHeight / 2
+    })
+  }
+  const setZoomRef = useRef(setZoom)
+  setZoomRef.current = setZoom
 
   useEffect(() => {
     dialog.current?.focus()
@@ -27,6 +54,11 @@ export function QuickLook({ files, index, onIndex, onClose }: { files: Attachmen
         e.preventDefault()
         e.stopPropagation()
         onClose()
+      } else if (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '_' || (e.key === '0' && (e.metaKey || e.ctrlKey || !e.altKey))) {
+        // + and − zoom (with or without ⌘), 0 goes back to the reading width.
+        e.preventDefault()
+        e.stopPropagation()
+        setZoomRef.current(e.key === '0' ? 1 : nextZoom(zoomRef.current, e.key === '+' || e.key === '=' ? 1 : -1))
       } else if (e.key === 'ArrowRight' && files.length > 1) {
         e.preventDefault()
         e.stopPropagation()
@@ -42,8 +74,21 @@ export function QuickLook({ files, index, onIndex, onClose }: { files: Attachmen
     return () => window.removeEventListener('keydown', onKey, true)
   }, [files.length, index, onClose, onIndex])
 
+  // Pinching the trackpad (or ⌘/Ctrl + scroll) zooms smoothly between the steps' ends.
+  useEffect(() => {
+    const root = scroller.current
+    if (!root) return
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return
+      e.preventDefault()
+      const z = Math.min(ZOOMS.at(-1)!, Math.max(ZOOMS[0]!, zoomRef.current * Math.exp(-e.deltaY / 200)))
+      setZoomRef.current(Math.round(z * 100) / 100)
+    }
+    root.addEventListener('wheel', onWheel, { passive: false })
+    return () => root.removeEventListener('wheel', onWheel)
+  }, [])
+
   // The page you're on, from where the reading is scrolled (PDFs).
-  const scroller = useRef<HTMLDivElement>(null)
   const [page, setPage] = useState({ at: 1, of: 0 })
   const onScroll = () => {
     const root = scroller.current
@@ -66,9 +111,9 @@ export function QuickLook({ files, index, onIndex, onClose }: { files: Attachmen
         ref={scroller}
         onScroll={onScroll}
         onMouseDown={(e) => !(e.target as HTMLElement).closest('[data-page], [data-sheet]') && onClose()}
-        className="scroll absolute inset-0 overflow-y-auto px-6 pt-[76px] pb-16"
+        className="scroll absolute inset-0 overflow-auto px-6 pt-[76px] pb-16"
       >
-        {isPdf(a) ? <PdfPages key={a.id} id={a.id} onPages={(of) => setPage({ at: 1, of })} /> : <ImageView key={a.id} id={a.id} name={a.filename} />}
+        {isPdf(a) ? <PdfPages key={a.id} id={a.id} zoom={zoom} onPages={(of) => setPage({ at: 1, of })} /> : <ImageView key={a.id} id={a.id} name={a.filename} zoom={zoom} />}
       </div>
 
       <header className="ql-bar pop-in absolute top-4 left-1/2 flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-1 rounded-full py-1 pr-1 pl-3.5 text-[13px]">
@@ -81,6 +126,22 @@ export function QuickLook({ files, index, onIndex, onClose }: { files: Attachmen
             Page {page.at} of {page.of}
           </span>
         )}
+        <span className="mx-2 h-4 w-px shrink-0 bg-rule" aria-hidden />
+        <span className="flex shrink-0 items-center text-[12px] text-ink-faint">
+          <BarButton onClick={() => setZoom(nextZoom(zoom, -1))} label="Zoom out" title="Zoom out (−)">
+            <path d="M3.5 8h9" />
+          </BarButton>
+          <button
+            onClick={() => setZoom(1)}
+            title="Actual reading size (0)"
+            className="min-w-[3.25em] rounded-full px-1 py-0.5 text-center tabular-nums hover:bg-pane-sunk hover:text-ink"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <BarButton onClick={() => setZoom(nextZoom(zoom, 1))} label="Zoom in" title="Zoom in (+)">
+            <path d="M3.5 8h9M8 3.5v9" />
+          </BarButton>
+        </span>
         <span className="mx-2 h-4 w-px shrink-0 bg-rule" aria-hidden />
         {files.length > 1 && (
           <span className="flex shrink-0 items-center text-[12px] text-ink-faint">
@@ -137,18 +198,30 @@ function FileGlyph({ pdf }: { pdf: boolean }) {
   )
 }
 
-function ImageView({ id, name }: { id: string; name: string }) {
+function ImageView({ id, name, zoom }: { id: string; name: string; zoom: number }) {
+  // 100% fits the window; zooming scales from that size.
+  const [fit, setFit] = useState<number | null>(null)
   return (
-    <div className="flex min-h-full items-center justify-center">
-      <img data-sheet src={fileUrl(id)} alt={name} className="ql-sheet checker rise max-h-[calc(100vh-140px)] max-w-full object-contain" draggable={false} />
+    <div className="flex min-h-full w-max min-w-full items-center justify-center">
+      <img
+        data-sheet
+        src={fileUrl(id)}
+        alt={name}
+        onLoad={(e) => setFit(e.currentTarget.getBoundingClientRect().width)}
+        style={fit && zoom !== 1 ? { width: fit * zoom, maxWidth: 'none', maxHeight: 'none' } : undefined}
+        className="ql-sheet checker rise max-h-[calc(100vh-140px)] max-w-full object-contain"
+        draggable={false}
+      />
     </div>
   )
 }
 
 /** Every page (up to MAX_PAGES), rendered at the preview's width for this screen. */
-function PdfPages({ id, onPages }: { id: string; onPages: (count: number) => void }) {
+function PdfPages({ id, zoom, onPages }: { id: string; zoom: number; onPages: (count: number) => void }) {
   const box = useRef<HTMLDivElement>(null)
   const [state, setState] = useState<{ pages: number; shown: number; error: string | null }>({ pages: 0, shown: 0, error: null })
+  // The page's width at 100%, and how sharp the canvases are drawn (as a zoom), for zooming.
+  const doc = useRef<{ width: number; drawnAt: number; zoom: number; draw: (canvas: HTMLCanvasElement, n: number, at: number) => Promise<void> } | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -161,24 +234,33 @@ function PdfPages({ id, onPages }: { id: string; onPages: (count: number) => voi
       if (!res.ok) throw new Error(`couldn't read the file (${res.status})`)
       const task = pdfjs.getDocument({ data: new Uint8Array(await res.arrayBuffer()), useWasm: false })
       destroy = () => void task.destroy()
-      const doc = await task.promise
-      const count = Math.min(doc.numPages, MAX_PAGES)
-      setState({ pages: doc.numPages, shown: 0, error: null })
+      const pdf = await task.promise
+      const count = Math.min(pdf.numPages, MAX_PAGES)
+      setState({ pages: pdf.numPages, shown: 0, error: null })
       onPages(count)
       // A comfortable reading width for a page: not the whole window.
-      const width = Math.min(host.clientWidth, 860)
-      for (let n = 1; n <= count && !controller.signal.aborted; n++) {
-        const page = await doc.getPage(n)
+      const width = Math.min(host.parentElement!.clientWidth - 48, 860)
+      /** Draws page n into `canvas`, sharp at zoom `at`. */
+      const draw = async (canvas: HTMLCanvasElement, n: number, at: number) => {
+        const page = await pdf.getPage(n)
         const base = page.getViewport({ scale: 1 })
-        const scale = (width * (window.devicePixelRatio || 1)) / base.width
-        const viewport = page.getViewport({ scale })
+        const viewport = page.getViewport({ scale: (width * at * (window.devicePixelRatio || 1)) / base.width })
+        const next = document.createElement('canvas')
+        next.width = Math.floor(viewport.width)
+        next.height = Math.floor(viewport.height)
+        await page.render({ canvas: next, viewport }).promise
+        canvas.width = next.width
+        canvas.height = next.height
+        canvas.getContext('2d')!.drawImage(next, 0, 0)
+      }
+      const drawnAt = Math.max(1, zoomNow.current)
+      doc.current = { width, drawnAt, zoom: zoomNow.current, draw }
+      for (let n = 1; n <= count && !controller.signal.aborted; n++) {
         const canvas = document.createElement('canvas')
-        canvas.width = Math.floor(viewport.width)
-        canvas.height = Math.floor(viewport.height)
-        canvas.style.width = `${width}px`
+        canvas.style.width = `${width * zoomNow.current}px`
         canvas.className = 'block bg-white'
         canvas.setAttribute('aria-label', `Page ${n}`)
-        await page.render({ canvas, viewport }).promise
+        await draw(canvas, n, drawnAt)
         if (controller.signal.aborted) return
         // A sheet on the desk, with its number underneath.
         const sheet = document.createElement('figure')
@@ -203,8 +285,31 @@ function PdfPages({ id, onPages }: { id: string; onPages: (count: number) => voi
     }
   }, [id])
 
+  // Zooming: the pages resize at once, then are drawn again sharper when zoomed past what
+  // they were drawn for (a moment later, once the zooming settles).
+  const zoomNow = useRef(zoom)
+  zoomNow.current = zoom
+  useEffect(() => {
+    const d = doc.current
+    const host = box.current
+    if (!d || !host) return
+    const canvases = [...host.querySelectorAll<HTMLCanvasElement>('[data-page] canvas')]
+    for (const c of canvases) c.style.width = `${d.width * zoom}px`
+    if (zoom <= d.drawnAt + 0.01) return
+    const t = setTimeout(() => {
+      d.drawnAt = zoom
+      void (async () => {
+        for (const [i, c] of canvases.entries()) {
+          if (d.drawnAt !== zoom) return
+          await d.draw(c, i + 1, zoom)
+        }
+      })()
+    }, 250)
+    return () => clearTimeout(t)
+  }, [zoom])
+
   return (
-    <div ref={box} className="mx-auto max-w-[860px]">
+    <div ref={box} className="mx-auto w-max min-w-full">
       <div data-pages />
       {state.error ? (
         <p data-sheet className="ql-note mx-auto w-fit text-danger">Couldn't show this PDF: {state.error}. Try “Open in app”.</p>

@@ -77,3 +77,14 @@ describe('recipient summary in tight space', () => {
     client.mockRestore()
   })
 })
+
+describe('zoom', () => {
+  it('steps through the zoom levels and stops at the ends', () => {
+    expect(QL.nextZoom(1, 1)).toBe(1.25)
+    expect(QL.nextZoom(1, -1)).toBe(0.8)
+    expect(QL.nextZoom(1.1, 1)).toBe(1.25) // from a pinched level to the next step
+    expect(QL.nextZoom(1.1, -1)).toBe(1)
+    expect(QL.nextZoom(3, 1)).toBe(3)
+    expect(QL.nextZoom(0.5, -1)).toBe(0.5)
+  })
+})
