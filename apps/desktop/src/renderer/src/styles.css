@@ -909,3 +909,46 @@ mark {
 [data-theme='omarchy'] .ql-sheet {
   border-radius: 0;
 }
+
+/* An AI draft waiting for you: a border of moving colour, until it's used or discarded. */
+@property --draft-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+.ai-draft {
+  --draft-colors: #5b7cff, #a45cff, #ff5fa8, #ffb452, #3fc6b4, #5b7cff;
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(var(--pane), var(--pane)) padding-box,
+    conic-gradient(from var(--draft-angle), var(--draft-colors)) border-box;
+  box-shadow: 0 8px 28px -18px color-mix(in oklab, #a45cff 70%, transparent);
+  animation: draft-spin 5s linear infinite;
+}
+@keyframes draft-spin {
+  to {
+    --draft-angle: 360deg;
+  }
+}
+.ai-draft-tag {
+  color: color-mix(in oklab, #a45cff 70%, var(--ink));
+  background: color-mix(in oklab, #a45cff 12%, var(--pane));
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-draft {
+    animation: none;
+  }
+}
+/* Omarchy: square, still, in the theme's own accent. */
+[data-theme='omarchy'] .ai-draft {
+  animation: none;
+  background:
+    linear-gradient(var(--pane), var(--pane)) padding-box,
+    linear-gradient(90deg, var(--accent), var(--new)) border-box;
+  box-shadow: none;
+}
+[data-theme='omarchy'] .ai-draft-tag {
+  border-radius: 0;
+  color: var(--accent);
+  background: var(--accent-wash);
+}
