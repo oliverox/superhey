@@ -980,3 +980,9 @@ mark {
   background: var(--pane);
   box-shadow: 0 0 0 3px var(--accent-wash);
 }
+
+/* Today's row actions, over the end of the row: they fade in over the text instead of
+   holding space for themselves. --row-bg is the row's background under the pointer. */
+.row-actions {
+  background: linear-gradient(90deg, transparent, var(--row-bg, var(--pane-sunk)) 28px);
+}

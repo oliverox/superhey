@@ -192,11 +192,13 @@ function ThreadRow({ item, reason, mark, onOpen, onDone }: { item: ThreadItem; r
       aria-selected={selected}
       onClick={onOpen}
       className={`group relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2.5 pr-3 pl-4 ${markClass(mark)}`}
+      style={{ '--row-bg': selected ? 'var(--selection)' : 'var(--pane-sunk)' } as React.CSSProperties}
     >
       <Avatar avatar={avatar} size={32} seed={other?.email ?? p.senderEmail ?? undefined} />
+      {/* The text has the whole row; Done and Not now float over its end on hover. */}
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium text-ink">{p.subject ? stripSubjectPrefixes(p.subject) : '(no subject)'}</div>
-        <div className="mt-0.5 truncate text-[13px] text-ink-faint">
+        <div className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-ink-faint">
           <span className="text-ink-soft">{who}</span> · {reason}
         </div>
       </div>
@@ -244,6 +246,7 @@ function ActionRow({ item, mark, onOpen, onDone }: { item: ActionItem; mark: Mar
       aria-selected={selected}
       onClick={onOpen}
       className={`group relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2.5 pr-3 pl-4 ${markClass(mark)}`}
+      style={{ '--row-bg': selected ? 'var(--selection)' : 'var(--pane-sunk)' } as React.CSSProperties}
     >
       <Avatar avatar={p.avatar} size={32} seed={p.senderEmail ?? undefined} />
       <div className="min-w-0 flex-1">
@@ -266,13 +269,13 @@ function RowActions({ onDone, onNotNow }: { onDone?: () => void; onNotNow?: () =
         run()
       }}
       title={title}
-      className={`shrink-0 rounded-ui px-2 py-1 text-[12px] font-medium opacity-0 group-hover:opacity-100 hover:bg-pane focus-visible:opacity-100 ${strong ? 'text-ink-soft hover:text-ok' : 'text-ink-faint hover:text-ink'}`}
+      className={`shrink-0 rounded-ui px-2 py-1 text-[12px] font-medium hover:bg-pane ${strong ? 'text-ink-soft hover:text-ok' : 'text-ink-faint hover:text-ink'}`}
     >
       {label}
     </button>
   )
   return (
-    <span className="flex shrink-0">
+    <span className="row-actions pointer-events-none absolute inset-y-0 right-0 flex items-center rounded-r-ui pr-2 pl-8 opacity-0 transition-opacity duration-(--dur-1) group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
       {onDone && button('Done', withShortcut('Done: you’ve dealt with it', 'done'), onDone, true)}
       {onNotNow && button('Not now', 'Not now: off Today until tomorrow, or until something new arrives', onNotNow)}
     </span>
