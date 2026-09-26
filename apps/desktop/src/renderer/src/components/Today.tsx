@@ -259,7 +259,7 @@ function RowActions({ onDone, onNotNow }: { onDone?: () => void; onNotNow?: () =
 /** Dates found in mail over the next week, each a click from its thread. Information, not tasks. */
 function ComingUp({ items, selectedId, onOpen }: { items: ComingUpItem[]; selectedId: number | null; onOpen: (p: PostingRow) => void }) {
   return (
-    <section aria-label="Coming up">
+    <section aria-label="Coming up" className="@container">
       <h2 className="eyebrow px-5 pt-4 pb-1.5">Coming up</h2>
       <ul>
         {items.map((c) => (
@@ -267,7 +267,7 @@ function ComingUp({ items, selectedId, onOpen }: { items: ComingUpItem[]; select
             <button
               onClick={() => onOpen(c.posting)}
               aria-current={c.posting.id === selectedId || undefined}
-              className={`mx-2 flex w-[calc(100%-1rem)] items-baseline gap-3 rounded-ui py-2 pl-4 text-left ${c.isDeadline ? 'pr-3' : 'pr-[92px]'} ${c.posting.id === selectedId ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
+              className={`mx-2 flex w-[calc(100%-1rem)] items-baseline gap-3 rounded-ui py-2 pl-4 text-left ${c.isDeadline ? 'pr-3' : 'pr-[92px] @max-[28rem]:pr-[52px]'} ${c.posting.id === selectedId ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
             >
               <span className="w-[76px] shrink-0 text-[12px] text-ink-faint tabular-nums">
                 {dayName(c.date)}
@@ -278,6 +278,12 @@ function ComingUp({ items, selectedId, onOpen }: { items: ComingUpItem[]; select
                   {c.isDeadline && <span className="font-medium text-danger">Due: </span>}
                   {c.label}
                 </span>
+                {c.task && (
+                  <span className="block truncate text-[13px] text-ink-soft">
+                    <span className="font-medium text-danger">To do: </span>
+                    {c.task}
+                  </span>
+                )}
                 <span className="block truncate text-[12px] text-ink-faint">{c.posting.subject ? stripSubjectPrefixes(c.posting.subject) : c.posting.senderName}</span>
               </span>
             </button>

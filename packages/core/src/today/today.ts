@@ -46,6 +46,8 @@ export interface ComingUpItem {
   time: string | null
   /** A deadline for something you must do (not just a date). */
   isDeadline: boolean
+  /** Something to do by then from the same email ("Confirm attendance"), shown with the date. */
+  task?: string | null
   /** When it ends, and its meeting link, when the mail says (for adding it to the calendar). */
   endDate?: string | null
   endTime?: string | null
@@ -175,7 +177,13 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
       comingUp.push({ key: `date:${posting.id}:${comingUp.length}`, posting, label, date, time, isDeadline, ...more })
     }
     for (const d of a.dates ?? []) add(d.label, d.date, d.time, false, { endDate: d.endDate ?? null, endTime: d.endTime ?? null, link: d.link ?? null })
-    for (const i of a.actionItems ?? []) if (i.due && i.due > today) add(i.text, i.due, null, true)
+    for (const i of a.actionItems ?? []) {
+      if (!i.due || i.due <= today) continue
+      // A task due on the day of one of the email's dates belongs with it (one row, not two).
+      const sameDay = comingUp.find((c) => c.posting.id === posting.id && !c.isDeadline && c.date === i.due && !c.task)
+      if (sameDay) sameDay.task = i.text
+      else add(i.text, i.due, null, true)
+    }
   }
   comingUp.sort((x, y) => x.date.localeCompare(y.date) || (x.time ?? '').localeCompare(y.time ?? ''))
 

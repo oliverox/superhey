@@ -65,7 +65,7 @@ export function AddToCalendar({ item, source }: { item: MailDate; source?: strin
     return (
       <span className="inline-flex h-7 shrink-0 items-center gap-1.5 text-[13px] font-medium text-ok">
         <CheckIcon />
-        Added
+        <span className="@max-[28rem]:hidden">Added</span>
         <button
           onClick={async (e) => {
             e.stopPropagation()
@@ -91,7 +91,7 @@ export function AddToCalendar({ item, source }: { item: MailDate; source?: strin
         className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-ui px-2 text-[13px] font-medium text-ok hover:bg-pane-sunk"
       >
         <CheckIcon />
-        In calendar
+        <span className="@max-[28rem]:sr-only">In calendar</span>
       </button>
     )
   }
@@ -104,13 +104,13 @@ export function AddToCalendar({ item, source }: { item: MailDate; source?: strin
         }}
         disabled={!range.data}
         title="Add to HEY Calendar"
-        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-ui bg-accent-wash px-2.5 text-[13px] font-medium text-accent transition-colors hover:bg-[color-mix(in_oklab,var(--accent)_18%,var(--pane))] disabled:opacity-50"
+        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-ui bg-accent-wash px-2.5 text-[13px] font-medium text-accent transition-colors @max-[28rem]:px-[7px] hover:bg-[color-mix(in_oklab,var(--accent)_18%,var(--pane))] disabled:opacity-50"
       >
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
           <rect x="2" y="3" width="12" height="11" rx="2" />
           <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3M8 8.5v3.5M6.25 10.25h3.5" />
         </svg>
-        Add
+        <span className="@max-[28rem]:sr-only">Add</span>
       </button>
       {form && range.data && (
         <EventForm

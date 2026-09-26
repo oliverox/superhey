@@ -100,6 +100,16 @@ describe('Today', () => {
     ])
   })
 
+  it('shows a task due on the day of one of the same email’s dates with that date, in one row', () => {
+    const { repo, put } = setup()
+    put('imbox', { id: 73, topic_id: 973, active_at: daysAgo(1) })
+    analyse(repo, 973, daysAgo(1), {
+      dates: [{ label: 'MDA event', date: '2026-09-27', time: '09:00' }],
+      actionItems: [{ text: 'Confirm attendance at MDA event', due: '2026-09-27', event: false }],
+    })
+    expect(buildToday(repo, input()).comingUp.map((c) => [c.label, c.task ?? null, c.isDeadline])).toEqual([['MDA event', 'Confirm attendance at MDA event', false]])
+  })
+
   it('puts deadlines from mail that have come in Due, and later ones in Coming up', () => {
     const { repo, put } = setup()
     put('imbox', { id: 70, topic_id: 970, active_at: daysAgo(2) })
