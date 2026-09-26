@@ -1,7 +1,7 @@
 export * from './ids'
 export * from './cli/errors'
 export { HeyRunner, locateCli, MIN_CLI_VERSION, type Exec, type ExecResult } from './cli/runner'
-export { HeyClient, type BoxPage, type BubbleWhen, type OutgoingMessage, type Verified } from './cli/client'
+export { HeyClient, type BoxPage, type BubbleWhen, type NewEvent, type OutgoingMessage, type Verified } from './cli/client'
 export { Outbox, UNDO_SEND_MS, type OutgoingKind, type OutgoingRecord, type OutgoingStatus } from './actions/outbox'
 export { ActionRunner, type Action, type ActionRecord, type ActionSource, type ActionStatus, type MoveTarget } from './actions/runner'
 export * as schemas from './cli/schemas'

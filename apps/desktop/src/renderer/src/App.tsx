@@ -19,6 +19,7 @@ import { ShortcutHelp } from './components/ShortcutHelp'
 import { Tooltips } from './components/Tooltips'
 import { CommandBar } from './components/CommandBar'
 import { Settings } from './components/Settings'
+import { CalendarView } from './components/Calendar'
 import { doneFor, TodayList, todayLabel, todayRows, todayThreads, type TodayData } from './components/Today'
 import type { Command } from './commands/model'
 import { boxCommands, emailCommand, labelCommands } from './commands/sources'
@@ -50,6 +51,14 @@ function Workspace({ status }: { status: AppStatus }) {
   const [boxId, setBoxId] = useState<number | null>(null)
   // Today is where the app opens; a box replaces it until you come back (0).
   const [onToday, setOnToday] = useState(true)
+  // The calendar takes the place of the list and reader while it's open; `focus` jumps to a day.
+  const [onCalendar, setOnCalendar] = useState(false)
+  const [calendarFocus, setCalendarFocus] = useState<{ day: string; nonce: number } | null>(null)
+  const openCalendar = (day?: string) => {
+    setOnCalendar(true)
+    setScreening(false)
+    if (day) setCalendarFocus({ day, nonce: Date.now() })
+  }
   const activeBox = ordered.find((b) => b.id === boxId) ?? ordered[0] ?? null
   const boxNames = useMemo(() => Object.fromEntries(ordered.map((b) => [b.id, b.name])), [ordered])
   const since = useLastLook(onToday)
@@ -90,6 +99,7 @@ function Workspace({ status }: { status: AppStatus }) {
   screeningRef.current = screening
   const screenerTarget = target?.screeningId ?? null
   const openScreener = () => {
+    setOnCalendar(false)
     setQuery('')
     setScreening(true)
   }
@@ -197,6 +207,7 @@ function Workspace({ status }: { status: AppStatus }) {
   // Light and dark are the Default theme's (Omarchy is dark).
   useShortcut('appearance', toggleDark, theme === 'default')
   const showBox = (id: number) => {
+    setOnCalendar(false)
     setOnToday(false)
     setScreening(false)
     setQuery('')
@@ -214,6 +225,7 @@ function Workspace({ status }: { status: AppStatus }) {
   openInBoxRef.current = openInBox
   const goToBox = (i: number) => ordered[i] && showBox(ordered[i]!.id)
   const goToToday = () => {
+    setOnCalendar(false)
     setTodayClosed(false)
     setOnToday(true)
     setScreening(false)
@@ -221,6 +233,7 @@ function Workspace({ status }: { status: AppStatus }) {
     setTarget(null)
   }
   useShortcut('today', goToToday)
+  useShortcut('calendar', () => openCalendar())
   // e on Today: done with the open item; Today then puts up the next.
   const doneWithOpen = onToday && target?.postingId != null ? doneFor(todayData, target.postingId) : null
   useShortcut('done', () => void doneWithOpen?.().then(() => setTarget(null)), !!doneWithOpen)
@@ -261,7 +274,7 @@ function Workspace({ status }: { status: AppStatus }) {
     <div
       ref={gridRef}
       style={{ '--list-w': `${listWidth.width}px` } as React.CSSProperties}
-      className={`tiles grid h-full ${listAlone ? 'grid-cols-[232px_1fr]' : 'grid-cols-[232px_var(--list-w)_1fr]'}`}
+      className={`tiles grid h-full ${listAlone || onCalendar ? 'grid-cols-[232px_1fr]' : 'grid-cols-[232px_var(--list-w)_1fr]'}`}
       onMouseDown={(e) => {
         const pane = (e.target as HTMLElement).closest<HTMLElement>('[data-pane]')?.dataset.pane as PaneId | undefined
         if (pane) setActivePane(pane)
@@ -269,9 +282,10 @@ function Workspace({ status }: { status: AppStatus }) {
     >
       <Sidebar
         boxes={ordered}
-        activeBoxId={onToday || screening ? null : (activeBox?.id ?? null)}
+        activeBoxId={onToday || screening || onCalendar ? null : (activeBox?.id ?? null)}
         onSelectBox={showBox}
-        today={{ active: onToday && !screening, count: todayData?.toHandle ?? null, onSelect: goToToday }}
+        today={{ active: onToday && !screening && !onCalendar, count: todayData?.toHandle ?? null, onSelect: goToToday }}
+        calendar={{ active: onCalendar, onOpen: openCalendar }}
         status={status}
         theme={theme}
         scheme={scheme}
@@ -282,6 +296,10 @@ function Workspace({ status }: { status: AppStatus }) {
         onOpenSettings={() => setShowSettings(true)}
       />
 
+      {onCalendar ? (
+        <CalendarView focus={calendarFocus} />
+      ) : (
+      <>
       <section className="pane relative flex min-w-0 flex-col bg-pane [view-transition-name:list]" data-pane="list" data-active={activePane === 'list'}>
         {!listAlone && <ListResizer gridRef={gridRef} width={listWidth.width} onResize={listWidth.save} />}
         <header className="drag flex h-[52px] shrink-0 items-center border-b border-rule px-4">
@@ -395,6 +413,8 @@ function Workspace({ status }: { status: AppStatus }) {
         />
         )}
       </div>
+      </>
+      )}
       <Toasts />
       {showActivity && <ActivityDrawer onClose={() => setShowActivity(false)} />}
       {showHelp && <ShortcutHelp onClose={() => setShowHelp(false)} />}

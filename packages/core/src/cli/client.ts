@@ -42,6 +42,20 @@ export interface Verified {
 /** How many box pages to scan when confirming a mutation. */
 const VERIFY_PAGES = 3
 
+/** An event to create: all day when there's no start time. Dates YYYY-MM-DD, times HH:MM. */
+export interface NewEvent {
+  title: string
+  startsOn: string
+  endsOn?: string | null
+  startTime?: string | null
+  endTime?: string | null
+  timeZone?: string | null
+  calendarId?: number | null
+  location?: string | null
+  link?: string | null
+  notes?: string | null
+}
+
 /** Typed access to the HEY CLI. Every method is one or a few CLI calls. */
 export class HeyClient {
   constructor(private readonly runner: HeyRunner) {}
@@ -158,6 +172,27 @@ export class HeyClient {
   /** Events of the week containing `date` (YYYY-MM-DD), repeating events expanded. */
   eventsWeek(date?: string) {
     return this.data(['event', 'week', ...(date ? [date] : []), '--all'], z.array(S.CalendarEvent))
+  }
+
+  /** Creates an event on a calendar. Times are read in `timeZone` (the machine's by default). */
+  async addEvent(e: NewEvent): Promise<number | null> {
+    const args = ['event', 'add', e.title, '--starts-on', e.startsOn]
+    if (e.endsOn && e.endsOn !== e.startsOn) args.push('--ends-on', e.endsOn)
+    if (e.startTime) {
+      args.push('--start-time', e.startTime)
+      if (e.endTime) args.push('--end-time', e.endTime)
+      if (e.timeZone) args.push('--time-zone', e.timeZone)
+    } else args.push('--all-day')
+    if (e.calendarId != null) args.push('--calendar', String(e.calendarId))
+    if (e.location) args.push('--location', e.location)
+    if (e.link) args.push('--link', e.link)
+    if (e.notes) args.push('--notes', e.notes)
+    const out = await this.data(args, z.looseObject({ id: z.number().optional() }).nullish())
+    return out?.id ?? null
+  }
+
+  async deleteEvent(id: number) {
+    await this.runner.json(['event', 'delete', String(id)])
   }
 
   todos() {
