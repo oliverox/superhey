@@ -167,8 +167,8 @@ const flush = () =>
     }
     for (let i = 0; i < 5; i++) await Promise.resolve()
   })
-async function open(onClose = vi.fn()) {
-  act(() => root.render(createElement(Settings, { onClose })))
+async function open(onClose = vi.fn(), initialTab: 'general' | 'ai' | 'voice' | 'usage' = 'ai') {
+  act(() => root.render(createElement(Settings, { onClose, initialTab })))
   await flush()
   return onClose
 }
@@ -210,7 +210,7 @@ async function menu(name: string, item: string) {
 describe('Reading', () => {
   it('turns marking seen on open off and on', async () => {
     localStorage.removeItem('pref:mark-seen-on-open')
-    await open()
+    await open(vi.fn(), 'general')
     expect(text()).toContain('Mark emails seen when you open them')
     expect(sw('Mark emails seen when you open them').getAttribute('aria-checked')).toBe('true')
     await click(sw('Mark emails seen when you open them'))
@@ -372,7 +372,7 @@ describe('Settings: tasks, budget and usage', () => {
   })
 
   it('shows the month’s spend against the budget, and the calls behind it', async () => {
-    await open()
+    await open(vi.fn(), 'usage')
     expect(text()).toContain('$0.42 of $5.00 in September')
     expect(byLabel('Spent this month').getAttribute('aria-valuenow')).toBe('0.42')
     const row = [...host.querySelectorAll('tbody tr')].at(-1)!.textContent
@@ -380,7 +380,7 @@ describe('Settings: tasks, budget and usage', () => {
   })
 
   it('changes the budget on Enter, and can lift it', async () => {
-    await open()
+    await open(vi.fn(), 'usage')
     const input = byLabel<HTMLInputElement>('Monthly budget in dollars')
     await typeInto(input, '12.345')
     await key(input, 'Enter')
@@ -396,7 +396,7 @@ describe('Settings: tasks, budget and usage', () => {
 
   it('warns when the budget is used up', async () => {
     backend.state.spent = 5.01
-    await open()
+    await open(vi.fn(), 'usage')
     expect(text()).toContain('The budget is used up')
   })
 
@@ -424,7 +424,7 @@ describe('formatting', () => {
 describe('Settings: your voice', () => {
   it('learns your voice on request, then shows it with your notes and a way to forget it', async () => {
     backend.state.keys.claude = 'sk-ant-api03-test'
-    await open()
+    await open(vi.fn(), 'voice')
     expect(text()).toContain('Learn my voice')
     await click(button('Learn my voice'))
     expect(backend.called('buildVoice')).toHaveLength(1)
@@ -441,5 +441,28 @@ describe('Settings: your voice', () => {
     expect(backend.called('setVoiceNotes')).toEqual([['Sign off as Oli with friends.']])
     await click(button('Forget my voice'))
     expect(text()).toContain('Learn my voice')
+  })
+})
+
+describe('Settings: tabs', () => {
+  it('shows one tab at a time, remembers the last one, and moves with the arrow keys', async () => {
+    localStorage.removeItem('settings:tab')
+    // No tab asked for: the one last used on this device, General the first time.
+    act(() => root.render(createElement(Settings, { onClose: vi.fn() })))
+    await flush()
+    const tab = (name: string) => [...host.querySelectorAll('[role=tab]')].find((t) => t.textContent === name) as HTMLButtonElement
+    expect(tab('General').getAttribute('aria-selected')).toBe('true')
+    expect(text()).toContain('Mark emails seen when you open them')
+    expect(text()).not.toContain('AI providers')
+    await click(tab('Usage'))
+    expect(text()).toContain('Budget and usage')
+    expect(text()).not.toContain('Mark emails seen')
+    expect(localStorage.getItem('settings:tab')).toBe('usage')
+    act(() => void tab('Usage').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
+    await flush()
+    expect(tab('General').getAttribute('aria-selected')).toBe('true')
+    act(() => void tab('General').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
+    await flush()
+    expect(text()).toContain('AI providers')
   })
 })
