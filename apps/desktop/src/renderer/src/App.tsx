@@ -18,7 +18,8 @@ import { useShortcut } from './shortcuts'
 import { ShortcutHelp } from './components/ShortcutHelp'
 import { Tooltips } from './components/Tooltips'
 import { CommandBar } from './components/CommandBar'
-import { Settings } from './components/Settings'
+import { Settings, type SettingsTab } from './components/Settings'
+import { AiSpend } from './components/AiSpend'
 import { CalendarView } from './components/Calendar'
 import { doneFor, TodayList, todayLabel, todayRows, todayThreads, type TodayData } from './components/Today'
 import type { Command } from './commands/model'
@@ -124,6 +125,8 @@ function Workspace({ status }: { status: AppStatus }) {
   const [showCommands, setShowCommands] = useState(false)
   useShortcut('palette', () => setShowCommands((v) => !v))
   const [showSettings, setShowSettings] = useState(false)
+  // Settings opened on a given tab (the AI spend in the header opens Usage).
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null)
   useShortcut('settings', () => setShowSettings((v) => !v))
   const [composing, setComposing] = useState<ComposeRequest | null>(null)
   useShortcut('compose', () => setComposing({ kind: 'new', message: { to: [], subject: '', body: '' } }), !composing)
@@ -348,6 +351,7 @@ function Workspace({ status }: { status: AppStatus }) {
               if (searchRows[0]) open(searchRows[0])
             }}
           />
+          {!searchExpanded && <AiSpend onOpen={() => setSettingsTab('usage')} />}
         </header>
         {/* Standing alone, the list keeps a readable measure. */}
         <div className={listAlone ? 'mx-auto flex min-h-0 w-full max-w-[780px] flex-1 flex-col' : 'contents'}>
@@ -426,7 +430,15 @@ function Workspace({ status }: { status: AppStatus }) {
       <Toasts />
       {showActivity && <ActivityDrawer onClose={() => setShowActivity(false)} />}
       {showHelp && <ShortcutHelp onClose={() => setShowHelp(false)} />}
-      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
+      {(showSettings || settingsTab) && (
+        <Settings
+          initialTab={settingsTab ?? undefined}
+          onClose={() => {
+            setShowSettings(false)
+            setSettingsTab(null)
+          }}
+        />
+      )}
       {showCommands && (
         <CommandBarHost
           boxes={ordered}
