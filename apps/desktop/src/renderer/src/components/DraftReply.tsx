@@ -21,10 +21,18 @@ export function DraftCard({ draft, onUse, onRedraft, onDiscard }: { draft: Reply
   const [all, setAll] = useState(false)
   const long = draft.body.split('\n').length > 8 || draft.body.length > 520
   return (
-    <section aria-label="Draft reply" className="rise mt-5 rounded-ui-lg border border-accent/30 bg-pane px-5 pt-4 pb-3">
-      <header className="flex items-baseline gap-2">
+    // A draft waiting for you: its border shimmers until you use it or throw it away, so it
+    // never passes for mail that's been sent.
+    <section aria-label="Draft reply, not sent" className="ai-draft rise mt-5 rounded-ui-lg px-5 pt-4 pb-3">
+      <header className="flex items-center gap-2">
         <h3 className="text-[13px] font-semibold text-ink">Draft reply</h3>
-        <span className="text-[12px] text-ink-faint">{draft.stale ? 'written before the latest message' : draft.instruction ? `“${draft.instruction}”` : 'in your voice'}</span>
+        <span className="min-w-0 truncate text-[12px] text-ink-faint">{draft.stale ? 'written before the latest message' : draft.instruction ? `“${draft.instruction}”` : 'in your voice'}</span>
+        <span className="ai-draft-tag ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold">
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+            <path d="M8 0c.4 3.6 2.4 5.6 6 6-3.6.4-5.6 2.4-6 6-.4-3.6-2.4-5.6-6-6 3.6-.4 5.6-2.4 6-6Zm5.5 10c.2 1.6 1 2.4 2.5 2.5-1.5.2-2.3 1-2.5 2.5-.2-1.5-1-2.3-2.5-2.5 1.5-.1 2.3-.9 2.5-2.5Z" />
+          </svg>
+          AI draft · not sent
+        </span>
       </header>
       <div className={`relative mt-2 overflow-hidden text-[15px] leading-relaxed whitespace-pre-wrap text-ink ${long && !all ? 'max-h-[12.5em]' : ''}`}>
         <WithPlaceholders text={draft.body} placeholders={draft.placeholders} />
