@@ -288,7 +288,7 @@ function ComingUp({ items, selectedId, onOpen }: { items: ComingUpItem[]; select
               </span>
             </button>
             {!c.isDeadline && (
-              <span className="absolute top-1/2 right-5 -translate-y-1/2">
+              <span className="absolute top-1 right-5">
                 <AddToCalendar item={c} source={c.posting.subject ? stripSubjectPrefixes(c.posting.subject) : undefined} />
               </span>
             )}
