@@ -930,10 +930,6 @@ mark {
     --draft-angle: 360deg;
   }
 }
-.ai-draft-tag {
-  color: color-mix(in oklab, #a45cff 70%, var(--ink));
-  background: color-mix(in oklab, #a45cff 12%, var(--pane));
-}
 @media (prefers-reduced-motion: reduce) {
   .ai-draft {
     animation: none;
@@ -947,12 +943,7 @@ mark {
     linear-gradient(90deg, var(--accent), var(--new)) border-box;
   box-shadow: none;
 }
-[data-theme='omarchy'] .ai-draft-tag {
-  border-radius: 0;
-  color: var(--accent);
-  background: var(--accent-wash);
-}
-
+[data-theme='omarchy'] 
 /* A field that reads as text: no chrome at rest, a tint under the pointer, a crisp field
    once you're in it. Used where a form should look like the thing it describes. */
 .ghost-field {
