@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'electron-vite'
 import type { Plugin } from 'vite'
+import pkg from './package.json'
 
 // Strict CSP for the packaged app. Dev skips it because React refresh injects an inline script.
 const csp: Plugin = {
@@ -22,6 +23,7 @@ export default defineConfig({
   },
   preload: {},
   renderer: {
+    define: { __APP_VERSION__: JSON.stringify(pkg.version) },
     resolve: { alias: { '@shared': resolve(__dirname, 'src/shared') } },
     plugins: [react(), tailwindcss(), csp],
   },

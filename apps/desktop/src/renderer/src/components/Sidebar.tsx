@@ -3,7 +3,7 @@ import { api, useLive } from '../api'
 import { startOfDay } from '../format'
 import { calendarColor, clockOf, onDay, timeRange, ymd } from '../calendar/model'
 import { withShortcut } from '../shortcuts'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Scheme, Theme } from '../theme'
 import { OmarchyLogo } from './OmarchyLogo'
 import { BubbleIcon, CalendarIcon, FeedIcon, ImboxIcon, PaperTrailIcon, ReplyLaterIcon, SetAsideIcon, TodayIcon } from './icons'
@@ -106,25 +106,30 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
 
       <Agenda onOpen={calendar.onOpen} />
 
-      <footer className="shrink-0 border-t border-side-rule px-4 py-3 text-[12px] text-side-faint">
-        <div className="mb-2.5 flex items-center gap-1">
-          <button onClick={onOpenActivity} className="flex items-center gap-2 rounded-ui px-1 py-1 text-left text-[12px] text-side-soft hover:text-side-ink">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden>
-              <path d="M2 8h2.5L6 3.5l4 9L11.5 8H14" />
-            </svg>
-            Activity
-          </button>
-          <button onClick={onOpenSettings} title={withShortcut('Settings', 'settings')} className="ml-auto flex items-center gap-2 rounded-ui px-1 py-1 text-left text-[12px] text-side-soft hover:text-side-ink">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden>
-              <path d="M3 5h10M3 11h10" />
-              <circle cx="6" cy="5" r="1.5" fill="currentColor" />
-              <circle cx="10.5" cy="11" r="1.5" fill="currentColor" />
-            </svg>
-            Settings
-          </button>
+      <footer className="shrink-0 border-t border-side-rule px-3 py-2.5 text-[12px] text-side-faint">
+        {status.testInstance && (
+          <div className="mb-2 rounded-ui border border-danger/50 px-2 py-1 text-[12px] font-medium text-danger" title="Opened by Claude to check changes: emails are never marked seen, nothing is sent, the Screener is untouched. Use your own SuperHey window.">
+            Test instance (read-only)
+          </div>
+        )}
+        {status.sync?.lastError && (
+          <div className="mb-1.5 truncate px-1 text-danger" title={status.sync.lastError}>
+            {status.sync.lastError}
+          </div>
+        )}
+        {/* One quiet row: what's running on the left, the tools on the right. */}
+        <div className="flex items-center gap-0.5">
+          <SyncStatus status={status} />
+          <FooterButton label="Activity" onClick={onOpenActivity}>
+            <path d="M2 8h2.5L6 3.5l4 9L11.5 8H14" />
+          </FooterButton>
+          <FooterButton label={withShortcut('Settings', 'settings')} onClick={onOpenSettings}>
+            <path d="M3 5h10M3 11h10" />
+            <circle cx="6" cy="5" r="1.5" fill="currentColor" />
+            <circle cx="10.5" cy="11" r="1.5" fill="currentColor" />
+          </FooterButton>
+          <AppearanceMenu theme={theme} scheme={scheme} onTheme={onTheme} onScheme={onScheme} />
         </div>
-        <AppearanceSwitch theme={theme} scheme={scheme} onTheme={onTheme} onScheme={onScheme} />
-        <SyncStatus status={status} />
       </footer>
     </aside>
   )
@@ -247,67 +252,109 @@ const LOOKS: Array<{ id: Look; label: string; icon: ReactNode }> = [
 ]
 
 /**
- * How the app looks, in one switch: Default in light, dark or as the system is, or
- * Omarchy. ⇧D flips light and dark; ⇧T switches Default and Omarchy.
+ * How the app looks: Default in light, dark or as the system is, or Omarchy. The button shows
+ * the current one; its menu lists all four. ⇧D flips light and dark; ⇧T switches styles.
  */
-function AppearanceSwitch({ theme, scheme, onTheme, onScheme }: { theme: Theme; scheme: Scheme; onTheme: (t: Theme) => void; onScheme: (s: Scheme) => void }) {
+function AppearanceMenu({ theme, scheme, onTheme, onScheme }: { theme: Theme; scheme: Scheme; onTheme: (t: Theme) => void; onScheme: (s: Scheme) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
   const current: Look = theme === 'omarchy' ? 'omarchy' : scheme
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey, true)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey, true)
+    }
+  }, [open])
   const choose = (look: Look) => {
-    if (look === 'omarchy') return onTheme('omarchy')
-    onTheme('default')
-    onScheme(look)
+    if (look === 'omarchy') onTheme('omarchy')
+    else {
+      onTheme('default')
+      onScheme(look)
+    }
+    setOpen(false)
   }
+  const glyph = (l: (typeof LOOKS)[number]) =>
+    l.id === 'omarchy' ? (
+      <OmarchyLogo className="size-[13px]" />
+    ) : (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
+        {l.icon}
+      </svg>
+    )
+  const now = LOOKS.find((l) => l.id === current)!
   return (
-    <div role="radiogroup" aria-label="Appearance" className="mb-3 flex rounded-ui bg-side-sel/60 p-0.5">
-      {LOOKS.map((l) => (
-        <button
-          key={l.id}
-          role="radio"
-          aria-checked={current === l.id}
-          aria-label={l.label}
-          title={l.label}
-          onClick={() => choose(l.id)}
-          className={`flex h-[26px] flex-1 items-center justify-center rounded-ui transition-colors ${
-            current === l.id ? 'bg-side-sel text-side-ink shadow-sm' : 'text-side-faint hover:text-side-soft'
-          }`}
-        >
-          {l.id === 'omarchy' ? (
-            <OmarchyLogo className="size-[13px]" />
-          ) : (
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
-              {l.icon}
-            </svg>
-          )}
-        </button>
-      ))}
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Appearance: ${now.label}`}
+        title={`Appearance: ${now.label}`}
+        className={`flex size-7 items-center justify-center rounded-ui hover:bg-side-sel/60 hover:text-side-ink ${open ? 'bg-side-sel text-side-ink' : 'text-side-soft'}`}
+      >
+        {glyph(now)}
+      </button>
+      {open && (
+        <div role="menu" aria-label="Appearance" className="pop-in absolute right-0 bottom-full z-30 mb-1.5 w-[190px] rounded-ui-lg border border-side-rule bg-side p-1 shadow-[0_14px_36px_-12px_rgba(0,0,0,0.6)]">
+          {LOOKS.map((l) => (
+            <button
+              key={l.id}
+              role="menuitemradio"
+              aria-checked={current === l.id}
+              onClick={() => choose(l.id)}
+              className={`flex w-full items-center gap-2.5 rounded-ui px-2.5 py-1.5 text-left text-[13px] hover:bg-side-sel ${current === l.id ? 'text-side-ink' : 'text-side-soft'}`}
+            >
+              <span className="flex w-4 justify-center">{glyph(l)}</span>
+              <span className="flex-1">{l.label}</span>
+              {current === l.id && (
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="m3 8.5 3.5 3.5L13 4.5" />
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
+function FooterButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+  return (
+    <button onClick={onClick} aria-label={label} title={label} className="flex size-7 items-center justify-center rounded-ui text-side-soft hover:bg-side-sel/60 hover:text-side-ink">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden>
+        {children}
+      </svg>
+    </button>
+  )
+}
+
+declare const __APP_VERSION__: string
+/** The app's version, from its package.json (set at build time). */
+const APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'
+
+/** The app and whether it's live: a dot and the version; the details on hover. */
 function SyncStatus({ status }: { status: AppStatus }) {
   const watch = status.sync?.watch ?? 'connecting'
   const label = { live: 'Live', connecting: 'Connecting', reconnecting: 'Reconnecting', stopped: 'Paused' }[watch]
-  const dot = watch === 'live' ? 'bg-side-accent' : 'bg-side-accent pulse'
+  const busy = watch !== 'live' || status.backfill.running
+  const details = [
+    `${label}${status.backfill.running ? ` · caching older mail (${status.backfill.postings.toLocaleString()})` : ''}`,
+    `SuperHey ${APP_VERSION}${status.cli ? ` · HEY CLI ${status.cli.version}` : ''}`,
+  ].join('\n')
   return (
-    <>
-      {status.testInstance && (
-        <div className="mb-2 rounded-ui border border-danger/50 px-2 py-1 text-[12px] font-medium text-danger" title="Opened by Claude to check changes: emails are never marked seen, nothing is sent, the Screener is untouched. Use your own SuperHey window.">
-          Test instance (read-only)
-        </div>
-      )}
-      <div className="flex items-center gap-2">
-        <span className={`size-1.5 rounded-full ${dot}`} />
-        <span>{label}</span>
-        {status.cli && <span className="ml-auto">CLI {status.cli.version}</span>}
-      </div>
-      {status.backfill.running && (
-        <div className="mt-1">Caching older mail · {status.backfill.postings.toLocaleString()}</div>
-      )}
-      {status.sync?.lastError && (
-        <div className="mt-1 truncate text-danger" title={status.sync.lastError}>
-          {status.sync.lastError}
-        </div>
-      )}
-    </>
+    <span className="mr-auto flex min-w-0 items-center gap-2 px-1 text-side-faint" title={details}>
+      <span className={`size-1.5 shrink-0 rounded-full ${watch === 'live' ? 'bg-ok' : 'bg-side-accent'} ${busy ? 'pulse' : ''}`} aria-label={label} />
+      <span className="truncate">SuperHey {APP_VERSION}</span>
+    </span>
   )
 }
