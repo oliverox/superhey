@@ -138,8 +138,10 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
     setDrafting(true)
     setError(null)
     try {
-      const draft = await api.draftReplyTo(request.message.threadId!, request.replyTo!, body.trim() || null)
-      setBeforeDraft(body)
+      // Redrafting follows the same instruction, not the draft now in the box.
+      const asked = beforeDraft ?? body
+      const draft = await api.draftReplyTo(request.message.threadId!, request.replyTo!, asked.trim() || null)
+      setBeforeDraft(asked)
       setBody(draft.body)
       setNote(draft.placeholders.length ? `Fill in before sending: ${draft.placeholders.join(', ')}` : null)
       bodyRef.current?.focus()
@@ -267,7 +269,7 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
         </ul>
       )}
 
-      <footer className="flex items-center gap-2 border-t border-rule px-3 py-2">
+      <footer className="@container flex items-center gap-2 border-t border-rule px-3 py-2 [&>button]:shrink-0 [&>button]:whitespace-nowrap">
         <button
           type="submit"
           disabled={!!busy}
@@ -295,7 +297,7 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
         </span>
         {canDraft && beforeDraft != null && !drafting && (
           <button type="button" onClick={undoDraft} className="rounded-ui px-2.5 py-1.5 text-[13px] text-ink-soft hover:bg-pane-sunk hover:text-ink">
-            Undo draft
+            Undo
           </button>
         )}
         {canDraft && (
@@ -307,8 +309,8 @@ export function Composer({ request, onClose, variant }: { request: ComposeReques
             className="inline-flex items-center gap-1.5 rounded-ui px-2.5 py-1.5 text-[13px] text-ink-soft hover:bg-pane-sunk hover:text-ink disabled:opacity-70"
           >
             {drafting ? <Spinner size={12} /> : <span aria-hidden>✦</span>}
-            {drafting ? 'Drafting…' : body.trim() && beforeDraft == null ? 'Draft this' : 'Draft in my voice'}
-            {!drafting && <kbd className="font-sans text-[11px] text-ink-faint">{keyLabel('mod+j')}</kbd>}
+            {drafting ? 'Drafting…' : beforeDraft != null ? 'Redraft' : body.trim() ? 'Draft this' : 'Draft in my voice'}
+            {!drafting && <kbd className="font-sans text-[11px] text-ink-faint @max-xl:hidden">{keyLabel('mod+j')}</kbd>}
           </button>
         )}
         <button type="button" onClick={discard} className="rounded-ui px-2.5 py-1.5 text-[13px] text-ink-soft hover:bg-pane-sunk hover:text-danger">
