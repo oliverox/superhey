@@ -93,6 +93,22 @@ export interface EventRow {
   endsAt: string | null
   allDay: boolean
   location: string | null
+  /** The calendar's colour name in HEY ("green", "purple"…), and its name. */
+  color: string | null
+  calendarName: string | null
+  recurring: boolean
+  /** A meeting link (Zoom, Meet…) when the event has one. */
+  joinUrl: string | null
+  /** The event in HEY. */
+  appUrl: string | null
+}
+
+/** A HEY calendar: where new events can go. */
+export interface CalendarRow {
+  id: number
+  name: string | null
+  kind: string
+  color: string | null
 }
 
 export interface SearchHit {
@@ -105,6 +121,25 @@ export interface SearchHit {
 }
 
 const now = () => new Date().toISOString()
+
+/** What the calendar view shows beyond the columns: colour, repetition, links. */
+function eventExtras(raw: string | null): Pick<EventRow, 'color' | 'calendarName' | 'recurring' | 'joinUrl' | 'appUrl'> {
+  let e: Record<string, any> = {}
+  try {
+    e = JSON.parse(raw ?? '{}') ?? {}
+  } catch {
+    // no extras
+  }
+  const cal = e.calendar ?? e.parent?.calendar ?? {}
+  const link = e.join_link?.url ?? e.join_link?.href ?? e.parent?.join_link?.url ?? null
+  return {
+    color: typeof cal.color === 'string' ? cal.color : null,
+    calendarName: typeof cal.name === 'string' ? cal.name : null,
+    recurring: !!(e.recurring || e.parent?.recurring),
+    joinUrl: typeof link === 'string' ? link : null,
+    appUrl: typeof e.edit_url === 'string' ? e.edit_url.replace(/\/edit$/, '') : typeof e.url === 'string' ? e.url.replace(/\.json$/, '') : null,
+  }
+}
 
 const b = (v: boolean | null | undefined) => (v ? 1 : 0)
 const n = <T>(v: T | null | undefined): T | null => v ?? null
@@ -660,7 +695,12 @@ export class Repo {
       endsAt: r.ends_at as string | null,
       allDay: r.all_day === 1,
       location: r.location as string | null,
+      ...eventExtras(r.raw_json as string | null),
     }))
+  }
+
+  calendars(): CalendarRow[] {
+    return this.all<CalendarRow>('SELECT id, name, kind, color FROM calendars ORDER BY id')
   }
 
   replaceTodos(todos: S.Todo[]) {

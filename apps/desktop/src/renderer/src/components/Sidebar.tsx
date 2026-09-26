@@ -1,8 +1,9 @@
 import type { AppStatus, BoxRow, EventRow } from '@shared/api'
 import { api, useLive } from '../api'
-import { clock, startOfDay } from '../format'
+import { startOfDay } from '../format'
+import { calendarColor, clockOf, onDay, timeRange, ymd } from '../calendar/model'
 import { withShortcut } from '../shortcuts'
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { Scheme, Theme } from '../theme'
 import { OmarchyLogo } from './OmarchyLogo'
 
@@ -21,9 +22,11 @@ interface Props {
   onOpenSettings: () => void
   /** Today, above the boxes: whether it's showing, and how much is left to handle. */
   today: { active: boolean; count: number | null; onSelect: () => void }
+  /** The calendar, below the boxes; `onOpen` with a day shows that day. */
+  calendar: { active: boolean; onOpen: (day?: string) => void }
 }
 
-export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onTheme, scheme, onScheme, active, onOpenActivity, onOpenSettings, today }: Props) {
+export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onTheme, scheme, onScheme, active, onOpenActivity, onOpenSettings, today, calendar }: Props) {
   return (
     <aside className="pane flex flex-col bg-side text-side-ink" data-pane="sidebar" data-active={active}>
       <div className="drag h-[52px] shrink-0" />
@@ -69,10 +72,24 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
               </li>
             )
           })}
+          <li className="mt-1.5">
+            <button
+              onClick={() => calendar.onOpen()}
+              aria-current={calendar.active ? 'page' : undefined}
+              className={`group flex w-full items-center rounded-ui px-2.5 py-[7px] text-left transition-colors ${
+                calendar.active ? 'bg-side-sel text-side-ink' : 'text-side-soft hover:bg-side-sel/60 hover:text-side-ink'
+              }`}
+            >
+              <span className="font-medium">Calendar</span>
+              <kbd className={`sidebar-key ml-auto ${calendar.active ? 'is-selected' : ''}`} title="Press 7">
+                7
+              </kbd>
+            </button>
+          </li>
         </ul>
       </nav>
 
-      <Agenda />
+      <Agenda onOpen={calendar.onOpen} />
 
       <footer className="shrink-0 border-t border-side-rule px-4 py-3 text-[12px] text-side-faint">
         <div className="mb-2.5 flex items-center gap-1">
@@ -98,41 +115,94 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
   )
 }
 
-function Agenda() {
+/**
+ * What's on: the event happening now or next, large, with how long until it (and Join when
+ * it has a meeting link); then the rest of today and tomorrow, one line each. Events that
+ * are over drop off. Any of them opens the calendar on its day.
+ */
+function Agenda({ onOpen }: { onOpen: (day?: string) => void }) {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000)
+    return () => clearInterval(t)
+  }, [])
   const from = startOfDay(0).toISOString()
   const to = startOfDay(2).toISOString()
   const events = useLive(() => api.events(from, to), [from], (e) => e.type === 'change' && e.change.kind === 'calendar')
-  const tomorrow = startOfDay(1).getTime()
-  const groups: Array<[string, EventRow[]]> = [
-    ['Today', (events.data ?? []).filter((e) => new Date(e.startsAt).getTime() < tomorrow)],
-    ['Tomorrow', (events.data ?? []).filter((e) => new Date(e.startsAt).getTime() >= tomorrow)],
-  ]
+  const today = ymd(now)
+  const tomorrow = ymd(startOfDay(1))
+  const all = events.data ?? []
+  const endOf = (e: EventRow) => new Date(e.endsAt ?? e.startsAt).getTime()
+  const todays = all.filter((e) => onDay(e, today) && (e.allDay || endOf(e) > now.getTime()))
+  const timed = todays.filter((e) => !e.allDay)
+  const next = timed[0] ?? null
+  const rest = [...todays.filter((e) => e.allDay), ...timed.slice(1)]
+  const tomorrows = all.filter((e) => onDay(e, tomorrow))
 
   return (
-    <div className="scroll mt-6 min-h-0 flex-1 px-5">
-      {groups.map(([label, items]) => (
-        <section key={label} className="mb-5">
-          <h2 className="eyebrow mb-2 !text-side-faint">{label}</h2>
-          {items.length === 0 ? (
-            <p className="text-[13px] text-side-faint">Nothing scheduled</p>
-          ) : (
-            <ul className="space-y-2">
-              {items.map((e) => (
-                <li key={e.key} className="flex gap-2.5 text-[13px] leading-snug">
-                  <span className="mt-[3px] h-3 w-[2px] shrink-0 bg-side-accent" />
-                  <span className="min-w-0">
-                    <span className="block truncate text-side-ink">{e.title}</span>
-                    <span className="text-side-faint">{e.allDay ? 'All day' : clock(e.startsAt)}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      ))}
+    <div className="scroll mt-6 min-h-0 flex-1 px-4">
+      <h2 className="eyebrow mb-2 px-1 !text-side-faint">Today</h2>
+      {next ? <NextUp event={next} now={now} onOpen={() => onOpen(today)} /> : !rest.length && <p className="px-1 text-[13px] text-side-faint">Nothing else today</p>}
+      {rest.length > 0 && <AgendaLines events={rest} onOpen={() => onOpen(today)} />}
+      <h2 className="eyebrow mt-5 mb-1.5 px-1 !text-side-faint">Tomorrow</h2>
+      {tomorrows.length ? <AgendaLines events={tomorrows} max={4} onOpen={() => onOpen(tomorrow)} /> : <p className="px-1 text-[13px] text-side-faint">Nothing scheduled</p>}
     </div>
   )
 }
+
+function NextUp({ event: e, now, onOpen }: { event: EventRow; now: Date; onOpen: () => void }) {
+  const start = new Date(e.startsAt).getTime()
+  const end = new Date(e.endsAt ?? e.startsAt).getTime()
+  const on = start <= now.getTime()
+  const mins = Math.round(((on ? end : start) - now.getTime()) / 60_000)
+  const when = on ? `Now · ${span(mins)} left` : mins <= 60 ? `In ${span(mins)}` : timeRange(e)
+  const color = calendarColor(e.color)
+  return (
+    <div className="mb-2 rounded-ui bg-side-sel/60 px-3 py-2.5">
+      <button onClick={onOpen} className="block w-full text-left">
+        <span className="flex items-center gap-2 text-[12px] font-medium" style={{ color: on || mins <= 15 ? color : undefined }}>
+          <span className={`size-[7px] shrink-0 rounded-full ${on ? 'pulse' : ''}`} style={{ background: color }} />
+          <span className={on || mins <= 15 ? '' : 'text-side-soft'}>{when}</span>
+        </span>
+        <span className="mt-1 block text-[14px] leading-snug font-medium text-side-ink">{e.title || '(No title)'}</span>
+        <span className="mt-0.5 block text-[12px] text-side-faint">
+          {on || mins <= 60 ? timeRange(e) : e.calendarName ?? ''}
+          {e.location ? ` · ${e.location}` : ''}
+        </span>
+      </button>
+      {e.joinUrl && (
+        <a href={e.joinUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex rounded-ui bg-side-accent px-2.5 py-1 text-[12px] font-semibold text-side-accent-ink hover:opacity-90">
+          Join
+        </a>
+      )}
+    </div>
+  )
+}
+
+function AgendaLines({ events, max = 8, onOpen }: { events: EventRow[]; max?: number; onOpen: () => void }) {
+  return (
+    <ul>
+      {events.slice(0, max).map((e) => (
+        <li key={e.key}>
+          <button onClick={onOpen} className="flex w-full min-w-0 items-baseline gap-2 rounded-ui px-1 py-[3px] text-left text-[13px] hover:bg-side-sel/60">
+            <span className="size-[6px] shrink-0 -translate-y-[1px] self-center rounded-full" style={{ background: calendarColor(e.color) }} />
+            <span className="w-[54px] shrink-0 text-[12px] text-side-faint tabular-nums">{e.allDay ? 'All day' : clockOf(e.startsAt)}</span>
+            <span className="min-w-0 truncate text-side-soft">{e.title || '(No title)'}</span>
+          </button>
+        </li>
+      ))}
+      {events.length > max && (
+        <li>
+          <button onClick={onOpen} className="px-1 py-[3px] text-[12px] text-side-faint hover:text-side-soft">
+            {events.length - max} more
+          </button>
+        </li>
+      )}
+    </ul>
+  )
+}
+
+const span = (mins: number) => (mins < 60 ? `${Math.max(1, mins)} min` : `${Math.floor(mins / 60)} h${mins % 60 ? ` ${mins % 60} min` : ''}`)
 
 type Look = 'light' | 'dark' | 'auto' | 'omarchy'
 

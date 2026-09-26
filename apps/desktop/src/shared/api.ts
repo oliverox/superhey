@@ -11,6 +11,8 @@ import type {
   CacheChange,
   EntryRow,
   EventRow,
+  CalendarRow,
+  NewEvent,
   PostingRow,
   SearchHit,
   HeySearchPage,
@@ -28,7 +30,7 @@ import type {
   StoredVoice,
 } from '@superhey/core'
 
-export type { OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, HeySearchPage, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId, TodayView, ThreadItem, TodoItem, ActionItem, ComingUpItem, ReplyDraftRow, StoredVoice }
+export type { CalendarRow, NewEvent, OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, HeySearchPage, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId, TodayView, ThreadItem, TodoItem, ActionItem, ComingUpItem, ReplyDraftRow, StoredVoice }
 
 /** Everything Settings shows about AI. API keys themselves never leave the main process. */
 export interface AiStatus {
@@ -70,7 +72,7 @@ export interface ThreadAnalysisView {
   expectsReply: boolean
   category: string
   actionItems: Array<{ text: string; due: string | null }>
-  dates: Array<{ label: string; date: string; time: string | null }>
+  dates: Array<{ label: string; date: string; time: string | null; endDate?: string | null; endTime?: string | null; link?: string | null }>
   amounts: Array<{ label: string; amount: number; currency: string }>
   analyzedAt: string
   model: string
@@ -128,6 +130,11 @@ export interface Api {
   /** Emails whose subject or sender contains every word of the query (for jumping to one). */
   findPostings(query: string, limit?: number): Promise<PostingRow[]>
   events(from: string, to: string): Promise<EventRow[]>
+  /** Events touching the days [from, to] (YYYY-MM-DD), read from HEY if not cached lately, and the calendars. */
+  calendarRange(from: string, to: string): Promise<{ events: EventRow[]; calendars: CalendarRow[] }>
+  /** Creates an event in HEY; answers its id when HEY says it. */
+  addEvent(event: NewEvent): Promise<number | null>
+  deleteEvent(id: number, day: string): Promise<void>
   /** Recent threads from one sender, excluding the open one. */
   senderThreads(email: string, excludeTopicId: number | null): Promise<PostingRow[]>
   posting(id: number): Promise<PostingRow | null>
@@ -173,7 +180,7 @@ export interface Api {
   testAi(engine: ProviderId | 'local'): Promise<AiTestResult>
 }
 
-export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'searchHey', 'searchPeople', 'voice', 'buildVoice', 'setVoiceNotes', 'forgetVoice', 'replyDraft', 'draftReply', 'draftReplyTo', 'discardDraft', 'forwardedOriginal', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'analysis', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
+export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'searchHey', 'searchPeople', 'voice', 'buildVoice', 'setVoiceNotes', 'forgetVoice', 'replyDraft', 'draftReply', 'draftReplyTo', 'discardDraft', 'forwardedOriginal', 'findPostings', 'events', 'calendarRange', 'addEvent', 'deleteEvent', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'analysis', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
 export type ApiMethod = (typeof API_METHODS)[number]
 
 export type ApiEvent =

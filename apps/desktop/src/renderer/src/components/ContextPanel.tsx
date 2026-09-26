@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { AttachmentRow, PostingRow, ThreadView } from '@shared/api'
 import { api, useLive } from '../api'
+import { AddToCalendar } from './AddToCalendar'
 import { dayName, shortDate } from '../format'
 import { dedupe, shortName, type Addr } from '../mail/people'
 import { extension, formatBytes, visibleAttachments } from './Attachments'
@@ -20,7 +21,7 @@ export function ContextPanel({ thread, onOpenThread }: { thread: ThreadView; onO
 
   return (
     <aside aria-label="Thread details" className="scroll w-[296px] shrink-0 border-l border-rule bg-pane px-4 pt-6 pb-10 text-[13px]">
-      <Understanding topicId={thread.topicId} />
+      <Understanding topicId={thread.topicId} subject={thread.subject ?? undefined} />
       <People thread={thread} />
       {counterpart && <MoreFrom person={counterpart} topicId={thread.topicId} onOpen={onOpenThread} />}
       {files.length > 0 && <Files files={files} />}
@@ -129,7 +130,7 @@ const isPast = (ymd: string) => {
 }
 
 /** The AI's reading of the thread: what it's about, whether it needs you, what to do and when. */
-export function Understanding({ topicId }: { topicId: number }) {
+export function Understanding({ topicId, subject }: { topicId: number; subject?: string }) {
   const a = useLive(() => api.analysis(topicId), [topicId], (e) => e.type === 'analysis' && e.topicId === topicId).data
   if (!a) return null
   return (
@@ -156,11 +157,25 @@ export function Understanding({ topicId }: { topicId: number }) {
             ))}
           </ul>
         )}
-        {(a.dates.length > 0 || a.amounts.length > 0) && (
-          <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-[13px]">
+        {a.dates.length > 0 && (
+          <ul className="space-y-1.5 text-[13px]" aria-label="Dates">
             {a.dates.map((d, i) => (
-              <Fact key={`d${i}`} label={d.label} value={`${dayName(d.date)}${d.time ? `, ${d.time}` : ''}`} />
+              <li key={`d${i}`} className="flex items-baseline gap-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-ink-faint">{d.label}</span>
+                  <span className="block text-ink tabular-nums">
+                    {dayName(d.date)}
+                    {d.time ? `, ${d.time}${d.endTime ? `–${d.endTime}` : ''}` : ''}
+                    {d.endDate ? ` → ${dayName(d.endDate)}` : ''}
+                  </span>
+                </span>
+                {!isPast(d.endDate ?? d.date) && <AddToCalendar item={d} source={subject} />}
+              </li>
             ))}
+          </ul>
+        )}
+        {a.amounts.length > 0 && (
+          <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-[13px]">
             {a.amounts.map((m, i) => (
               <Fact key={`m${i}`} label={m.label} value={money(m.amount, m.currency)} />
             ))}

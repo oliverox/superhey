@@ -133,6 +133,33 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
     this.emit('change', { kind: 'calendar' })
   }
 
+  /**
+   * Makes sure the events of every HEY week (Monday to Sunday) touching [from, to] are
+   * cached, fetching the weeks not read in the last few minutes. Dates are YYYY-MM-DD.
+   */
+  async ensureEvents(from: string, to: string, maxAgeMs = 5 * 60_000) {
+    const weeks: Date[] = []
+    const [fy, fm, fd] = from.split('-').map(Number) as [number, number, number]
+    const start = new Date(fy, fm - 1, fd)
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7)) // back to Monday
+    for (let w = new Date(start); ymd(w) <= to && weeks.length < 12; w = new Date(w.getFullYear(), w.getMonth(), w.getDate() + 7)) weeks.push(w)
+    const stale = weeks.filter((w) => {
+      const at = this.repo.getState(`events:week:${ymd(w)}`)
+      return !at || Date.now() - Date.parse(at) > maxAgeMs
+    })
+    if (!stale.length) return false
+    await Promise.all(
+      stale.map(async (w) => {
+        const events = await this.client.eventsWeek(ymd(w))
+        const end = new Date(w.getFullYear(), w.getMonth(), w.getDate() + 7)
+        this.repo.replaceEvents(w.toISOString(), end.toISOString(), events)
+        this.repo.setState(`events:week:${ymd(w)}`, new Date().toISOString())
+      }),
+    )
+    this.emit('change', { kind: 'calendar' })
+    return true
+  }
+
   /** Who's waiting in The Screener (held in memory; it's small and always re-read). */
   async refreshScreener(): Promise<ScreenerEntry[]> {
     this.screener = await this.client.screenerList()

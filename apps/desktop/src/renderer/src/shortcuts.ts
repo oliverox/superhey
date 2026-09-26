@@ -22,6 +22,7 @@ export const SHORTCUTS = {
   box4: { keys: ['4'], label: 'Reply Later', group: 'Navigate' },
   box5: { keys: ['5'], label: 'Set Aside', group: 'Navigate' },
   box6: { keys: ['6'], label: 'Bubble Up', group: 'Navigate' },
+  calendar: { keys: ['7'], label: 'Calendar', group: 'Navigate' },
   search: { keys: ['/'], label: 'Search', group: 'Navigate' },
 
   expandAll: { keys: [';'], label: 'Expand all messages', group: 'Thread' },

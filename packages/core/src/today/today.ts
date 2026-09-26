@@ -46,6 +46,10 @@ export interface ComingUpItem {
   time: string | null
   /** A deadline for something you must do (not just a date). */
   isDeadline: boolean
+  /** When it ends, and its meeting link, when the mail says (for adding it to the calendar). */
+  endDate?: string | null
+  endTime?: string | null
+  link?: string | null
 }
 
 export interface TodoItem {
@@ -165,12 +169,12 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
   for (const { posting, a } of analysed) {
     if (!shown(posting) || a.category === 'newsletter' || a.category === 'promotion') continue
     const found = new Set<string>()
-    const add = (label: string, date: string, time: string | null, isDeadline: boolean) => {
+    const add = (label: string, date: string, time: string | null, isDeadline: boolean, more: Pick<ComingUpItem, 'endDate' | 'endTime' | 'link'> = {}) => {
       if (date < today || date > inAWeek || (date === today && time != null && time < nowHm) || found.has(`${date}|${label.toLowerCase()}`)) return
       found.add(`${date}|${label.toLowerCase()}`)
-      comingUp.push({ key: `date:${posting.id}:${comingUp.length}`, posting, label, date, time, isDeadline })
+      comingUp.push({ key: `date:${posting.id}:${comingUp.length}`, posting, label, date, time, isDeadline, ...more })
     }
-    for (const d of a.dates ?? []) add(d.label, d.date, d.time, false)
+    for (const d of a.dates ?? []) add(d.label, d.date, d.time, false, { endDate: d.endDate ?? null, endTime: d.endTime ?? null, link: d.link ?? null })
     for (const i of a.actionItems ?? []) if (i.due && i.due > today) add(i.text, i.due, null, true)
   }
   comingUp.sort((x, y) => x.date.localeCompare(y.date) || (x.time ?? '').localeCompare(y.time ?? ''))

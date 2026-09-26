@@ -39,7 +39,10 @@ export const ThreadAnalysis = z.object({
         label: z.string(),
         date: ymd,
         time: z.string().regex(/^\d{2}:\d{2}$/).nullable().describe('HH:MM (24-hour) exactly as the thread states it, in the time zone it gives; null when it gives no time.'),
-        timeZone: z.string().nullable().describe('IANA time zone of that time when the thread names one (e.g. "Lisbon time" is Europe/Lisbon, "CET" is Europe/Paris, "PT" is America/Los_Angeles); null when it names none (the user\'s own time).'),
+        endDate: ymd.nullable().describe('The last day, when it runs over several days (a trip, a conference); else null.'),
+        endTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().describe('HH:MM when the thread says when it ends (in the same zone as time); else null.'),
+        timeZone: z.string().nullable().describe('IANA time zone of those times when the thread names one (e.g. "Lisbon time" is Europe/Lisbon, "CET" is Europe/Paris, "PT" is America/Los_Angeles); null when it names none (the user\'s own time).'),
+        link: z.string().nullable().describe('The meeting link (Zoom, Meet, Teams…) for this date when the thread gives one; else null.'),
       }),
     )
     .describe('At most 5 dates the user takes part in or must act by, from today on: their deadlines, bookings, check-ins, renewals, appointments. Not events advertised to them (launches, webinars, livestreams). Past dates only if they are missed deadlines. No duplicates.'),
@@ -80,7 +83,7 @@ Rules:
 - Keep everything short and plain. Start summaries with the substance; the app already shows the sender. Write in the thread's language.`
 
 /** Bumped when the instructions change, so threads are read again as they come up. */
-export const ANALYSIS_VERSION = 4
+export const ANALYSIS_VERSION = 5
 
 /** The prompt: the thread as data, newest messages kept when it's long. */
 export function analysisPrompt(
@@ -219,23 +222,39 @@ export class ThreadAnalyzer extends EventEmitter<{ analysis: [TopicId]; error: [
  * user's own time (which may change the day). An unknown zone keeps the day, without a time.
  */
 export function inLocalTime(d: ThreadAnalysis['dates'][number], localZone = Intl.DateTimeFormat().resolvedOptions().timeZone): ThreadAnalysis['dates'][number] {
-  if (!d.time || !d.timeZone || d.timeZone === localZone) return { ...d, timeZone: null }
-  const [y, mo, day] = d.date.split('-').map(Number) as [number, number, number]
-  const [h, mi] = d.time.split(':').map(Number) as [number, number]
+  const link = d.link && /^https?:\/\//i.test(d.link) ? d.link : null
+  if (!d.time || !d.timeZone || d.timeZone === localZone) return { ...d, link, timeZone: null }
   try {
-    // The instant that reads d.time on d.date in its zone: guess as UTC, then correct by the zone's offset.
-    const wall = Date.UTC(y, mo - 1, day, h, mi)
-    let at = wall - offsetMs(d.timeZone, wall)
-    at = wall - offsetMs(d.timeZone, at)
-    const parts = Object.fromEntries(
-      new Intl.DateTimeFormat('en-CA', { timeZone: localZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
-        .formatToParts(new Date(at))
-        .map((p) => [p.type, p.value]),
-    )
-    return { ...d, date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}`, timeZone: null }
+    const start = moveZone(d.date, d.time, d.timeZone, localZone)
+    const end = d.endTime ? moveZone(d.endDate ?? d.date, d.endTime, d.timeZone, localZone) : null
+    return {
+      ...d,
+      date: start.date,
+      time: start.time,
+      endDate: end ? (end.date !== start.date ? end.date : null) : d.endDate,
+      endTime: end?.time ?? null,
+      timeZone: null,
+      link,
+    }
   } catch {
-    return { ...d, time: null, timeZone: null }
+    return { ...d, time: null, endTime: null, timeZone: null, link }
   }
+}
+
+/** The day and time in `localZone` of `date` `time` in `zone`. */
+function moveZone(date: string, time: string, zone: string, localZone: string): { date: string; time: string } {
+  const [y, mo, day] = date.split('-').map(Number) as [number, number, number]
+  const [h, mi] = time.split(':').map(Number) as [number, number]
+  // The instant that reads `time` on `date` in its zone: guess as UTC, then correct by the zone's offset.
+  const wall = Date.UTC(y, mo - 1, day, h, mi)
+  let at = wall - offsetMs(zone, wall)
+  at = wall - offsetMs(zone, at)
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', { timeZone: localZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date(at))
+      .map((p) => [p.type, p.value]),
+  )
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` }
 }
 
 /** How far `zone`'s clock is ahead of UTC at `at`. */

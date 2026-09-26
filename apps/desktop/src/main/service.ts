@@ -225,6 +225,57 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     return this.need().repo.events(from, to)
   }
 
+  async calendarRange(from: unknown, to: unknown) {
+    const day = (v: unknown) => {
+      if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new Error('dates must be YYYY-MM-DD')
+      return v
+    }
+    const [f, t] = [day(from), day(to)]
+    const core = this.need()
+    await core.engine.ensureEvents(f, t)
+    // A little either side, for events crossing midnight in other time zones.
+    const lo = new Date(Date.parse(f) - 86_400_000).toISOString()
+    const hi = new Date(Date.parse(t) + 2 * 86_400_000).toISOString()
+    return { events: core.repo.events(lo, hi), calendars: core.repo.calendars() }
+  }
+
+  async addEvent(input: unknown) {
+    const e = (input ?? {}) as Record<string, unknown>
+    const text = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null)
+    const date = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null)
+    const time = (v: unknown) => (typeof v === 'string' && /^\d{2}:\d{2}$/.test(v) ? v : null)
+    const title = text(e.title, 200)
+    const startsOn = date(e.startsOn)
+    if (!title || !startsOn) throw new Error('An event needs a title and a day')
+    const link = text(e.link, 500)
+    if (link && !/^https?:\/\//i.test(link)) throw new Error('The link must start with http:// or https://')
+    if (process.env.SUPERHEY_TEST_NO_SEND === '1') throw new Error('Calendar changes are disabled in this test instance')
+    const core = this.need()
+    const id = await core.client.addEvent({
+      title,
+      startsOn,
+      endsOn: date(e.endsOn),
+      startTime: time(e.startTime),
+      endTime: time(e.endTime),
+      timeZone: text(e.timeZone, 64),
+      calendarId: typeof e.calendarId === 'number' ? int(e.calendarId) : null,
+      location: text(e.location, 300),
+      link,
+      notes: text(e.notes, 2000),
+    })
+    await core.engine.ensureEvents(startsOn, date(e.endsOn) ?? startsOn, 0)
+    return id
+  }
+
+  /** Deletes an event, then re-reads the week of `day` (YYYY-MM-DD) it was on. */
+  async deleteEvent(id: unknown, day: unknown) {
+    if (process.env.SUPERHEY_TEST_NO_SEND === '1') throw new Error('Calendar changes are disabled in this test instance')
+    const core = this.need()
+    await core.client.deleteEvent(int(id))
+    if (typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)) await core.engine.ensureEvents(day, day, 0)
+    else await core.engine.refreshCalendar()
+  }
+
   async findPostings(query: string, limit = 8) {
     if (typeof query !== 'string') throw new Error('query must be a string')
     return this.need().repo.findPostings(query.slice(0, 200), Math.min(int(limit), 50))
