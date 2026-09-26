@@ -17,6 +17,7 @@ import { dropOutgoing, useOutgoingReplies } from '../outbox'
 import { useShortcut, withShortcut } from '../shortcuts'
 import { HtmlBody } from './HtmlBody'
 import { Tag } from './Tag'
+import { AiSpend } from './AiSpend'
 import { AiSparkle } from './DraftReply'
 import { Composer, type ComposeRequest } from './Composer'
 import { PersonChip, RecipientsButton } from './People'
@@ -125,16 +126,8 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose }: Rea
             Open in HEY ↗
           </a>
         )}
-        <button
-          onClick={panel.toggle}
-          aria-pressed={panel.open}
-          title={withShortcut(panel.open ? 'Hide details' : 'Show details', 'details')}
-          className={`no-drag flex size-7 items-center justify-center rounded-ui ${
-            panel.open ? 'bg-pane-sunk text-ink' : 'text-ink-faint hover:bg-pane-sunk hover:text-ink'
-          }`}
-        >
-          <PanelIcon />
-        </button>
+        {/* The AI's cost this month; the details panel opens from the summary (✦ Details) or i. */}
+        <AiSpend onOpen={() => window.dispatchEvent(new CustomEvent('superhey:settings', { detail: 'usage' }))} />
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -872,14 +865,6 @@ function useContextPanel(ref: React.RefObject<HTMLElement | null>) {
   return { open, toggle }
 }
 
-function PanelIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M10 3v10" stroke="currentColor" strokeWidth="1.4" />
-    </svg>
-  )
-}
 
 function ReaderSkeleton() {
   return (

@@ -127,6 +127,11 @@ function Workspace({ status }: { status: AppStatus }) {
   const [showSettings, setShowSettings] = useState(false)
   // Settings opened on a given tab (the AI spend in the header opens Usage).
   const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null)
+  useEffect(() => {
+    const on = (e: Event) => setSettingsTab((e as CustomEvent<SettingsTab>).detail)
+    window.addEventListener('superhey:settings', on)
+    return () => window.removeEventListener('superhey:settings', on)
+  }, [])
   useShortcut('settings', () => setShowSettings((v) => !v))
   const [composing, setComposing] = useState<ComposeRequest | null>(null)
   useShortcut('compose', () => setComposing({ kind: 'new', message: { to: [], subject: '', body: '' } }), !composing)
@@ -351,7 +356,8 @@ function Workspace({ status }: { status: AppStatus }) {
               if (searchRows[0]) open(searchRows[0])
             }}
           />
-          {!searchExpanded && <AiSpend onOpen={() => setSettingsTab('usage')} />}
+          {/* With a thread open, the reader's top bar shows it instead. */}
+          {!searchExpanded && listAlone && <AiSpend onOpen={() => setSettingsTab('usage')} />}
         </header>
         {/* Standing alone, the list keeps a readable measure. */}
         <div className={listAlone ? 'mx-auto flex min-h-0 w-full max-w-[780px] flex-1 flex-col' : 'contents'}>
