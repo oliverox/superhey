@@ -137,12 +137,8 @@ export function DraftCard({
                 setSending(false)
               }
             }}
-            className="btn-primary inline-flex items-center gap-1.5 disabled:opacity-50"
+            className="btn-primary disabled:opacity-50"
           >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M2.5 8 13.5 2.5 10 13.5 7.5 9 2.5 8Z" />
-              <path d="M7.5 9 13.5 2.5" />
-            </svg>
             {sending ? 'Sending…' : sendTo ? `Send to ${sendTo}` : 'Send'}
           </button>
         )}
