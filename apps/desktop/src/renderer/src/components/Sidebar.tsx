@@ -6,7 +6,35 @@ import { withShortcut } from '../shortcuts'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Scheme, Theme } from '../theme'
 import { OmarchyLogo } from './OmarchyLogo'
-import { BubbleIcon, CalendarIcon, FeedIcon, ImboxIcon, PaperTrailIcon, ReplyLaterIcon, SetAsideIcon, TodayIcon } from './icons'
+import { BubbleIcon, FeedIcon, ImboxIcon, PaperTrailIcon, ReplyLaterIcon, SetAsideIcon, TodayIcon } from './icons'
+
+const sidebarDay = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+
+/** Today's date, rolling over at midnight. */
+function useToday() {
+  const [d, setD] = useState(() => new Date())
+  useEffect(() => {
+    const t = setInterval(() => {
+      const n = new Date()
+      setD((p) => (p.toDateString() === n.toDateString() ? p : n))
+    }, 60_000)
+    return () => clearInterval(t)
+  }, [])
+  return d
+}
+
+/** A calendar page with today's number on it, like the Mac's Calendar icon. */
+function DayIcon({ day }: { day: number }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="2" y="2.5" width="12" height="11.5" rx="2" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M2 5.5h12" stroke="currentColor" strokeWidth="1.3" />
+      <text x="8" y="12.3" textAnchor="middle" fontSize="6.4" fontWeight="700" fill="currentColor" fontFamily="var(--font-ui)">
+        {day}
+      </text>
+    </svg>
+  )
+}
 
 /** Each HEY box's icon; the ones the toolbar also acts with are drawn the same way there. */
 const BOX_ICONS: Record<string, () => React.ReactNode> = {
@@ -38,7 +66,8 @@ interface Props {
   calendar: { active: boolean; onOpen: (day?: string) => void }
 }
 
-export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onTheme, scheme, onScheme, active, onOpenActivity, onOpenSettings, today, calendar }: Props) {
+export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onTheme, scheme, onScheme, active, onOpenActivity, onOpenSettings, today: todayNav, calendar }: Props) {
+  const today = useToday()
   return (
     <aside className="pane flex flex-col bg-side text-side-ink" data-pane="sidebar" data-active={active}>
       <div className="drag h-[52px] shrink-0" />
@@ -47,16 +76,16 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
         <ul className="space-y-px">
           <li className="mb-1.5">
             <button
-              onClick={today.onSelect}
-              aria-current={today.active ? 'page' : undefined}
+              onClick={todayNav.onSelect}
+              aria-current={todayNav.active ? 'page' : undefined}
               className={`group flex w-full items-center rounded-ui px-2.5 py-[7px] text-left transition-colors ${
-                today.active ? 'bg-side-sel text-side-ink' : 'text-side-soft hover:bg-side-sel/60 hover:text-side-ink'
+                todayNav.active ? 'bg-side-sel text-side-ink' : 'text-side-soft hover:bg-side-sel/60 hover:text-side-ink'
               }`}
             >
               <span className="mr-2.5 flex shrink-0 opacity-80"><TodayIcon /></span>
               <span className="font-medium">Today</span>
-              {!!today.count && <span className="ml-2 text-[12px] text-side-faint tabular-nums">{today.count}</span>}
-              <kbd className={`sidebar-key ml-auto ${today.active ? 'is-selected' : ''}`} title="Press 0">
+              {!!todayNav.count && <span className="ml-2 text-[12px] text-side-faint tabular-nums">{todayNav.count}</span>}
+              <kbd className={`sidebar-key ml-auto ${todayNav.active ? 'is-selected' : ''}`} title="Press 0">
                 0
               </kbd>
             </button>
@@ -90,12 +119,13 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
             <button
               onClick={() => calendar.onOpen()}
               aria-current={calendar.active ? 'page' : undefined}
+              title="Calendar"
               className={`group flex w-full items-center rounded-ui px-2.5 py-[7px] text-left transition-colors ${
                 calendar.active ? 'bg-side-sel text-side-ink' : 'text-side-soft hover:bg-side-sel/60 hover:text-side-ink'
               }`}
             >
-              <span className="mr-2.5 flex shrink-0 opacity-80"><CalendarIcon /></span>
-              <span className="font-medium">Calendar</span>
+              <span className="mr-2.5 flex shrink-0 opacity-80"><DayIcon day={today.getDate()} /></span>
+              <span className="font-medium">{sidebarDay.format(today)}</span>
               <kbd className={`sidebar-key ml-auto ${calendar.active ? 'is-selected' : ''}`} title="Press 7">
                 7
               </kbd>
