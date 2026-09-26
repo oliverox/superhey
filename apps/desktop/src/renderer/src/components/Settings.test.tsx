@@ -464,7 +464,7 @@ describe('Settings: tabs', () => {
     act(() => void tab('General').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
     await flush()
     expect(tab('Appearance').getAttribute('aria-selected')).toBe('true')
-    expect(text()).toContain('Graphite')
+    expect(text()).toContain('Cobalt')
     act(() => void tab('Appearance').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
     await flush()
     expect(text()).toContain('AI providers')

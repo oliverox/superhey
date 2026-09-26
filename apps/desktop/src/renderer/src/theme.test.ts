@@ -20,7 +20,8 @@ describe('themes', () => {
     expect(css).toContain(":root[data-theme='omarchy'][data-omarchy='catppuccin-latte']")
     expect(css).toContain('color-scheme:light')
     // The styles' own colours live in styles.css.
-    expect(css).not.toContain("data-palette='graphite'")
+    expect(css).toContain("data-palette='graphite'")
+    expect(css).not.toContain("data-palette='cobalt'")
     expect(css).not.toContain("data-omarchy='tokyo-night'")
     expect(new Set(OMARCHY_THEMES.map((t) => t.id)).size).toBe(OMARCHY_THEMES.length)
   })
