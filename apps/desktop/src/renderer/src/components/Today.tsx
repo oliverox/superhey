@@ -314,9 +314,9 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
                   {c.label}
                 </span>
                 {c.task && (
-                  <span className="block truncate text-[13px] text-ink-soft">
-                    <span className="font-medium text-danger">To do: </span>
-                    {c.task}
+                  <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px] text-ink-soft">
+                    <span className="shrink-0 rounded-[4px] bg-attn-wash px-1.5 text-[11px] leading-[16px] font-semibold text-attn">To do</span>
+                    <span className="truncate">{c.task}</span>
                   </span>
                 )}
                 <span className="block truncate text-[12px] text-ink-faint">{c.posting.subject ? stripSubjectPrefixes(c.posting.subject) : c.posting.senderName}</span>
