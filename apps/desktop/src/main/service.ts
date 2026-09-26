@@ -355,6 +355,14 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     return this.drafter.draft(TopicId(int(topicId)), text)
   }
 
+  /** A draft answering one earlier message of a thread, for the composer (not kept). */
+  async draftReplyTo(topicId: unknown, entryId: unknown, instruction: unknown = null) {
+    if (instruction !== null && typeof instruction !== 'string') throw new Error('instruction must be text')
+    if (!this.drafter) throw new Error('AI isn’t ready yet')
+    const text = typeof instruction === 'string' ? instruction.trim().slice(0, 500) || null : null
+    return this.drafter.draftFor(TopicId(int(topicId)), int(entryId), text)
+  }
+
   async discardDraft(topicId: unknown) {
     this.need().repo.deleteReplyDraft(TopicId(int(topicId)))
     this.emit('event', { type: 'draft', topicId: int(topicId) })
