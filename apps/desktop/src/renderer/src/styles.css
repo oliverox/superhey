@@ -952,3 +952,31 @@ mark {
   color: var(--accent);
   background: var(--accent-wash);
 }
+
+/* A field that reads as text: no chrome at rest, a tint under the pointer, a crisp field
+   once you're in it. Used where a form should look like the thing it describes. */
+.ghost-field {
+  margin: 0 -2px;
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  background: transparent;
+  padding: 3px 8px;
+  outline: none;
+  transition:
+    background-color var(--dur-1),
+    border-color var(--dur-1),
+    box-shadow var(--dur-1);
+}
+.ghost-field::placeholder {
+  color: var(--ink-faint);
+}
+.ghost-field:hover {
+  background: var(--pane-sunk);
+}
+.ghost-field:focus,
+.ghost-field:focus-visible,
+.ghost-field[aria-expanded='true'] {
+  border-color: var(--rule-strong);
+  background: var(--pane);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
