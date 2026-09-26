@@ -193,7 +193,7 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
 
     const fetch = (async () => {
       const posting = this.repo.db
-        .prepare('SELECT subject, has_attachments FROM postings WHERE topic_id = ? LIMIT 1')
+        .prepare('SELECT subject, has_attachments FROM postings WHERE topic_id = ? ORDER BY is_bundle, active_at DESC LIMIT 1')
         .get(topicId) as { subject: string; has_attachments: number } | undefined
       // Ask for attachments alongside the thread when the posting says there are some,
       // or when there is no posting to ask (a thread opened from search).
