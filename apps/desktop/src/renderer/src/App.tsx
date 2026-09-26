@@ -59,6 +59,14 @@ function Workspace({ status }: { status: AppStatus }) {
     setScreening(false)
     if (day) setCalendarFocus({ day, nonce: Date.now() })
   }
+  // "In calendar" next to a date in an email opens the calendar on that day.
+  const openCalendarRef = useRef(openCalendar)
+  openCalendarRef.current = openCalendar
+  useEffect(() => {
+    const on = (e: Event) => openCalendarRef.current((e as CustomEvent<string>).detail)
+    window.addEventListener('superhey:open-calendar', on)
+    return () => window.removeEventListener('superhey:open-calendar', on)
+  }, [])
   const activeBox = ordered.find((b) => b.id === boxId) ?? ordered[0] ?? null
   const boxNames = useMemo(() => Object.fromEntries(ordered.map((b) => [b.id, b.name])), [ordered])
   const since = useLastLook(onToday)

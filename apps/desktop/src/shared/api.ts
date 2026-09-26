@@ -72,7 +72,7 @@ export interface ThreadAnalysisView {
   expectsReply: boolean
   category: string
   actionItems: Array<{ text: string; due: string | null }>
-  dates: Array<{ label: string; date: string; time: string | null }>
+  dates: Array<{ label: string; date: string; time: string | null; endDate?: string | null; endTime?: string | null; link?: string | null }>
   amounts: Array<{ label: string; amount: number; currency: string }>
   analyzedAt: string
   model: string

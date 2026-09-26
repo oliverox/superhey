@@ -43,6 +43,17 @@ every HEY app, and HEY stays the one source of truth.
 - **Actions with undo:** move, Set Aside, Reply Later, Bubble Up, labels, seen/unseen,
   trash. Every action is logged in Activity, and most can be undone (`z`).
 
+**Calendar**
+
+- Your HEY Calendar in **Day, Week and Month** views, like the Mac's Calendar: events in
+  their calendar's colours, all-day events above the hours, a line at the time now, and
+  details with **Join** for meeting links. Press `7`, or pick Calendar in the sidebar.
+- The sidebar leads with what's happening now or next ("In 10 min", with Join), then the
+  rest of today and tomorrow.
+- **Add dates from email to the calendar:** calls, bookings and trips the AI finds in a
+  thread get an **Add** button (in the details panel and in Today's Coming up) that opens a
+  filled-in event to check first. Dates already in your calendar say **In calendar**.
+
 **Writing**
 
 - Reply, Reply all and Forward, from the end of a thread or **to any earlier message** in it.
@@ -146,7 +157,8 @@ Press `?` in the app for the full list. The main ones:
 
 | | |
 | --- | --- |
-| **Navigate** | `j` / `k` next and previous · `0` Today · `1`–`6` boxes · `/` search · `Esc` close the email or leave search |
+| **Navigate** | `j` / `k` next and previous · `0` Today · `1`–`6` boxes · `7` Calendar · `/` search · `Esc` close the email or leave search |
+| **Calendar** | `←` / `→` previous and next · `T` today · `D` `W` `M` day, week, month · double-click a time to add an event |
 | **Thread** | `;` expand all · `:` collapse all · `i` details |
 | **Act** | `r` Reply Later · `s` Set Aside · `b` Bubble Up… · `m` Move to… · `f` The Feed · `p` Paper Trail · `l` Labels… · `u` seen/unseen · `#` Trash · `e` Done (on Today) · `z` undo |
 | **Write** | `⇧R` reply · `a` reply all · `⇧F` forward · `c` new message · `⌘↵` send · `⌘J` draft in your voice |
@@ -220,7 +232,7 @@ npx electron-vite dev --remoteDebuggingPort 9335 -- --port 5175
 
 | Variable | Effect |
 | --- | --- |
-| `SUPERHEY_TEST_NO_SEND=1` | Sending fails instead of delivering (the window says "Test instance"). |
+| `SUPERHEY_TEST_NO_SEND=1` | Sending mail and changing the calendar fail instead of happening (the window says "Test instance"). |
 | `SUPERHEY_TEST_NO_SCREENER_DECISIONS=1` | The Screener can't let anyone in or out. |
 | `SUPERHEY_TEST_NO_AUTO_ACTIONS=1` | Nothing is changed automatically (e.g. marking seen on open). |
 | `SUPERHEY_USER_DATA` | Electron's profile folder (keeps this copy's settings apart). |

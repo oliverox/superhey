@@ -249,6 +249,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     if (!title || !startsOn) throw new Error('An event needs a title and a day')
     const link = text(e.link, 500)
     if (link && !/^https?:\/\//i.test(link)) throw new Error('The link must start with http:// or https://')
+    if (process.env.SUPERHEY_TEST_NO_SEND === '1') throw new Error('Calendar changes are disabled in this test instance')
     const core = this.need()
     const id = await core.client.addEvent({
       title,
@@ -268,6 +269,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
 
   /** Deletes an event, then re-reads the week of `day` (YYYY-MM-DD) it was on. */
   async deleteEvent(id: unknown, day: unknown) {
+    if (process.env.SUPERHEY_TEST_NO_SEND === '1') throw new Error('Calendar changes are disabled in this test instance')
     const core = this.need()
     await core.client.deleteEvent(int(id))
     if (typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)) await core.engine.ensureEvents(day, day, 0)

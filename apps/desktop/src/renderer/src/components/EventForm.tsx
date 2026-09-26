@@ -152,7 +152,7 @@ export function EventForm({ draft, calendars, onDone, onCancel }: { draft: Event
             <select value={calendarId ?? ''} onChange={(e) => setCalendarId(Number(e.target.value) || null)} aria-label="Calendar" className={field}>
               {choices.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name ?? 'Calendar'}
+                  {c.name ?? 'HEY Calendar'}
                 </option>
               ))}
             </select>

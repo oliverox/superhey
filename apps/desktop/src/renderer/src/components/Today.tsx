@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ActionItem, ComingUpItem, PostingRow, ThreadItem, TodayView, TodoItem } from '@shared/api'
+import { AddToCalendar } from './AddToCalendar'
 import { api } from '../api'
 import { dayName, shortDate } from '../format'
 import { stripSubjectPrefixes } from '../mail/forwarded'
@@ -262,7 +263,7 @@ function ComingUp({ items, selectedId, onOpen }: { items: ComingUpItem[]; select
       <h2 className="eyebrow px-5 pt-4 pb-1.5">Coming up</h2>
       <ul>
         {items.map((c) => (
-          <li key={c.key}>
+          <li key={c.key} className="relative">
             <button
               onClick={() => onOpen(c.posting)}
               aria-current={c.posting.id === selectedId || undefined}
@@ -280,6 +281,11 @@ function ComingUp({ items, selectedId, onOpen }: { items: ComingUpItem[]; select
                 <span className="block truncate text-[12px] text-ink-faint">{c.posting.subject ? stripSubjectPrefixes(c.posting.subject) : c.posting.senderName}</span>
               </span>
             </button>
+            {!c.isDeadline && (
+              <span className="absolute top-1.5 right-5">
+                <AddToCalendar item={c} source={c.posting.subject ? stripSubjectPrefixes(c.posting.subject) : undefined} />
+              </span>
+            )}
           </li>
         ))}
       </ul>

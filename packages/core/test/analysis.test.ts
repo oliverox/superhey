@@ -81,7 +81,7 @@ const ANSWER: ThreadAnalysis = {
   expectsReply: false,
   category: 'personal',
   actionItems: [{ text: 'Answer Alice about Friday lunch', due: '2026-09-26', event: false }],
-  dates: [{ label: 'Lunch', date: '2026-09-26', time: null, timeZone: null }],
+  dates: [{ label: 'Lunch', date: '2026-09-26', time: null, endDate: null, endTime: null, timeZone: null, link: null }],
   amounts: [],
 }
 
@@ -239,11 +239,15 @@ describe('clipWords', () => {
 })
 
 describe('times in another zone', () => {
-  const at = (time: string | null, timeZone: string | null, date = '2026-10-12') => ({ label: 'Call', date, time, timeZone })
+  const at = (time: string | null, timeZone: string | null, date = '2026-10-12', endTime: string | null = null) => ({ label: 'Call', date, time, endDate: null, endTime, timeZone, link: null })
   it('moves a time given in another zone into the user’s', () => {
     expect(inLocalTime(at('16:00', 'Asia/Jerusalem'), 'Asia/Dubai')).toEqual(at('17:00', null))
     expect(inLocalTime(at('16:00', 'Asia/Jerusalem'), 'Europe/London')).toEqual(at('14:00', null))
   })
+  it('moves the end time too', () => {
+    expect(inLocalTime(at('16:00', 'Asia/Jerusalem', '2026-10-12', '17:00'), 'Asia/Dubai')).toEqual(at('17:00', null, '2026-10-12', '18:00'))
+  })
+
   it('can change the day', () => {
     expect(inLocalTime(at('23:30', 'America/Los_Angeles'), 'Europe/Paris')).toEqual(at('08:30', null, '2026-10-13'))
   })
