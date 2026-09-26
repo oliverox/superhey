@@ -4,14 +4,16 @@ import { setMarkSeenOnOpen, useMarkSeenOnOpen } from '../prefs'
 import { api, useLive } from '../api'
 import { Menu, MenuItem, MenuSeparator } from './Menu'
 import { Spinner } from './Spinner'
+import { Appearance } from './Appearance'
 
 /**
  * Settings, over the app (⌘, or the command bar). For now: AI. Changes apply as they're
  * made, like macOS settings; an API key is saved only when you press Save.
  */
-export type SettingsTab = 'general' | 'ai' | 'voice' | 'usage'
+export type SettingsTab = 'general' | 'appearance' | 'ai' | 'voice' | 'usage'
 const TABS: Array<[SettingsTab, string]> = [
   ['general', 'General'],
+  ['appearance', 'Appearance'],
   ['ai', 'AI'],
   ['voice', 'Your voice'],
   ['usage', 'Usage'],
@@ -76,6 +78,8 @@ export function Settings({ onClose, initialTab }: { onClose: () => void; initial
             <Section title="Reading" hint="How SuperHey treats email as you go through it.">
               <Reading />
             </Section>
+          ) : tab === 'appearance' ? (
+            <Appearance Section={Section} />
           ) : status.error ? (
             <p className="mt-6 text-danger">Couldn't load the settings: {status.error}</p>
           ) : !s ? (

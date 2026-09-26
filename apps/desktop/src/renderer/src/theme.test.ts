@@ -9,3 +9,19 @@ describe('light and dark', () => {
     expect(showsDark('auto', false)).toBe(false)
   })
 })
+
+describe('themes', () => {
+  it('gives every Default theme a light and a dark side, and styles the rest by attribute', async () => {
+    const { DEFAULT_THEMES, OMARCHY_THEMES, themeCss } = await import('./themes')
+    for (const t of DEFAULT_THEMES) expect(t.light.pane).not.toBe(t.dark.pane)
+    const css = themeCss()
+    expect(css).toContain(":root[data-palette='linen']:not([data-theme='omarchy'])")
+    expect(css).toContain(":root[data-palette='linen'][data-scheme='dark']")
+    expect(css).toContain(":root[data-theme='omarchy'][data-omarchy='catppuccin-latte']")
+    expect(css).toContain('color-scheme:light')
+    // The styles' own colours live in styles.css.
+    expect(css).not.toContain("data-palette='graphite'")
+    expect(css).not.toContain("data-omarchy='tokyo-night'")
+    expect(new Set(OMARCHY_THEMES.map((t) => t.id)).size).toBe(OMARCHY_THEMES.length)
+  })
+})
