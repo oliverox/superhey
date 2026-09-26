@@ -120,6 +120,8 @@ export interface Api {
   replyDraft(topicId: number): Promise<ReplyDraftRow | null>
   /** Writes a draft reply now, optionally following an instruction ("say yes but push to Friday"). */
   draftReply(topicId: number, instruction: string | null): Promise<ReplyDraftRow>
+  /** A draft answering one earlier message (by entry ID), handed to the composer. */
+  draftReplyTo(topicId: number, entryId: number, instruction: string | null): Promise<{ body: string; placeholders: string[] }>
   discardDraft(topicId: number): Promise<void>
   /** People to suggest for from: and to:. */
   searchPeople(text: string): Promise<Array<{ name: string | null; email: string; count: number }>>
@@ -171,7 +173,7 @@ export interface Api {
   testAi(engine: ProviderId | 'local'): Promise<AiTestResult>
 }
 
-export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'searchHey', 'searchPeople', 'voice', 'buildVoice', 'setVoiceNotes', 'forgetVoice', 'replyDraft', 'draftReply', 'discardDraft', 'forwardedOriginal', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'analysis', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
+export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'searchHey', 'searchPeople', 'voice', 'buildVoice', 'setVoiceNotes', 'forgetVoice', 'replyDraft', 'draftReply', 'draftReplyTo', 'discardDraft', 'forwardedOriginal', 'findPostings', 'events', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'analysis', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
 export type ApiMethod = (typeof API_METHODS)[number]
 
 export type ApiEvent =

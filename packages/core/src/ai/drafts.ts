@@ -108,25 +108,41 @@ export class Drafter extends EventEmitter<{ draft: [TopicId]; error: [Error] }> 
 
   /** Writes (or rewrites) the thread's draft now, optionally following the user's instruction. */
   async draft(topicId: TopicId, instruction: string | null = null) {
-    const { repo, ai } = this.deps
+    const { repo } = this.deps
     const activeAt = repo.latestActivity(topicId)
     const thread = await this.deps.fetchThread(topicId, repo.entryCount(topicId), 'normal')
     if (!thread?.entries.length || activeAt == null) throw new Error('This thread isn’t available to draft a reply to.')
     const analysis = repo.analysis(topicId) as { replyReason?: string | null } | null
+    const { body, placeholders, model } = await this.write(thread, { reason: analysis?.replyReason ?? null, instruction })
+    repo.saveReplyDraft({ topicId, activeAt, body, placeholders, instruction, model })
+    this.emit('draft', topicId)
+    return repo.replyDraft(topicId)!
+  }
+
+  /**
+   * A reply to one earlier message of the thread, not its latest: the thread is cut after that
+   * message, so it's the one answered. Handed straight to the composer, not kept.
+   */
+  async draftFor(topicId: TopicId, entryId: number, instruction: string | null = null): Promise<ReplyDraft> {
+    const thread = await this.deps.fetchThread(topicId, this.deps.repo.entryCount(topicId), 'normal')
+    const at = thread?.entries.findIndex((e) => e.id === entryId) ?? -1
+    if (!thread || at < 0) throw new Error('That message isn’t available to draft a reply to.')
+    const { body, placeholders } = await this.write({ ...thread, entries: thread.entries.slice(0, at + 1) }, { instruction })
+    return { body, placeholders }
+  }
+
+  private async write(thread: ThreadView, opts: { reason?: string | null; instruction: string | null }) {
     const now = this.deps.now?.() ?? new Date()
-    const result = await ai.run({
+    const result = await this.deps.ai.run({
       task: 'draft',
-      system: draftSystem(repo),
-      prompt: draftPrompt(thread, await this.deps.me(), now.toISOString().slice(0, 10), { reason: analysis?.replyReason ?? null, instruction }),
+      system: draftSystem(this.deps.repo),
+      prompt: draftPrompt(thread, await this.deps.me(), now.toISOString().slice(0, 10), opts),
       schema: ReplyDraft,
       // A short email, little thinking (low effort is the client's default).
       maxOutputTokens: 1000,
     })
     const body = result.output.body.trim()
     // Only placeholders that are really in the text.
-    const placeholders = result.output.placeholders.filter((p) => body.includes(p))
-    repo.saveReplyDraft({ topicId, activeAt, body, placeholders, instruction, model: result.model })
-    this.emit('draft', topicId)
-    return repo.replyDraft(topicId)!
+    return { body, placeholders: result.output.placeholders.filter((p) => body.includes(p)), model: result.model }
   }
 }

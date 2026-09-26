@@ -173,6 +173,19 @@ describe('reply drafts', () => {
     expect(repo.replyDraft(TopicId(900))).toBeNull()
   })
 
+  it('answers an earlier message when asked, without keeping it as the thread’s draft', async () => {
+    const { repo, d, calls, fetchThread } = drafter()
+    const later = { id: 2, from: { name: 'Bob', email: 'bob@example.com', isMe: false }, createdAt: '2026-09-26T07:00:00Z', to: [], cc: [], bodyMd: 'A later message about something else.', isMine: false, attachments: [] } as never
+    fetchThread.mockResolvedValue(thread({ entries: [...thread().entries, later] }))
+    const draft = await d.draftFor(TopicId(900), 1, 'say yes')
+    expect(draft).toEqual({ body: expect.stringContaining('Friday works'), placeholders: ['[place]'] })
+    const prompt = JSON.stringify(calls[0]!.prompt)
+    expect(prompt).toContain('Are you free for lunch')
+    expect(prompt).not.toContain('A later message')
+    expect(repo.replyDraft(TopicId(900))).toBeNull()
+    await expect(d.draftFor(TopicId(900), 99)).rejects.toThrow(/isn’t available/)
+  })
+
   it('drafts in the background only with a voice profile and drafting on, once per state of a thread', async () => {
     const { repo, d, calls } = drafter()
     d.enqueue(TopicId(900))
