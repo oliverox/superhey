@@ -69,7 +69,24 @@ export function useTyped(text: string, key: string) {
   }
 }
 
-export function DraftCard({ draft, onUse, onRedraft, onDiscard }: { draft: ReplyDraftRow; onUse: (body: string) => void; onRedraft: () => void; onDiscard: () => void }) {
+export function DraftCard({
+  draft,
+  sendTo,
+  onSend,
+  onUse,
+  onRedraft,
+  onDiscard,
+}: {
+  draft: ReplyDraftRow
+  /** Who Send replies to ("Eon"), when it can be sent from here. */
+  sendTo?: string
+  onSend?: (body: string) => Promise<void>
+  onUse: (body: string) => void
+  onRedraft: () => void
+  onDiscard: () => void
+}) {
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
   const [all, setAll] = useState(false)
   const typed = useTyped(draft.body, `${draft.topicId}:${draft.createdAt}`)
   // Read-only here: Use draft takes it to the composer, where it's edited and sent.
@@ -100,12 +117,37 @@ export function DraftCard({ draft, onUse, onRedraft, onDiscard }: { draft: Reply
       )}
       {placeholders.length > 0 && (
         <p className="mt-2 text-[12px] text-ink-faint">
-          Fill in before sending: {placeholders.join(', ')}
+          Fill in before sending: {placeholders.join(', ')}{onSend ? ' (Edit to fill them in)' : ''}
         </p>
       )}
+      {sendError && <p className="mt-2 text-[12px] text-danger">{sendError}</p>}
       <div className="mt-3 flex items-center gap-2">
-        <button type="button" onClick={() => onUse(body)} className="btn-primary">
-          Use draft
+        {onSend && (
+          <button
+            type="button"
+            disabled={sending || typed.typing || placeholders.length > 0}
+            title={placeholders.length ? 'Fill in the gaps first: Edit' : `Send this reply${sendTo ? ` to ${sendTo}` : ''} (you’ll have a few seconds to undo)`}
+            onClick={async () => {
+              setSending(true)
+              setSendError(null)
+              try {
+                await onSend(body)
+              } catch (e) {
+                setSendError(e instanceof Error ? e.message : String(e))
+                setSending(false)
+              }
+            }}
+            className="btn-primary inline-flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M2.5 8 13.5 2.5 10 13.5 7.5 9 2.5 8Z" />
+              <path d="M7.5 9 13.5 2.5" />
+            </svg>
+            {sending ? 'Sending…' : sendTo ? `Send to ${sendTo}` : 'Send'}
+          </button>
+        )}
+        <button type="button" onClick={() => onUse(body)} className={onSend ? 'rounded-ui px-2.5 py-1.5 text-[13px] font-medium text-ink-soft hover:bg-pane-sunk hover:text-ink' : 'btn-primary'}>
+          {onSend ? 'Edit' : 'Use draft'}
         </button>
         <button type="button" onClick={onRedraft} className="rounded-ui px-2.5 py-1.5 text-[13px] text-ink-soft hover:bg-pane-sunk hover:text-ink">
           Redraft…
