@@ -144,10 +144,27 @@ function Workspace({ status }: { status: AppStatus }) {
 
   // On Today, the reader shows the first thing to handle, so there's never an empty pane to
   // look at. It isn't marked seen: you haven't chosen to read it.
+  // Unless you've closed the reader there: then Today stays a list until you open something.
   const firstOnToday = todayThreads(todayData)[0]
+  const [todayClosed, setTodayClosed] = useState(false)
   useEffect(() => {
-    if (onToday && !screening && !query && !target && firstOnToday) open(firstOnToday, false)
-  }, [onToday, screening, query, target, firstOnToday, open])
+    if (onToday && !todayClosed && !screening && !query && !target && firstOnToday) open(firstOnToday, false)
+  }, [onToday, todayClosed, screening, query, target, firstOnToday, open])
+  useEffect(() => {
+    if (target) setTodayClosed(false)
+  }, [target])
+  const closeReader = () => {
+    if (onToday) setTodayClosed(true)
+    setTarget(null)
+    setActivePane('list')
+  }
+  const closeReaderRef = useRef(closeReader)
+  closeReaderRef.current = closeReader
+  const canCloseReader = !!target && !screening
+  const canCloseRef = useRef(canCloseReader)
+  canCloseRef.current = canCloseReader
+  const queryRef = useRef(query)
+  queryRef.current = query
 
   // Keyboard (see shortcuts.ts for the full map).
   const step = (delta: number) => {
@@ -179,6 +196,7 @@ function Workspace({ status }: { status: AppStatus }) {
   openInBoxRef.current = openInBox
   const goToBox = (i: number) => ordered[i] && showBox(ordered[i]!.id)
   const goToToday = () => {
+    setTodayClosed(false)
     setOnToday(true)
     setScreening(false)
     setQuery('')
@@ -205,6 +223,13 @@ function Workspace({ status }: { status: AppStatus }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return
+      const typing = document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement
+      // With nothing else to leave, Esc closes the reader: checked once every other handler
+      // (an open dialog or drawer) has had its turn at the key.
+      if (!typing && !queryRef.current && canCloseRef.current) {
+        setTimeout(() => !e.defaultPrevented && closeReaderRef.current())
+        return
+      }
       setQuery('')
       searchRef.current?.blur()
       // Leaving The Screener also closes the unscreened email in the reader.
@@ -340,6 +365,7 @@ function Workspace({ status }: { status: AppStatus }) {
           target={target}
           active={activePane === 'reader'}
           onOpenThread={open}
+          onClose={screening ? undefined : closeReader}
           onLeaveBox={() => {
             // Move on to the next thread (or the previous one at the end), like HEY.
             const i = list.findIndex((p) => p.id === target?.postingId)
