@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ActionItem, ComingUpItem, PostingRow, ThreadItem, TodayView, TodoItem } from '@shared/api'
 import { AddToCalendar } from './AddToCalendar'
+import { Tag } from './Tag'
 import { api } from '../api'
 import { dayName, shortDate } from '../format'
 import { stripSubjectPrefixes } from '../mail/forwarded'
@@ -315,7 +316,7 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
                 </span>
                 {c.task && (
                   <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px] text-ink-soft">
-                    <span className="shrink-0 rounded-[4px] bg-attn-wash px-1.5 text-[11px] leading-[16px] font-semibold text-attn">To do</span>
+                    <Tag kind="action">To do</Tag>
                     <span className="truncate">{c.task}</span>
                   </span>
                 )}
