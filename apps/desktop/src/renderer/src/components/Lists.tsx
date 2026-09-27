@@ -1,4 +1,5 @@
 import { Tag } from './Tag'
+import { MarkRead } from './MarkRead'
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { DUR, motionOff } from '../motion'
 import type { PostingRow } from '@shared/api'
@@ -130,12 +131,13 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
               aria-hidden={gone || undefined}
               aria-selected={gone ? undefined : selected}
               onClick={gone ? undefined : () => onOpen(p)}
-              className={`relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2.5 pr-3 pl-4 transition-colors duration-(--dur-1) ${
+              className={`group/row relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2.5 pr-3 pl-4 transition-colors duration-(--dur-1) ${
                 gone ? 'row-leave pointer-events-none' : 'rise'
               } ${selected && !gone ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
-              style={{ animationDelay: `${Math.min(i, 12) * 18}ms` }}
+              style={{ animationDelay: `${Math.min(i, 12) * 18}ms`, '--row-bg': selected ? 'var(--selection)' : 'var(--pane-sunk)' } as React.CSSProperties}
             >
               {!p.seen && <span className="absolute top-1/2 left-[5px] size-1.5 -translate-y-1/2 rounded-full bg-new" aria-label="Unseen" />}
+              {!gone && !search && <MarkRead posting={p} />}
               <Avatar avatar={p.avatar} stacked={p.isBundle} blockedTrackers={p.blockedTrackers} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
