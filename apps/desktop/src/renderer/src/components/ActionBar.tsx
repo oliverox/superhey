@@ -1,3 +1,4 @@
+import { BubblePicker } from './BubblePicker'
 import { BubbleIcon, icon, LabelIcon, MoveIcon, ReplyLaterIcon, SetAsideIcon, TrashIcon } from './icons'
 import { useEffect, useState } from 'react'
 import type { Action, PostingRow } from '@shared/api'
@@ -84,29 +85,7 @@ export function ActionBar({
       <Menu label="Bubble Up" icon={<BubbleIcon />} shortcut={keys ? 'bubbleMenu' : undefined}>
         {(close) => (
           <>
-            <MenuItem onSelect={() => (close(), bubble({ kind: 'now' }))}>Now</MenuItem>
-            <MenuItem onSelect={() => (close(), bubble({ kind: 'tomorrow' }))} hint="morning">
-              Tomorrow
-            </MenuItem>
-            <MenuItem onSelect={() => (close(), bubble({ kind: 'weekend' }))} hint="Saturday">
-              This weekend
-            </MenuItem>
-            <MenuItem onSelect={() => (close(), bubble({ kind: 'next-week' }))} hint="Monday">
-              Next week
-            </MenuItem>
-            <label className="flex items-center gap-2 rounded-ui px-2.5 py-1.5 hover:bg-pane-alt">
-              <span className="flex-1">On a date…</span>
-              <input
-                type="date"
-                min={new Date().toISOString().slice(0, 10)}
-                onChange={(e) => {
-                  if (!e.target.value) return
-                  close()
-                  bubble({ kind: 'on', date: e.target.value })
-                }}
-                className="rounded-[4px] border border-rule-strong bg-pane px-1 text-[12px] text-ink"
-              />
-            </label>
+            <BubblePicker onPick={(when) => (close(), bubble(when))} />
             {(p.bubbledUp || kind === 'bubblebox') && (
               <>
                 <MenuSeparator />
