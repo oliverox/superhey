@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ActionItem, ComingUpItem, PostingRow, ThreadItem, TodayView, TodoItem } from '@shared/api'
 import { AddToCalendar } from './AddToCalendar'
 import { Tag } from './Tag'
+import { MarkRead } from './MarkRead'
 import { api } from '../api'
 import { dayName, shortDate } from '../format'
 import { stripSubjectPrefixes } from '../mail/forwarded'
@@ -220,8 +221,10 @@ function NewRow({ posting: p, mark, onOpen }: { posting: PostingRow; mark: Mark;
       role="option"
       aria-selected={selected}
       onClick={onOpen}
-      className={`relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2 pr-3 pl-4 transition-colors duration-(--dur-1) ${markClass(mark)}`}
+      className={`group/row relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2 pr-3 pl-4 transition-colors duration-(--dur-1) ${markClass(mark)}`}
+      style={{ '--row-bg': selected ? 'var(--selection)' : 'var(--pane-sunk)' } as React.CSSProperties}
     >
+      <MarkRead posting={p} />
       <Avatar avatar={p.avatar} size={32} seed={p.senderEmail ?? undefined} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
