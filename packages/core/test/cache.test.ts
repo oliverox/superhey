@@ -57,6 +57,22 @@ describe('Repo postings', () => {
     expect(r.posting(PostingId(101))).toMatchObject({ avatar: { url: null, color: null, initials: 'BL' }, blockedTrackers: false })
   })
 
+  it('knows which calendars take new events: yours, not feeds or HEY’s own lists', () => {
+    const r = repo()
+    r.replaceCalendars([
+      S.Calendar.parse({ id: 1, kind: 'normal', name: null, personal: true }),
+      S.Calendar.parse({ id: 2, kind: 'maybe', name: 'Maybe', owned: true }),
+      S.Calendar.parse({ id: 3, kind: 'normal', name: 'Personal', owned: true }),
+      S.Calendar.parse({ id: 4, kind: 'normal', name: 'Google', owned: true, external: true }),
+    ])
+    expect(r.calendars().map((c) => [c.id, c.writable])).toEqual([
+      [1, false],
+      [2, false],
+      [3, true],
+      [4, false],
+    ])
+  })
+
   it('names a thread by its own email, not by a bundle that shares it', () => {
     const r = repo()
     const stripe = { id: 51, name: 'Stripe', email_address: 'notify@stripe.com' }
