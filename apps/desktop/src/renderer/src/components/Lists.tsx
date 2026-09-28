@@ -142,8 +142,8 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
               style={{ animationDelay: `${Math.min(i, 12) * 18}ms`, '--row-bg': selected ? 'var(--selection)' : 'var(--pane-sunk)' } as React.CSSProperties}
             >
               {!gone && !search && <MarkRead posting={p} />}
-              <span className={p.seen ? 'opacity-75' : ''}>
-                <Avatar avatar={p.avatar} size={28} muted />
+              <span>
+                <Avatar avatar={p.avatar} size={32} />
               </span>
               <div className="min-w-0 flex-1">
                 {/* Who, then when (and whether it wants a reply). */}
