@@ -40,3 +40,19 @@ export function useOutgoingReplies(topicId: number | null, entries: EntryRow[]):
   if (topicId == null) return []
   return [...records.values()].filter((r) => r.kind !== 'forward' && r.message.threadId === topicId && !isDelivered(r, entries))
 }
+
+/**
+ * Open a thread's reply with some words in it (e.g. from Today: "Ask to move it…"), for
+ * ⌘J to draft in your voice. Kept until the thread's reply area picks it up.
+ */
+let pendingReply: { topicId: number; body: string } | null = null
+export function replyWith(topicId: number, body: string) {
+  pendingReply = { topicId, body }
+  window.dispatchEvent(new CustomEvent('superhey:reply-with'))
+}
+export function takeReplyFor(topicId: number): string | null {
+  if (pendingReply?.topicId !== topicId) return null
+  const { body } = pendingReply
+  pendingReply = null
+  return body
+}

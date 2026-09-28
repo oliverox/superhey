@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { openDb } from '../src/cache/db'
 import { Repo } from '../src/cache/repo'
 import * as S from '../src/cli/schemas'
-import { buildToday, type TodayInput } from '../src/today/today'
+import { buildToday, clashWith, itemKey, type TodayInput } from '../src/today/today'
 import { alice, me, posting } from './fixtures'
 import { PostingId, TopicId } from '../src/ids'
 
@@ -96,6 +96,35 @@ describe('Today', () => {
     expect(at(8).due.actions.map((a) => a.text)).toEqual(['Respond to the meeting invitation'])
     expect(at(12).due.actions).toEqual([])
     expect(at(12).needsReply).toEqual([])
+  })
+
+  it('knows forms, bills and RSVPs, and lets them go once done', () => {
+    const { repo, put } = setup()
+    put('imbox', { id: 75, topic_id: 975, active_at: daysAgo(1) })
+    analyse(repo, 975, daysAgo(1), {
+      actionItems: [
+        { text: 'Pay the school trip', due: '2026-09-25', event: false, kind: 'bill', amount: { amount: 40, currency: 'EUR' }, done: false },
+        { text: 'Return the signed form', due: '2026-09-26', event: false, kind: 'form', amount: null, done: false },
+        { text: 'Pay the old invoice', due: '2026-09-25', event: false, kind: 'bill', amount: null, done: true },
+      ],
+    })
+    const t = buildToday(repo, input())
+    expect(t.due.actions.map((a) => [a.text, a.kind, a.amount?.amount ?? null])).toEqual([['Pay the school trip', 'bill', 40]])
+    expect(t.comingUp.map((c) => [c.label, c.kind, c.soon])).toEqual([['Return the signed form', 'form', true]])
+    // Ticked Done: gone.
+    const done = new Set([itemKey(975, 'Pay the school trip'), itemKey(975, 'return the  signed form')])
+    const after = buildToday(repo, input({ done }))
+    expect(after.due.actions).toEqual([])
+    expect(after.comingUp).toEqual([])
+  })
+
+  it('says when a date clashes with the calendar, but not with itself once added', () => {
+    const at = (day: string, hm: string) => new Date(`${day}T${hm}:00`).toISOString()
+    const ev = (title: string, s: string, e: string) => ({ key: title, id: 1, calendarId: null, title, startsAt: at('2026-10-03', s), endsAt: at('2026-10-03', e), allDay: false, location: null, color: null, calendarName: null, recurring: false, joinUrl: null, appUrl: null })
+    const date = { label: 'MDA event', date: '2026-10-03', time: '09:00' }
+    expect(clashWith(date, [ev('Gym', '08:30', '10:00')])?.title).toBe('Gym')
+    expect(clashWith(date, [ev('MDA event', '09:00', '10:00')])).toBeNull()
+    expect(clashWith(date, [ev('Lunch', '12:00', '13:00')])).toBeNull()
   })
 
   it('lets a call or meeting that has passed go, rather than calling it late', () => {

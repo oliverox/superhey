@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { takeReplyFor } from '../outbox'
 import type { ThreadView } from '@shared/api'
 import { displayName, replyRecipients, shortName } from '../mail/people'
 import { useShortcut, withShortcut } from '../shortcuts'
@@ -35,6 +36,20 @@ export function ReplyArea({
       setRequest({ kind, message: { to, cc, body: '', threadId: thread.topicId }, context: `to ${who}`, draftFrom: latest.id })
     }
   }
+
+  // Today asked for a reply with some words in it ("Ask to move it…"): open it, ready for ⌘J.
+  useEffect(() => {
+    const take = () => {
+      const body = latest ? takeReplyFor(thread.topicId) : null
+      if (!body || !latest) return
+      const who = latest.from ? (latest.from.isMe ? 'your message' : displayName(latest.from)) : 'the thread'
+      const { to, cc } = replyRecipients(latest, 'reply')
+      setRequest({ kind: 'reply', message: { to, cc, body, threadId: thread.topicId }, context: `to ${who}`, fresh: true, draftFrom: latest.id })
+    }
+    take()
+    window.addEventListener('superhey:reply-with', take)
+    return () => window.removeEventListener('superhey:reply-with', take)
+  }, [thread.topicId, latest?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useShortcut('reply', () => open('reply'), keys && !request && !!latest)
   useShortcut('replyAll', () => open('reply-all'), keys && !request && !!latest)
