@@ -402,7 +402,7 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
               </span>
             </button>
             {/* On hover, over the end of the row: reply (an RSVP, or to move a clash), Done, Add. Added · Undo stays. */}
-            <span className="row-actions absolute top-[7px] right-2 flex items-center gap-1 rounded-r-ui pr-3 pl-8 opacity-0 transition-opacity duration-(--dur-1) group-hover/cu:opacity-100 focus-within:opacity-100 has-[.keep-visible]:opacity-100">
+            <span className="row-actions absolute inset-y-0 right-2 flex items-center gap-1 rounded-r-ui pr-3 pl-8 opacity-0 transition-opacity duration-(--dur-1) group-hover/cu:opacity-100 focus-within:opacity-100 has-[.keep-visible]:opacity-100">
               {reply && (
                 <HoverButton
                   onClick={() => {
