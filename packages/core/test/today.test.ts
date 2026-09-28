@@ -83,6 +83,21 @@ describe('Today', () => {
     expect(ids(t.replyLater)).toEqual([62])
   })
 
+  it('drops what an email asked about a meeting that has already happened today', () => {
+    const { repo, put } = setup()
+    put('imbox', { id: 74, topic_id: 974, active_at: daysAgo(1) })
+    analyse(repo, 974, daysAgo(1), {
+      needsReply: true,
+      replyReason: 'Confirm attendance',
+      actionItems: [{ text: 'Respond to the meeting invitation', due: '2026-09-25', event: false }],
+      dates: [{ label: 'Cockpit Design', date: '2026-09-25', time: '08:45', endTime: '10:45' }],
+    })
+    const at = (h: number) => buildToday(repo, { ...input(), now: new Date(2026, 8, 25, h, 0) })
+    expect(at(8).due.actions.map((a) => a.text)).toEqual(['Respond to the meeting invitation'])
+    expect(at(12).due.actions).toEqual([])
+    expect(at(12).needsReply).toEqual([])
+  })
+
   it('lets a call or meeting that has passed go, rather than calling it late', () => {
     const { repo, put } = setup()
     put('imbox', { id: 72, topic_id: 972, active_at: daysAgo(5) })

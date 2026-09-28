@@ -137,9 +137,20 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
   const seen = new Set<number>()
   const bubbled = items(repo.bubbledUp(), seen)
 
+  // An email about something that's already happened (a meeting this morning): its dates
+  // are all over, so what it asked of you (RSVP, confirm) has lapsed too.
+  const hmNow = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  const over = (d: { date: string; endDate?: string | null; time: string | null; endTime?: string | null }) => {
+    const last = d.endDate ?? d.date
+    if (last !== today) return last < today
+    const until = d.endTime ?? d.time
+    return until != null && until <= hmNow
+  }
+  const lapsed = (a: ThreadAnalysis) => (a.dates ?? []).length > 0 && (a.dates ?? []).every(over)
+
   const actions: ActionItem[] = []
   for (const { posting, a } of analysed) {
-    if (!shown(posting) || seen.has(posting.topicId!)) continue
+    if (!shown(posting) || seen.has(posting.topicId!) || lapsed(a)) continue
     // A call or meeting that has passed is simply over, not late.
     const due = (a.actionItems ?? []).filter((i) => i.due != null && (isEvent(i) ? i.due === today : i.due <= today))
     due.forEach((i, n) => actions.push({ key: `action:${posting.id}:${n}`, posting, text: i.text, due: i.due!, daysLate: Math.round((dayStart(today) - dayStart(i.due!)) / DAY) }))
@@ -149,7 +160,7 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
 
   const laterBox = new Set(repo.replyLater().map((p) => p.topicId))
   const needsReply = items(
-    analysed.filter(({ posting, a }) => a.needsReply && !laterBox.has(posting.topicId) && !posting.bubbledUp).map((r) => r.posting),
+    analysed.filter(({ posting, a }) => a.needsReply && !lapsed(a) && !laterBox.has(posting.topicId) && !posting.bubbledUp).map((r) => r.posting),
     seen,
   ).map((i) => ({ ...i, reason: analysisOf.get(i.posting.topicId!)?.replyReason ?? null }))
 
