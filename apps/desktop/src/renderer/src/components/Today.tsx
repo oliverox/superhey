@@ -5,7 +5,8 @@ import { AddToCalendar } from './AddToCalendar'
 import { Tag } from './Tag'
 import { MarkRead } from './MarkRead'
 import { api } from '../api'
-import { clock, dayName, shortDate } from '../format'
+import { clock, clockHm, dayName, shortDate } from '../format'
+import { canReply, taskUnder } from '../today/comingUp'
 import { stripSubjectPrefixes } from '../mail/forwarded'
 import { withShortcut } from '../shortcuts'
 import { Avatar } from './Avatar'
@@ -311,10 +312,13 @@ const money = (m: Money) => {
     return `${m.amount} ${m.currency}`
   }
 }
-/** What sort of to-do: FORM, BILL · €40, RSVP… (a deadline says DUE when it's a plain task). */
-function KindTag({ kind, amount, due }: { kind: TaskKind; amount?: Money | null; due?: boolean }) {
+/**
+ * What sort of to-do: FORM, BILL · €40, RSVP… (a deadline says DUE when it's a plain task).
+ * Coloured only when it's pressing; otherwise it just says what it is.
+ */
+function KindTag({ kind, amount, due, pressing = true }: { kind: TaskKind; amount?: Money | null; due?: boolean; pressing?: boolean }) {
   return (
-    <Tag kind={due && kind === 'task' ? 'reply' : 'action'}>
+    <Tag kind={!pressing ? 'plain' : due && kind === 'task' ? 'reply' : 'action'}>
       {due && kind === 'task' ? 'Due' : KIND_LABEL[kind]}
       {amount ? ` · ${money(amount)}` : ''}
     </Tag>
@@ -329,7 +333,7 @@ function HoverButton({ onClick, title, children }: { onClick: () => void; title:
         onClick()
       }}
       title={title}
-      className="h-7 shrink-0 rounded-ui bg-pane px-2.5 text-[12px] font-medium text-ink-soft shadow-[0_0_0_1px_var(--rule-strong)] hover:text-ink"
+      className="h-6 shrink-0 rounded-ui px-2 text-[12px] font-medium text-ink-soft hover:bg-pane hover:text-ink"
     >
       {children}
     </button>
@@ -351,7 +355,13 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
     <section aria-label="Coming up" className="@container">
       <h2 className="eyebrow px-5 pt-4 pb-1.5">Coming up</h2>
       <ul>
-        {items.map((c) => (
+        {items.map((c) => {
+          // Coloured only when it needs you soon, clashes, or costs something.
+          const pressing = (c.soon && (c.isDeadline || !!c.task)) || !!c.clash || (c.kind === 'bill' && !!c.amount)
+          const from = c.posting.senderName ?? c.posting.senderEmail ?? ''
+          const subject = c.posting.subject ? stripSubjectPrefixes(c.posting.subject) : null
+          const reply = c.clash ? canReply(c.posting, 'move') : (c.kind === 'rsvp' || c.kind === 'appointment') && canReply(c.posting, 'confirm')
+          return (
           <li key={c.key} className="group/cu relative" style={{ '--row-bg': pick(c.key, c.posting.id) === 'on' ? 'var(--selection)' : 'var(--pane-sunk)' } as React.CSSProperties}>
             <button
               onClick={() => onOpen(c.key, c.posting)}
@@ -360,17 +370,19 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
             >
               <span className={`w-[76px] shrink-0 text-[12px] tabular-nums ${c.soon && (c.isDeadline || c.task) ? 'font-medium text-attn' : 'text-ink-faint'}`}>
                 {dayName(c.date)}
-                {c.time && <span className="block">{c.time}</span>}
+                {c.time && <span className="block">{clockHm(c.time)}</span>}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex min-w-0 items-center gap-1.5 text-ink">
-                  {c.isDeadline && <KindTag kind={c.kind ?? 'task'} amount={c.amount} due />}
+                  {c.isDeadline && <KindTag kind={c.kind ?? 'task'} amount={c.amount} due pressing={pressing} />}
                   <span className="truncate">{c.label}</span>
                 </span>
                 {c.task && (
                   <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px] text-ink-soft">
-                    <KindTag kind={c.kind ?? 'task'} amount={c.amount} />
-                    <span className="truncate">{c.task}</span>
+                    <KindTag kind={c.kind ?? 'task'} amount={c.amount} pressing={pressing} />
+                    <span className="truncate" title={c.task}>
+                      {taskUnder(c.task, c.label)}
+                    </span>
                   </span>
                 )}
                 {c.clash && (
@@ -384,12 +396,14 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
                     </span>
                   </span>
                 )}
-                <span className="block truncate text-[12px] text-ink-faint">{c.posting.subject ? stripSubjectPrefixes(c.posting.subject) : c.posting.senderName}</span>
+                <span className="block truncate text-[12px] text-ink-faint" title={subject ?? undefined}>
+                  {from || subject}
+                </span>
               </span>
             </button>
             {/* On hover, over the end of the row: reply (an RSVP, or to move a clash), Done, Add. Added · Undo stays. */}
-            <span className="row-actions absolute top-1 right-2 flex items-center gap-1 rounded-r-ui pr-3 pl-8 opacity-0 transition-opacity duration-(--dur-1) group-hover/cu:opacity-100 focus-within:opacity-100 has-[.keep-visible]:opacity-100">
-              {(c.clash || c.kind === 'rsvp' || c.kind === 'appointment') && (
+            <span className="row-actions absolute top-[7px] right-2 flex items-center gap-1 rounded-r-ui pr-3 pl-8 opacity-0 transition-opacity duration-(--dur-1) group-hover/cu:opacity-100 focus-within:opacity-100 has-[.keep-visible]:opacity-100">
+              {reply && (
                 <HoverButton
                   onClick={() => {
                     replyWith(c.posting.topicId!, c.clash ? `Ask to move it: it clashes with ${c.clash.title} at ${clock(c.clash.startsAt)}` : c.kind === 'rsvp' ? 'Yes, I’ll be there' : 'Confirm the appointment')
@@ -405,10 +419,11 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
                   Done
                 </HoverButton>
               )}
-              {!c.isDeadline && <AddToCalendar item={c} source={c.posting.subject ? stripSubjectPrefixes(c.posting.subject) : undefined} />}
+              {!c.isDeadline && <AddToCalendar item={c} source={subject ?? undefined} compact />}
             </span>
           </li>
-        ))}
+          )
+        })}
       </ul>
     </section>
   )

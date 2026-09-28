@@ -119,6 +119,19 @@ describe('Today', () => {
     expect(after.comingUp).toEqual([])
   })
 
+  it('keeps the date when its to-do is done', () => {
+    const { repo, put } = setup()
+    put('imbox', { id: 80, topic_id: 980, active_at: daysAgo(1) })
+    analyse(repo, 980, daysAgo(1), {
+      category: 'booking',
+      actionItems: [{ text: 'Check in for flight MK 288', due: '2026-09-28', event: false, kind: 'task', amount: null, done: false }],
+      dates: [{ label: 'Flight to Antananarivo', date: '2026-09-28', time: '14:20' }],
+    })
+    expect(buildToday(repo, input()).comingUp.map((c) => [c.label, c.task ?? null])).toEqual([['Flight to Antananarivo', 'Check in for flight MK 288']])
+    const done = new Set([itemKey(980, 'Check in for flight MK 288')])
+    expect(buildToday(repo, input({ done })).comingUp.map((c) => [c.label, c.task ?? null])).toEqual([['Flight to Antananarivo', null]])
+  })
+
   it('shows a sum only on a bill, and nothing from marketing', () => {
     const { repo, put } = setup()
     put('imbox', { id: 76, topic_id: 976, active_at: daysAgo(1) })

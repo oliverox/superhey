@@ -2,6 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { clockHm } from '../format'
 import type { PostingRow, ThreadItem, TodoItem } from '@shared/api'
 import type { TodayData } from './Today'
 
@@ -122,7 +123,8 @@ describe('what the AI found', () => {
     expect(text()).toContain('Send the signed form1 day late · Reservation for Seaside Retreat')
     expect(text()).toContain('Dana Novak · Guest asks about early check-in')
     const coming = host.querySelector('section[aria-label="Coming up"]')!.textContent
-    expect(coming).toContain('14:00Check-inBooking confirmed')
+    // The time in the app's clock; the sender, not the subject, says where it came from.
+    expect(coming).toContain(`${clockHm('14:00')}Check-inDana Novak`)
     expect(coming).toContain('DueConfirm numbers')
     await click([...host.querySelectorAll('section[aria-label="Coming up"] button')][0]!)
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 7 }))

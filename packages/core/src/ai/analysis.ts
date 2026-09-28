@@ -35,7 +35,7 @@ export const ThreadAnalysis = z.object({
         event: z.boolean().describe('True when it is being somewhere at a set time (attend a call, meeting, appointment, trip), which is simply over once its day has passed; false for work to finish by a deadline.'),
         kind: z
           .enum(['form', 'bill', 'rsvp', 'appointment', 'task'])
-          .describe('form: sign, fill in or return a document; bill: pay something; rsvp: say whether they will attend; appointment: confirm, book or reschedule one; task: anything else.'),
+          .describe('form: sign, fill in or return a document; bill: pay something; rsvp: say whether they will attend; appointment: confirm, book or reschedule one with someone (a doctor, a school, a repair visit), not checking in for a flight or hotel; task: anything else, including check-ins.'),
         amount: z.object({ amount: z.number(), currency: z.string() }).nullable().describe('For a bill: the sum to pay (ISO currency code). Else null.'),
         done: z.boolean().describe('True only when a later message in the thread shows it is already handled (the form was received, the bill paid, the RSVP given).'),
       }),
@@ -92,7 +92,7 @@ Rules:
 - Keep everything short and plain. Start summaries with the substance; the app already shows the sender. Write in the thread's language.`
 
 /** Bumped when the instructions change, so threads are read again as they come up. */
-export const ANALYSIS_VERSION = 8
+export const ANALYSIS_VERSION = 9
 
 /** The prompt: the thread as data, newest messages kept when it's long. */
 export function analysisPrompt(

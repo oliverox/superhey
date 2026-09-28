@@ -49,7 +49,8 @@ export const showInCalendar = (day: string) => window.dispatchEvent(new CustomEv
  * "Add" for a date in an email: opens the event form filled in from it. Once HEY has the
  * event, it says so (and opens the calendar on that day); just after adding, Undo.
  */
-export function AddToCalendar({ item, source }: { item: MailDate; source?: string }) {
+export function AddToCalendar({ item, source, compact = false }: { item: MailDate; source?: string; compact?: boolean }) {
+  const size = compact ? 'h-6 text-[12px]' : 'h-7 text-[13px]'
   const range = useLive(() => api.calendarRange(item.date, item.endDate ?? item.date), [item.date, item.endDate], (e) => e.type === 'change' && e.change.kind === 'calendar')
   const [form, setForm] = useState(false)
   const [added, setAdded] = useState<number | null>(null)
@@ -63,7 +64,7 @@ export function AddToCalendar({ item, source }: { item: MailDate; source?: strin
 
   if (added != null) {
     return (
-      <span className="keep-visible inline-flex h-7 shrink-0 items-center gap-1.5 text-[13px] font-medium text-ok">
+      <span className={`keep-visible inline-flex ${size} shrink-0 items-center gap-1.5 font-medium text-ok`}>
         <CheckIcon />
         <span className="@max-[28rem]:hidden">Added</span>
         <button
@@ -88,7 +89,7 @@ export function AddToCalendar({ item, source }: { item: MailDate; source?: strin
           showInCalendar(item.date)
         }}
         title={`“${match.title}”${match.allDay ? '' : ` at ${clockOf(match.startsAt)}`}: show in the calendar`}
-        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-ui px-2 text-[13px] font-medium text-ok hover:bg-pane-sunk"
+        className={`inline-flex ${size} shrink-0 items-center gap-1.5 rounded-ui px-2 font-medium text-ok hover:bg-pane-sunk`}
       >
         <CheckIcon />
         <span className="@max-[28rem]:sr-only">In calendar</span>
@@ -104,7 +105,7 @@ export function AddToCalendar({ item, source }: { item: MailDate; source?: strin
         }}
         disabled={!range.data}
         title="Add to HEY Calendar"
-        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-ui bg-accent-wash px-2.5 text-[13px] font-medium text-accent transition-colors @max-[28rem]:px-[7px] hover:bg-[color-mix(in_oklab,var(--accent)_18%,var(--pane))] disabled:opacity-50"
+        className={`inline-flex ${size} shrink-0 items-center gap-1.5 rounded-ui bg-accent-wash px-2.5 font-medium text-accent transition-colors @max-[28rem]:px-[7px] hover:bg-[color-mix(in_oklab,var(--accent)_18%,var(--pane))] disabled:opacity-50`}
       >
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
           <rect x="2" y="3" width="12" height="11" rx="2" />

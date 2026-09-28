@@ -29,6 +29,11 @@ export function dayAndTime(iso: string, now = new Date()): { day: string; time: 
 
 export const longDate = (iso: string) => long.format(new Date(iso))
 export const clock = (iso: string) => time.format(new Date(iso))
+/** "14:20" (a time of day as mail gives it) in the app's clock: "2:20 PM" where that's how you read time. */
+export const clockHm = (hm: string) => {
+  const [h, m] = hm.split(':').map(Number) as [number, number]
+  return time.format(new Date(2000, 0, 1, h, m))
+}
 
 const weekdayDate = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 
