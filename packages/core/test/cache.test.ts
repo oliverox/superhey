@@ -96,7 +96,7 @@ describe('Repo postings', () => {
     ])
     const rows = r.postings(1)
     expect(rows.map((p) => [p.id, p.isBundle, p.bundleCount])).toEqual([
-      [1, true, 1], // "1 new": the unread one
+      [1, true, 2], // both of the sender's emails, read or not
       [4, false, null],
       // The read statement is in the bundle too (HEY lists only the bundle).
     ])

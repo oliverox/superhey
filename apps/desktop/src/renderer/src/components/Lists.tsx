@@ -283,9 +283,12 @@ function senderLabel(p: PostingRow) {
   return name || p.senderEmail || 'Unknown'
 }
 
-/** How many emails a bundle holds: from the cache, or HEY's joined subjects when not yet loaded. */
+/**
+ * How many of the sender's emails a bundle holds, from the cache. Not HEY's bundle subject:
+ * that lists the sender's last five subjects, whether or not they're still in the box.
+ */
 function bundleSize(p: PostingRow) {
-  return Math.max(p.bundleCount ?? 0, p.subject.split(' • ').length)
+  return p.bundleCount ?? 0
 }
 
 const monthYear = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' })
