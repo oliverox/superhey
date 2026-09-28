@@ -86,12 +86,13 @@ Rules:
 - expectsReply: only when the user wrote the latest message: true if it asks the others for an answer or action ("Can you send the invoice?", "Let me know"), false for sending files, thanks, or FYI.
 - Dates: resolve relative dates ("Friday", "next week") against the message's date, as YYYY-MM-DD. Leave out dates you are unsure of. An action item has a due date only when the thread states one.
 - Only the user's own dates: events a company advertises to them (launches, webinars, livestreams, sales) are not their dates.
+- Marketing is not a to-do: an offer or nudge to buy, invest, upgrade, subscribe or claim something ("don't miss out", "reserve your spot", "invest up to $X", "offer ends Friday") is category promotion, even from a service the user has an account with. It has no action items and no dates; its sums are not amounts due. Action items are only what the user owes, has agreed to, or is required to do.
 - Times: give them as the thread states them, with the time zone it names (as an IANA name); the app converts them to the user's time. No zone named: the user's own time.
 - Never repeat secrets: one-time codes, passwords, PINs, verification or security codes, full card or account numbers. Say "a one-time code" instead.
 - Keep everything short and plain. Start summaries with the substance; the app already shows the sender. Write in the thread's language.`
 
 /** Bumped when the instructions change, so threads are read again as they come up. */
-export const ANALYSIS_VERSION = 7
+export const ANALYSIS_VERSION = 8
 
 /** The prompt: the thread as data, newest messages kept when it's long. */
 export function analysisPrompt(
@@ -280,6 +281,8 @@ function offsetMs(zone: string, at: number): number {
   return Date.UTC(p.year!, p.month! - 1, p.day!, p.hour!, p.minute!, p.second!) - Math.floor(at / 1000) * 1000
 }
 
+const advertising = (a: Pick<ThreadAnalysis, 'category'>) => a.category === 'promotion' || a.category === 'newsletter'
+
 /** Holds the model to the limits the prompt asks for. */
 function tidy(a: ThreadAnalysis): ThreadAnalysis {
   return {
@@ -287,7 +290,8 @@ function tidy(a: ThreadAnalysis): ThreadAnalysis {
     summary: clipWords(scrub(a.summary.trim()), 140),
     replyReason: a.needsReply ? (a.replyReason ? clipWords(scrub(a.replyReason.trim()), 140) : null) : null,
     replyOptions: a.needsReply ? (a.replyOptions ?? []).map((o) => clipWords(scrub(o.trim()), 60)).filter(Boolean).slice(0, 3) : [],
-    actionItems: a.actionItems.slice(0, 5).map((i) => ({ ...i, text: scrub(i.text) })),
+    // Marketing never gives the user work; a sum is only owed on a bill.
+    actionItems: advertising(a) ? [] : a.actionItems.slice(0, 5).map((i) => ({ ...i, text: scrub(i.text), amount: i.kind === 'bill' ? i.amount : null })),
     dates: a.dates.slice(0, 5).map((d) => inLocalTime(d)),
     amounts: a.amounts.slice(0, 5),
   }

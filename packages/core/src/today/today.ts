@@ -203,13 +203,16 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
     i.done === true || (input.done?.has(itemKey(topicId, i.text)) ?? false) || (i.kind === 'rsvp' && repo.lastEntryIsMine(topicId as TopicId))
   const open = (topicId: number, a: ThreadAnalysis) => (a.actionItems ?? []).filter((i) => !isDone(topicId, i))
 
+  // A sum is only owed on a bill (older readings put an offer's amount on a plain task).
+  const owed = (i: ThreadAnalysis['actionItems'][number]) => (i.kind === 'bill' ? (i.amount ?? null) : null)
+
   const actions: ActionItem[] = []
   for (const { posting, a } of analysed) {
-    if (!shown(posting) || seen.has(posting.topicId!) || lapsed(a)) continue
+    if (!shown(posting) || seen.has(posting.topicId!) || lapsed(a) || a.category === 'newsletter' || a.category === 'promotion') continue
     // A call or meeting that has passed is simply over, not late.
     const due = open(posting.topicId!, a).filter((i) => i.due != null && (isEvent(i) ? i.due === today : i.due <= today))
     due.forEach((i, n) =>
-      actions.push({ key: `action:${posting.id}:${n}`, posting, text: i.text, due: i.due!, daysLate: Math.round((dayStart(today) - dayStart(i.due!)) / DAY), kind: i.kind ?? 'task', amount: i.amount ?? null }),
+      actions.push({ key: `action:${posting.id}:${n}`, posting, text: i.text, due: i.due!, daysLate: Math.round((dayStart(today) - dayStart(i.due!)) / DAY), kind: i.kind ?? 'task', amount: owed(i) }),
     )
     if (due.length) seen.add(posting.topicId!)
   }
@@ -249,11 +252,11 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
       if (!i.due || i.due <= today) continue
       // A task due on the day of one of the email's dates belongs with it (one row, not two).
       const sameDay = comingUp.find((c) => c.posting.id === posting.id && !c.isDeadline && c.date === i.due && !c.task)
-      if (sameDay) Object.assign(sameDay, { task: i.text, kind: i.kind ?? 'task', amount: i.amount ?? null })
+      if (sameDay) Object.assign(sameDay, { task: i.text, kind: i.kind ?? 'task', amount: owed(i) })
       else {
         add(i.text, i.due, null, true)
         const row = comingUp.at(-1)
-        if (row?.label === i.text && row.date === i.due) Object.assign(row, { kind: i.kind ?? 'task', amount: i.amount ?? null })
+        if (row?.label === i.text && row.date === i.due) Object.assign(row, { kind: i.kind ?? 'task', amount: owed(i) })
       }
     }
   }

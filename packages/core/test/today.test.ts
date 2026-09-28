@@ -118,6 +118,17 @@ describe('Today', () => {
     expect(after.comingUp).toEqual([])
   })
 
+  it('shows a sum only on a bill, and nothing from marketing', () => {
+    const { repo, put } = setup()
+    put('imbox', { id: 76, topic_id: 976, active_at: daysAgo(1) })
+    put('imbox', { id: 77, topic_id: 977, active_at: daysAgo(1) })
+    const offer = { text: 'Pre-invest up to $11,326.13', due: '2026-09-25', event: false, kind: 'task', amount: { amount: 11326.13, currency: 'USD' }, done: false }
+    analyse(repo, 976, daysAgo(1), { category: 'notification', actionItems: [offer] })
+    analyse(repo, 977, daysAgo(1), { category: 'promotion', actionItems: [{ ...offer, text: 'Claim your offer' }] })
+    const t = buildToday(repo, input())
+    expect(t.due.actions.map((a) => [a.text, a.amount])).toEqual([['Pre-invest up to $11,326.13', null]])
+  })
+
   it('says when a date clashes with the calendar, but not with itself once added', () => {
     const at = (day: string, hm: string) => new Date(`${day}T${hm}:00`).toISOString()
     const ev = (title: string, s: string, e: string) => ({ key: title, id: 1, calendarId: null, title, startsAt: at('2026-10-03', s), endsAt: at('2026-10-03', e), allDay: false, location: null, color: null, calendarName: null, recurring: false, joinUrl: null, appUrl: null })
