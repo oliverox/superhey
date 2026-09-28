@@ -163,6 +163,28 @@ describe('ActionRunner', () => {
     expect((await actions.run({ type: 'seen', postingId: 100, seen: true })).canUndo).toBe(false)
   })
 
+  it('moves a whole bundle as one: logged as a batch, and one undo brings every email back', async () => {
+    const make = (id: number): Thread => ({ id, topic_id: id + 800, box: 'imbox', seen: false, bubbled: false, scheduled: false, labels: [] })
+    const hey = fakeHey([make(100), make(101), make(102)])
+    const runner = new HeyRunner({ binary: 'hey', exec: hey.exec })
+    const client = new HeyClient(runner)
+    const repo = new Repo(openDb(':memory:'))
+    const engine = new SyncEngine(client, repo, runner, { attachmentsDir: mkdtempSync(join(tmpdir(), 'att-')) })
+    vi.spyOn(engine, 'requestBoxRefresh').mockImplementation(() => {})
+    repo.replaceBoxes(Object.entries(BOXES).map(([kind, id]) => ({ id, kind, name: kind })))
+    repo.upsertPostings([100, 101, 102].map((id) => S.Posting.parse(posting({ id, topic_id: id + 800, box_id: BOXES.imbox }))))
+    const actions = new ActionRunner(client, repo, engine)
+
+    const done = await actions.runAll([100, 101, 102].map((postingId) => ({ type: 'move', postingId, to: 'asidebox' }) as const))
+    expect(done.map((r) => r.status)).toEqual(['done', 'done', 'done'])
+    expect([...hey.state.values()].map((t) => t.box)).toEqual(['asidebox', 'asidebox', 'asidebox'])
+
+    // Undoing the last one (what z does) undoes them all.
+    await actions.undo(done.at(-1)!.id)
+    expect([...hey.state.values()].map((t) => t.box)).toEqual(['imbox', 'imbox', 'imbox'])
+    expect(actions.recent().filter((r) => r.source === 'user').every((r) => r.status === 'undone')).toBe(true)
+  })
+
   it('moves a thread, and undo restores both its box and its unseen state', async () => {
     const { actions, heyThread, cached } = setup()
     const r = await actions.run({ type: 'move', postingId: 100, to: 'trailbox' })

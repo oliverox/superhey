@@ -17,7 +17,18 @@ import { ReplyArea } from './ReplyArea'
  * fetched only then. `;` / `:` expand or collapse them all. The thread keys (e, r, ⇧R…)
  * act on the email in focus: the one last opened, or clicked.
  */
-export function BundleView({ bundleId, sender, onLeaveBox }: { bundleId: number; sender: string; onLeaveBox: () => void }) {
+export function BundleView({
+  bundleId,
+  sender,
+  onLeaveBox,
+  onMembers,
+}: {
+  bundleId: number
+  sender: string
+  onLeaveBox: () => void
+  /** The emails shown, as they change: the top bar acts on them all. */
+  onMembers?: (rows: PostingRow[]) => void
+}) {
   const members = useLive(() => api.bundleThreads(bundleId), [bundleId])
   // Actions change the cached rows; re-read those (not HEY's bundle) so seen, labels and
   // moves show at once. An email moved or trashed out of the box leaves the digest.
@@ -32,6 +43,14 @@ export function BundleView({ bundleId, sender, onLeaveBox }: { bundleId: number;
   // Rows read for an earlier member list don't count (they'd look like an emptied bundle).
   const fresh = rows.data?.key === key ? rows.data.rows : null
   const list = (fresh ?? members.data ?? []).filter((t): t is PostingRow => !!t && t.boxId === box)
+
+  // Told again whenever what the actions depend on changes (which emails, seen, labels, box).
+  const shape = list.map((t) => `${t.id}:${t.seen ? 1 : 0}:${t.boxId}:${t.bubbledUp ? 1 : 0}:${t.labels.join('|')}`).join()
+  const latest = useRef({ list, onMembers })
+  latest.current = { list, onMembers }
+  useEffect(() => {
+    latest.current.onMembers?.(latest.current.list)
+  }, [shape])
 
   const [open, setOpen] = useState<Set<number> | null>(null)
   const [focused, setFocused] = useState<number | null>(null)

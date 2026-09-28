@@ -175,3 +175,180 @@ export function ActionBar({
 
 const SeenIcon = ({ seen }: { seen: boolean }) =>
   icon(seen ? <><circle cx="8" cy="8" r="3" fill="currentColor" stroke="none" /><circle cx="8" cy="8" r="5.75" /></> : <circle cx="8" cy="8" r="5.75" />)
+
+/** What a bundle-wide action does, waiting for a yes. */
+interface Pending {
+  /** The question, with `{all}` for which emails: "Set Aside {all}?" */
+  question: string
+  /** The confirm button: "Set Aside". */
+  button: string
+  actions: Action[]
+  leaves: boolean
+  danger?: boolean
+}
+
+/**
+ * The top bar's actions for a bundle: the same icons as a thread's, acting on every email
+ * the bundle holds. Each asks first (it can be many emails), then runs as one batch, so
+ * a single undo (z) brings them all back. Keys stay with the email in focus inside.
+ */
+export function BundleActionBar({ members, sender, onLeaveBox }: { members: PostingRow[]; sender: string; onLeaveBox: () => void }) {
+  const boxes = useLive(() => api.boxes(), [])
+  const labels = useLive(() => api.labels(), [])
+  const [pending, setPending] = useState<Pending | null>(null)
+
+  useEffect(() => {
+    if (!pending) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      setPending(null)
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
+  }, [pending])
+
+  if (!members.length) return null
+  const kind = boxes.data?.find((b) => b.id === members[0]!.boxId)?.kind ?? ''
+  const n = members.length
+  const each = (make: (postingId: number) => Action) => members.map((m) => make(m.id))
+  const ask = (question: string, button: string, actions: Action[], leaves: boolean, danger = false) => actions.length && setPending({ question, button, actions, leaves, danger })
+  const move = (to: Extract<Action, { type: 'move' }>['to'], question: string, button: string) => ask(question, button, each((postingId) => ({ type: 'move', postingId, to })), true)
+  const allSeen = members.every((m) => m.seen)
+  const bubbled = members.some((m) => m.bubbledUp) || kind === 'bubblebox'
+
+  const confirm = () => {
+    if (!pending) return
+    setPending(null)
+    if (pending.leaves) onLeaveBox()
+    void api.runActions(pending.actions)
+  }
+
+  return (
+    <div className="no-drag relative flex items-center gap-0.5" role="toolbar" aria-label="Bundle actions">
+      {/* Says these act on the bundle, not the open email (which has the same icons). */}
+      <span className="mr-1 pl-1 text-[12px] font-medium text-ink-faint tabular-nums" title={`These act on all ${n} emails from ${sender}`}>
+        All {n}
+      </span>
+      <ToolbarButton
+        label={kind === 'laterbox' ? 'Remove the whole bundle from Reply Later' : 'Reply Later: the whole bundle'}
+        pressed={kind === 'laterbox'}
+        onClick={() => (kind === 'laterbox' ? move('imbox', 'Take {all} out of Reply Later?', 'Take out') : move('laterbox', 'Put {all} in Reply Later?', 'Reply Later'))}
+      >
+        <ReplyLaterIcon />
+      </ToolbarButton>
+      <ToolbarButton
+        label={kind === 'asidebox' ? 'Remove the whole bundle from Set Aside' : 'Set Aside: the whole bundle'}
+        pressed={kind === 'asidebox'}
+        onClick={() => (kind === 'asidebox' ? move('imbox', 'Take {all} out of Set Aside?', 'Take out') : move('asidebox', 'Set Aside {all}?', 'Set Aside'))}
+      >
+        <SetAsideIcon />
+      </ToolbarButton>
+
+      <Menu label="Bubble Up: the whole bundle" icon={<BubbleIcon />}>
+        {(close) => (
+          <>
+            <BubblePicker
+              onPick={(when) => {
+                close()
+                ask('Bubble up {all}?', 'Bubble up', each((postingId) => ({ type: 'bubble', postingId, when })), when.kind !== 'now')
+              }}
+            />
+            {bubbled && (
+              <>
+                <MenuSeparator />
+                <MenuItem onSelect={() => (close(), ask('Cancel bubbling up {all}?', 'Cancel bubble up', each((postingId) => ({ type: 'unbubble', postingId })), false))}>Cancel bubble up</MenuItem>
+              </>
+            )}
+          </>
+        )}
+      </Menu>
+
+      <Menu label="Move the whole bundle to…" icon={<MoveIcon />}>
+        {(close) => (
+          <>
+            {(
+              [
+                ['imbox', 'Imbox'],
+                ['feedbox', 'The Feed'],
+                ['trailbox', 'Paper Trail'],
+              ] as const
+            )
+              .filter(([k]) => k !== kind)
+              .map(([k, name]) => (
+                <MenuItem key={k} onSelect={() => (close(), move(k, `Move {all} to ${name}?`, 'Move'))}>
+                  {name}
+                </MenuItem>
+              ))}
+          </>
+        )}
+      </Menu>
+
+      <Menu label="Labels: the whole bundle" icon={<LabelIcon />}>
+        {(close) =>
+          (labels.data ?? []).length === 0 ? (
+            <p className="px-2.5 py-1.5 text-ink-faint">No labels yet. Create them in HEY.</p>
+          ) : (
+            <div className="scroll max-h-[320px]">
+              {(labels.data ?? []).map((l) => {
+                // On when every email has it; choosing it again takes it off them all.
+                const on = members.every((m) => m.labels.includes(l.name))
+                const targets = members.filter((m) => m.labels.includes(l.name) === on)
+                return (
+                  <MenuItem
+                    key={l.id}
+                    checked={on}
+                    onSelect={() => {
+                      close()
+                      ask(on ? `Remove “${l.name}” from {all}?` : `Label {all} “${l.name}”?`, on ? 'Remove label' : 'Label', targets.map((m) => ({ type: 'label', postingId: m.id, labelId: l.id, add: !on })), false)
+                    }}
+                  >
+                    {l.name}
+                  </MenuItem>
+                )
+              })}
+            </div>
+          )
+        }
+      </Menu>
+
+      <ToolbarButton
+        label={allSeen ? 'Mark the whole bundle unseen' : 'Mark the whole bundle seen'}
+        onClick={() => ask(allSeen ? 'Mark {all} unseen?' : 'Mark {all} seen?', allSeen ? 'Mark unseen' : 'Mark seen', members.filter((m) => m.seen === allSeen).map((m) => ({ type: 'seen', postingId: m.id, seen: !allSeen })), false)}
+      >
+        <SeenIcon seen={allSeen} />
+      </ToolbarButton>
+
+      <ToolbarButton label="Move the whole bundle to Trash" pressed={pending?.danger} onClick={() => ask('Move {all} to Trash?', 'Move to Trash', each((postingId) => ({ type: 'trash', postingId })), true, true)}>
+        <TrashIcon />
+      </ToolbarButton>
+
+      {pending && (
+        <div
+          role="alertdialog"
+          aria-label="Confirm for the whole bundle"
+          className="pop-in absolute top-full left-0 z-50 mt-1.5 w-[268px] rounded-ui-lg border border-rule-strong bg-pane p-3 text-[13px] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.28)]"
+        >
+          <p className="text-ink">{pending.question.replace('{all}', `${pending.actions.length === 1 ? 'the 1 email' : `all ${pending.actions.length} emails`} from ${sender}`)}</p>
+          <p className="mt-1 text-ink-faint">
+            {pending.danger
+              ? 'This applies to every email in the bundle. You can restore them from Trash in HEY, but not from here.'
+              : `This applies to every email in the bundle${pending.actions.length < n ? ' that needs it' : ''}. Undo (z) brings them all back.`}
+          </p>
+          <div className="mt-3 flex justify-end gap-1.5">
+            <button onClick={() => setPending(null)} className="rounded-ui px-2.5 py-1 text-ink-soft hover:bg-pane-alt">
+              Cancel
+            </button>
+            <button
+              autoFocus
+              onClick={confirm}
+              className={`rounded-ui px-2.5 py-1 font-medium hover:opacity-90 ${pending.danger ? 'bg-danger text-white' : 'bg-accent text-accent-ink'}`}
+            >
+              {pending.button}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

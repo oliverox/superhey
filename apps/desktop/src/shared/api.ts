@@ -150,6 +150,8 @@ export interface Api {
   labels(): Promise<Array<{ id: number; name: string }>>
   /** Runs an action on HEY. `auto` is for behaviours like seen-on-open, kept out of the log. */
   runAction(action: Action, source?: 'user' | 'auto'): Promise<ActionRecord>
+  /** The same kind of action on several threads (a whole bundle); undoing one undoes all. */
+  runActions(actions: Action[]): Promise<ActionRecord[]>
   undoAction(id: number): Promise<ActionRecord>
   recentActions(limit?: number): Promise<ActionRecord[]>
   /** First-time senders waiting in The Screener. */
@@ -189,7 +191,7 @@ export interface Api {
   testAi(engine: ProviderId | 'local'): Promise<AiTestResult>
 }
 
-export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'searchHey', 'searchPeople', 'voice', 'buildVoice', 'setVoiceNotes', 'forgetVoice', 'replyDraft', 'draftReply', 'draftReplyTo', 'discardDraft', 'forwardedOriginal', 'findPostings', 'events', 'calendarRange', 'addEvent', 'deleteEvent', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'markItemDone', 'analysis', 'summarize', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
+export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'searchHey', 'searchPeople', 'voice', 'buildVoice', 'setVoiceNotes', 'forgetVoice', 'replyDraft', 'draftReply', 'draftReplyTo', 'discardDraft', 'forwardedOriginal', 'findPostings', 'events', 'calendarRange', 'addEvent', 'deleteEvent', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'runActions', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'markItemDone', 'analysis', 'summarize', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
 export type ApiMethod = (typeof API_METHODS)[number]
 
 export type ApiEvent =

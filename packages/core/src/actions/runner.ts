@@ -77,7 +77,20 @@ export class ActionRunner extends EventEmitter<{ action: [ActionRecord] }> {
     super()
   }
 
-  async run(action: Action, source: ActionSource = 'user'): Promise<ActionRecord> {
+  /**
+   * Runs the same kind of action on several threads (a whole bundle) as one: logged as a
+   * batch, so undoing any of them undoes them all. The first runs alone, to name the batch.
+   */
+  async runAll(actions: Action[], source: ActionSource = 'user'): Promise<ActionRecord[]> {
+    const [first, ...rest] = actions
+    if (!first) return []
+    const head = await this.run(first, source)
+    this.repo.db.prepare('UPDATE actions SET batch = ? WHERE id = ?').run(head.id, head.id)
+    const tail = await Promise.all(rest.map((a) => this.run(a, source, head.id)))
+    return [head, ...tail]
+  }
+
+  async run(action: Action, source: ActionSource = 'user', batch: number | null = null): Promise<ActionRecord> {
     if (action.type === 'screen') return this.screen(action, source)
     if (action.type === 'todo') return this.todo(action, source)
     if (action.type === 'handled') return this.handled(action, source)
@@ -85,7 +98,7 @@ export class ActionRunner extends EventEmitter<{ action: [ActionRecord] }> {
     if (!posting) throw new Error(`thread ${action.postingId} is not in the cache`)
     const snapshot = this.repo.postingSnapshot(action.postingId)!
     const inverse = this.inverseOf(action)
-    const id = this.insert(action, source, this.describe(action, posting.subject), inverse)
+    const id = this.insert(action, source, this.describe(action, posting.subject), inverse, batch)
     this.publish(id)
 
     try {
@@ -104,8 +117,22 @@ export class ActionRunner extends EventEmitter<{ action: [ActionRecord] }> {
     return this.publish(id)
   }
 
-  /** Reverses a finished action by running its inverse. */
+  /** Reverses a finished action by running its inverse; one of a batch reverses the whole batch. */
   async undo(actionId: number): Promise<ActionRecord> {
+    const row = this.row(actionId)
+    if (!row) throw new Error(`no action ${actionId}`)
+    if (row.batch != null) {
+      const members = this.repo.db
+        .prepare("SELECT id FROM actions WHERE batch = ? AND status = 'done' AND inverse_json IS NOT NULL AND undone_by IS NULL ORDER BY id DESC")
+        .all(row.batch) as Array<{ id: number }>
+      if (!members.length) throw new Error("This action can't be undone")
+      await Promise.all(members.map((m) => this.undoOne(m.id)))
+      return this.publish(actionId)
+    }
+    return this.undoOne(actionId)
+  }
+
+  private async undoOne(actionId: number): Promise<ActionRecord> {
     const row = this.row(actionId)
     if (!row) throw new Error(`no action ${actionId}`)
     if (row.status !== 'done' || !row.inverse_json || row.undone_by != null) throw new Error("This action can't be undone")
@@ -348,13 +375,13 @@ export class ActionRunner extends EventEmitter<{ action: [ActionRecord] }> {
     }
   }
 
-  private insert(action: PostingAction, source: ActionSource, summary: string, inverse: Action[] | null): number {
+  private insert(action: PostingAction, source: ActionSource, summary: string, inverse: Action[] | null, batch: number | null = null): number {
     const res = this.repo.db
       .prepare(
-        `INSERT INTO actions (source, type, params_json, status, created_at, posting_id, summary, inverse_json)
-         VALUES (?, ?, ?, 'running', ?, ?, ?, ?)`,
+        `INSERT INTO actions (source, type, params_json, status, created_at, posting_id, summary, inverse_json, batch)
+         VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?)`,
       )
-      .run(source, action.type, JSON.stringify(action), new Date().toISOString(), action.postingId, summary, inverse ? JSON.stringify(inverse) : null)
+      .run(source, action.type, JSON.stringify(action), new Date().toISOString(), action.postingId, summary, inverse ? JSON.stringify(inverse) : null, batch)
     return Number(res.lastInsertRowid)
   }
 
@@ -387,6 +414,7 @@ interface ActionRow extends Record<string, SQLInputValue> {
   summary: string
   inverse_json: string | null
   undone_by: number | null
+  batch: number | null
 }
 
 function toRecord(r: ActionRow): ActionRecord {

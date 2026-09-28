@@ -316,6 +316,14 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     return this.need().actions.run(checked, source)
   }
 
+  /** The same kind of action on every email of a bundle, undone as one. Thread actions only. */
+  async runActions(actions: unknown) {
+    if (!Array.isArray(actions) || actions.length === 0 || actions.length > 200) throw new Error('bad actions')
+    const checked = actions.map(validateAction)
+    if (checked.some((a) => a.type === 'screen' || a.type === 'todo' || a.type === 'handled')) throw new Error('only thread actions run together')
+    return this.need().actions.runAll(checked, 'user')
+  }
+
   async undoAction(id: number) {
     return this.need().actions.undo(int(id))
   }

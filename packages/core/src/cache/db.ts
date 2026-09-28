@@ -212,6 +212,8 @@ const MIGRATIONS: string[] = [
      SELECT 1 FROM postings p
      WHERE p.topic_id = entries.topic_id AND p.is_bundle = 0 AND p.sender_email = entries.sender_email
        AND json_extract(p.raw_json, '$.alternative_sender_name') IS NOT NULL);`,
+  // Actions taken together (a whole bundle): the first one's id, so they undo as one.
+  `ALTER TABLE actions ADD COLUMN batch INTEGER;`,
 ]
 
 export type Db = DatabaseSync

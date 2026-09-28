@@ -9,7 +9,7 @@ import { isDesigned } from '../mail/html'
 import { splitQuoted, type QuotedSplit } from '../mail/quoted'
 import { repeatedSignatures } from '../mail/signature'
 import { AttachmentStrip, stripAttachmentLines, visibleAttachments } from './Attachments'
-import { ActionBar } from './ActionBar'
+import { ActionBar, BundleActionBar } from './ActionBar'
 import { BundleView } from './BundleView'
 import { ContextPanel } from './ContextPanel'
 import { usePresence } from '../motion'
@@ -100,6 +100,9 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose }: Rea
   const mainRef = useRef<HTMLElement>(null)
   const panel = useContextPanel(mainRef)
   const showPanel = panel.open && !!thread.data && !target.isBundle
+  // A bundle's emails, as its digest shows them: what the top bar's actions act on.
+  const [members, setMembers] = useState<{ bundleId: number; rows: PostingRow[] } | null>(null)
+  const bundleRows = members && members.bundleId === target.postingId ? members.rows : []
 
   return (
     <main ref={mainRef} className="pane flex min-h-0 flex-col bg-pane-alt [view-transition-name:reader]" data-active={active}>
@@ -116,7 +119,14 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose }: Rea
             </svg>
           </button>
         )}
-        <div className="mr-auto">{target.postingId != null && <ActionBar postingId={target.postingId} onLeaveBox={onLeaveBox} />}</div>
+        <div className="mr-auto">
+          {target.postingId != null &&
+            (target.isBundle ? (
+              <BundleActionBar members={bundleRows} sender={target.sender ?? 'this sender'} onLeaveBox={onLeaveBox} />
+            ) : (
+              <ActionBar postingId={target.postingId} onLeaveBox={onLeaveBox} />
+            ))}
+        </div>
         {target.appUrl && (
           <a
             href={target.appUrl}
@@ -156,7 +166,7 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose }: Rea
           {!target.isBundle && topicId != null && <SummaryStrip topicId={topicId} detailsOpen={showPanel} onDetails={panel.toggle} />}
 
             {target.isBundle ? (
-              target.postingId != null && <BundleView bundleId={target.postingId} sender={target.sender ?? 'this sender'} onLeaveBox={onLeaveBox} />
+              target.postingId != null && <BundleView bundleId={target.postingId} sender={target.sender ?? 'this sender'} onLeaveBox={onLeaveBox} onMembers={(rows) => setMembers({ bundleId: target.postingId!, rows })} />
             ) : topicId == null ? (
               // Not a thread (a HEY World post, say): nothing the CLI can read.
               <p className="mt-6 text-ink-soft">
