@@ -51,3 +51,12 @@ export function canReply(p: Pick<PostingRow, 'senderEmail' | 'ai'>, purpose: 'co
   if (purpose === 'confirm' && category === 'booking') return false
   return true
 }
+
+/**
+ * A name written in capitals, in ordinary case: "AIR MAURITIUS CALL CENTRE" is "Air
+ * Mauritius Call Centre". Acronyms without vowels (LLP, DBS) stay; mixed case is left alone.
+ */
+export function quietName(name: string): string {
+  if (!/\p{Lu}{2}/u.test(name) || name !== name.toUpperCase()) return name
+  return name.replace(/\p{L}+/gu, (w) => (/[AEIOUY]/i.test(w) ? w[0] + w.slice(1).toLowerCase() : w))
+}

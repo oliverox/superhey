@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canReply, taskUnder } from './comingUp'
+import { canReply, quietName, taskUnder } from './comingUp'
 
 describe('taskUnder', () => {
   it('drops what the date above already says', () => {
@@ -27,5 +27,14 @@ describe('canReply', () => {
     expect(canReply(p('reservations@hotel.example', 'booking'), 'confirm')).toBe(false)
     expect(canReply(p('reservations@hotel.example', 'booking'), 'move')).toBe(true)
     expect(canReply(p('teacher@school.example', 'personal'), 'confirm')).toBe(true)
+  })
+})
+
+describe('quietName', () => {
+  it('stops a name in capitals from shouting', () => {
+    expect(quietName('AIR MAURITIUS CALL CENTRE')).toBe('Air Mauritius Call Centre')
+    expect(quietName('CARDCITY LLP')).toBe('Cardcity LLP')
+    expect(quietName('Airbnb')).toBe('Airbnb')
+    expect(quietName('DBS')).toBe('DBS')
   })
 })

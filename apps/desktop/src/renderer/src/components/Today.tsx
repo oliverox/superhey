@@ -6,7 +6,7 @@ import { Tag } from './Tag'
 import { MarkRead } from './MarkRead'
 import { api } from '../api'
 import { clock, clockHm, dayName, shortDate } from '../format'
-import { canReply, taskUnder } from '../today/comingUp'
+import { canReply, quietName, taskUnder } from '../today/comingUp'
 import { stripSubjectPrefixes } from '../mail/forwarded'
 import { withShortcut } from '../shortcuts'
 import { Avatar } from './Avatar'
@@ -358,7 +358,7 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
         {items.map((c) => {
           // Coloured only when it needs you soon, clashes, or costs something.
           const pressing = (c.soon && (c.isDeadline || !!c.task)) || !!c.clash || (c.kind === 'bill' && !!c.amount)
-          const from = c.posting.senderName ?? c.posting.senderEmail ?? ''
+          const from = c.posting.senderName ? quietName(c.posting.senderName) : (c.posting.senderEmail ?? '')
           const subject = c.posting.subject ? stripSubjectPrefixes(c.posting.subject) : null
           const reply = c.clash ? canReply(c.posting, 'move') : (c.kind === 'rsvp' || c.kind === 'appointment') && canReply(c.posting, 'confirm')
           return (

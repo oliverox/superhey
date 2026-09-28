@@ -203,8 +203,10 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
     i.done === true || (input.done?.has(itemKey(topicId, i.text)) ?? false) || (i.kind === 'rsvp' && repo.lastEntryIsMine(topicId as TopicId))
   const open = (topicId: number, a: ThreadAnalysis) => (a.actionItems ?? []).filter((i) => !isDone(topicId, i))
 
-  // Checking in for a flight or a hotel is a to-do, whatever the model called it.
-  const kindOf = (i: ThreadAnalysis['actionItems'][number]) => (i.kind === 'appointment' && /^check[- ]?in\b/i.test(i.text) ? 'task' : (i.kind ?? 'task'))
+  // An appointment is one to confirm, book, move or cancel; checking in or getting ready
+  // for guests is a to-do, whatever the model called it.
+  const kindOf = (i: ThreadAnalysis['actionItems'][number]) =>
+    i.kind === 'appointment' && !/\b(confirm|book|re-?schedule|schedule|cancel|appointment)/i.test(i.text) ? 'task' : (i.kind ?? 'task')
   // A sum is only owed on a bill (older readings put an offer's amount on a plain task).
   const owed = (i: ThreadAnalysis['actionItems'][number]) => (i.kind === 'bill' ? (i.amount ?? null) : null)
 
