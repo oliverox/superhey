@@ -315,11 +315,11 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
       <h2 className="eyebrow px-5 pt-4 pb-1.5">Coming up</h2>
       <ul>
         {items.map((c) => (
-          <li key={c.key} className="relative">
+          <li key={c.key} className="group/cu relative" style={{ '--row-bg': pick(c.key, c.posting.id) === 'on' ? 'var(--selection)' : 'var(--pane-sunk)' } as React.CSSProperties}>
             <button
               onClick={() => onOpen(c.key, c.posting)}
               aria-current={pick(c.key, c.posting.id) === 'on' || undefined}
-              className={`relative mx-2 flex w-[calc(100%-1rem)] items-baseline gap-3 rounded-ui py-2 pl-4 text-left ${c.isDeadline ? 'pr-3' : 'pr-[92px] @max-[28rem]:pr-[52px]'} ${markClass(pick(c.key, c.posting.id))}`}
+              className={`relative mx-2 flex w-[calc(100%-1rem)] items-baseline gap-3 rounded-ui py-2 pl-4 text-left pr-3 ${markClass(pick(c.key, c.posting.id))}`}
             >
               <span className="w-[76px] shrink-0 text-[12px] text-ink-faint tabular-nums">
                 {dayName(c.date)}
@@ -340,7 +340,8 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
               </span>
             </button>
             {!c.isDeadline && (
-              <span className="absolute top-1 right-5">
+              // Add appears on hover, over the end of the row; once added (Undo) it stays.
+              <span className="row-actions absolute top-1 right-2 flex rounded-r-ui pr-3 pl-8 opacity-0 transition-opacity duration-(--dur-1) group-hover/cu:opacity-100 focus-within:opacity-100 has-[.keep-visible]:opacity-100">
                 <AddToCalendar item={c} source={c.posting.subject ? stripSubjectPrefixes(c.posting.subject) : undefined} />
               </span>
             )}

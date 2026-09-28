@@ -63,7 +63,7 @@ export function AddToCalendar({ item, source }: { item: MailDate; source?: strin
 
   if (added != null) {
     return (
-      <span className="inline-flex h-7 shrink-0 items-center gap-1.5 text-[13px] font-medium text-ok">
+      <span className="keep-visible inline-flex h-7 shrink-0 items-center gap-1.5 text-[13px] font-medium text-ok">
         <CheckIcon />
         <span className="@max-[28rem]:hidden">Added</span>
         <button
