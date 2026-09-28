@@ -202,6 +202,16 @@ const MIGRATIONS: string[] = [
   `,
   // Whether new events can go on a calendar: yours, not a subscribed feed, not HEY's own list.
   `ALTER TABLE calendars ADD COLUMN writable INTEGER NOT NULL DEFAULT 1;`,
+  // Messages stored before they took the email's own From name: take it from their posting.
+  `UPDATE entries SET sender_name = (
+     SELECT p.sender_name FROM postings p
+     WHERE p.topic_id = entries.topic_id AND p.is_bundle = 0 AND p.sender_email = entries.sender_email
+       AND json_extract(p.raw_json, '$.alternative_sender_name') IS NOT NULL
+     ORDER BY p.active_at DESC LIMIT 1)
+   WHERE EXISTS (
+     SELECT 1 FROM postings p
+     WHERE p.topic_id = entries.topic_id AND p.is_bundle = 0 AND p.sender_email = entries.sender_email
+       AND json_extract(p.raw_json, '$.alternative_sender_name') IS NOT NULL);`,
 ]
 
 export type Db = DatabaseSync
