@@ -102,6 +102,10 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
         const selected = p.id === selectedId
         const gone = leaving.has(p.id)
         const folded = !search && !!collapsed?.has(group)
+        // In Previously seen, a quiet heading where the day changes (Today, Yesterday…).
+        const bucket = group === 'Previously seen' ? dayBucket(p.activeAt) : null
+        const prevBucket = i > 0 && groupOf(rows[i - 1]!, heldNew) === group && group === 'Previously seen' ? dayBucket(rows[i - 1]!.activeAt) : null
+        const day = bucket && bucket !== prevBucket && !(showHeader && bucket === 'Today') ? bucket : null
         return (
           <Fragment key={p.id}>
             {showHeader && (
@@ -125,46 +129,57 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
                 )}
               </li>
             )}
+            {!folded && !search && day && <li aria-hidden className="px-5 pt-3 pb-1 text-[11px] font-medium text-ink-faint">{day}</li>}
             {!folded && <li
               ref={gone ? foldShut : undefined}
               role={gone ? undefined : 'option'}
               aria-hidden={gone || undefined}
               aria-selected={gone ? undefined : selected}
               onClick={gone ? undefined : () => onOpen(p)}
-              className={`group/row relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2.5 pr-3 pl-4 transition-colors duration-(--dur-1) ${
+              className={`group/row relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2 pr-3 pl-3 transition-colors duration-(--dur-1) ${
                 gone ? 'row-leave pointer-events-none' : 'rise'
               } ${selected && !gone ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
               style={{ animationDelay: `${Math.min(i, 12) * 18}ms`, '--row-bg': selected ? 'var(--selection)' : 'var(--pane-sunk)' } as React.CSSProperties}
             >
-              {!p.seen && <span className="absolute top-1/2 left-[5px] size-1.5 -translate-y-1/2 rounded-full bg-new" aria-label="Unseen" />}
               {!gone && !search && <MarkRead posting={p} />}
-              <Avatar avatar={p.avatar} stacked={p.isBundle} blockedTrackers={p.blockedTrackers} />
+              <span className={p.seen ? 'opacity-75' : ''}>
+                <Avatar avatar={p.avatar} size={28} muted />
+              </span>
               <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2">
-                  <span className={`min-w-0 truncate ${p.seen ? 'text-ink-soft' : 'font-semibold text-ink'}`}>
-                    {p.subject ? mark(stripSubjectPrefixes(p.isBundle ? p.subject.split(' • ')[0]! : p.subject)) : '(no subject)'}
+                {/* Who, then when (and whether it wants a reply). */}
+                <div className="flex items-center gap-2">
+                  {!p.seen && <span className="size-1.5 shrink-0 rounded-full bg-new" aria-label="Unseen" />}
+                  <span className={`min-w-0 truncate text-[14px] ${p.seen ? 'text-ink-soft' : 'font-semibold text-ink'}`}>{mark(senderLabel(p))}</span>
+                  {p.isBundle && <BundleCount posting={p} />}
+                  {!p.isBundle && (p.entryCount ?? 0) > 1 && <span className="shrink-0 text-[12px] text-ink-faint tabular-nums">{p.entryCount}</span>}
+                  <span className="ml-auto flex shrink-0 items-center gap-2 pl-2">
+                    {p.ai?.needsReply && (
+                      <span className="flex items-center gap-1 text-[12px] font-medium text-accent" title={p.ai.replyReason ? `Needs your reply: ${p.ai.replyReason}` : 'Needs your reply'}>
+                        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                          <path d="M6.5 3.5 2.5 7.5l4 4" />
+                          <path d="M2.5 7.5h7a4 4 0 0 1 4 4V13" />
+                        </svg>
+                        Reply
+                      </span>
+                    )}
+                    {p.hasAttachments && <Paperclip />}
+                    <span className={`text-[12px] tabular-nums ${p.seen ? 'text-ink-faint' : 'font-medium text-ink-soft'}`}>{search ? shortDate(p.activeAt) : rowTime(p.activeAt, p.seen)}</span>
                   </span>
-                  {p.hasAttachments && <Paperclip />}
-                  {(p.entryCount ?? 0) > 1 && <span className="shrink-0 text-[11px] text-ink-faint">{p.entryCount}</span>}
-                  <span className="ml-auto shrink-0 pl-1 text-[12px] text-ink-faint">{shortDate(p.activeAt)}</span>
                 </div>
-                <div className="mt-0.5 flex min-w-0 items-baseline gap-1.5 text-[13px] text-ink-faint">
+                {/* What: tags, the subject, and the AI's line (or HEY's opening words). A bundle: its latest subject. */}
+                <div className="mt-px flex min-w-0 items-baseline gap-1.5 text-[13px]">
                   {search?.boxNames[p.boxId] && <span className="shrink-0 text-[12px] font-medium text-ink-faint">{search.boxNames[p.boxId]}</span>}
                   {!p.isBundle && <SubjectTags subject={p.subject} sender={senderLabel(p)} labels={p.labels} />}
-                  {p.labels.map((label) => (
+                  {p.labels.filter((label) => tagKind(label, senderLabel(p)) !== 'sender').map((label) => (
                     <Tag key={label} kind="label">
                       {label}
                     </Tag>
                   ))}
-                  {p.ai?.needsReply && (
-                    <Tag kind="reply" title={p.ai.replyReason ? `Needs your reply: ${p.ai.replyReason}` : 'Needs your reply'}>
-                      Reply
-                    </Tag>
-                  )}
                   <span className="min-w-0 truncate">
-                    <span className="font-medium text-ink-soft">{mark(senderLabel(p))}</span>
-                    {/* The AI's one-line summary when it has read the thread; HEY's opening words otherwise. */}
-                    {p.isBundle ? <> · {bundleNote(p)}</> : (p.ai?.summary ?? p.summary) && <> – {mark((p.ai?.summary ?? p.summary)!)}</>}
+                    <span className={p.seen ? 'text-ink-soft' : 'font-medium text-ink'}>
+                      {p.subject ? mark(stripSubjectPrefixes(p.isBundle ? p.subject.split(' • ')[0]! : p.subject)) : '(no subject)'}
+                    </span>
+                    {!p.isBundle && (p.ai?.summary ?? p.summary) && <span className="text-ink-faint"> – {mark((p.ai?.summary ?? p.summary)!)}</span>}
                   </span>
                 </div>
               </div>
@@ -274,6 +289,39 @@ function bundleNote(p: PostingRow) {
   if (p.seen && !p.bundleCount) return 'all read'
   const n = Math.max(p.bundleCount ?? 0, p.subject.split(' • ').length)
   return n > 1 ? `${n} new` : 'new'
+}
+
+/** A bundle's count, as a chip: "5 new", or "all read". */
+function BundleCount({ posting: p }: { posting: PostingRow }) {
+  const note = bundleNote(p)
+  return <span className={`shrink-0 rounded-full px-1.5 text-[11px] leading-[17px] font-medium tabular-nums ${note === 'all read' ? 'bg-pane-sunk text-ink-faint' : 'bg-accent-wash text-accent'}`}>{note}</span>
+}
+
+const monthYear = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' })
+const monthOnly = new Intl.DateTimeFormat(undefined, { month: 'long' })
+const weekday = new Intl.DateTimeFormat(undefined, { weekday: 'short' })
+const clockFmt = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
+const dayMonth = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
+const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+
+/** Which day heading a read email falls under: Today, Yesterday, This week, then its month. */
+export function dayBucket(iso: string | null, now = new Date()): string {
+  if (!iso) return 'Earlier'
+  const d = new Date(iso)
+  const days = Math.round((midnight(now) - midnight(d)) / 86_400_000)
+  if (days <= 0) return 'Today'
+  if (days === 1) return 'Yesterday'
+  if (days < 7) return 'Earlier this week'
+  return d.getFullYear() === now.getFullYear() ? monthOnly.format(d) : monthYear.format(d)
+}
+
+/** A row's time under its day heading: the clock today and yesterday, the weekday this week, else the date. */
+function rowTime(iso: string | null, seen: boolean) {
+  if (!iso) return ''
+  if (!seen) return shortDate(iso)
+  const d = new Date(iso)
+  const days = Math.round((midnight(new Date()) - midnight(d)) / 86_400_000)
+  return days <= 1 ? clockFmt.format(d) : days < 7 ? weekday.format(d) : dayMonth.format(d)
 }
 
 function Empty({ children }: { children: React.ReactNode }) {

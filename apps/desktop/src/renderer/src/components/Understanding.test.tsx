@@ -81,13 +81,14 @@ describe('list rows', () => {
   it('show the AI’s summary instead of HEY’s opening words, and Reply when a thread needs you', () => {
     act(() => root.render(createElement(Lists.PostingList, { postings: [row({ ai: { summary: 'Alice asks about Friday lunch', needsReply: true, replyReason: 'asks if Friday works', expectsReply: false, category: 'personal' } })], loading: false, selectedId: null, onOpen: () => {} })))
     const li = host.querySelector('[role=option]')!
-    expect(li.textContent).toContain('ReplyAlice – Alice asks about Friday lunch')
+    expect(li.textContent).toContain('AliceReply')
+    expect(li.textContent).toContain('Lunch on Friday? – Alice asks about Friday lunch')
     expect(li.textContent).not.toContain('Are you free')
   })
 
   it('show HEY’s opening words before the thread is read, and no Reply', () => {
     act(() => root.render(createElement(Lists.PostingList, { postings: [row({})], loading: false, selectedId: null, onOpen: () => {} })))
-    expect(host.querySelector('[role=option]')!.textContent).toContain('Alice – Are you free for lunch on…')
+    expect(host.querySelector('[role=option]')!.textContent).toContain('Lunch on Friday? – Are you free for lunch on…')
     expect(host.textContent).not.toContain('Reply')
   })
 })

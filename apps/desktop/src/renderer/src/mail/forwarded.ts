@@ -155,6 +155,12 @@ export function tagKind(tag: string, sender: string | null): 'action' | 'sender'
   if (ACTION_TAG.test(tag.trim())) return 'action'
   const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
   if (sender && norm(tag) && (norm(sender) === norm(tag) || norm(sender).startsWith(norm(tag)))) return 'sender'
+  // The sender's initials ("NSA" from National Spiritual Assembly), or a name in brackets.
+  if (sender) {
+    const initials = (sender.match(/\p{Lu}[\p{L}'’]*/gu) ?? []).map((w) => w[0]).join('')
+    const bracketed = /\(([^)]+)\)/.exec(sender)?.[1]
+    if ((initials.length >= 2 && norm(initials) === norm(tag)) || (bracketed && norm(bracketed) === norm(tag))) return 'sender'
+  }
   return 'list'
 }
 
