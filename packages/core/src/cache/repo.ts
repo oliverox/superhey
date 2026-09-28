@@ -109,6 +109,8 @@ export interface CalendarRow {
   name: string | null
   kind: string
   color: string | null
+  /** New events can be added to it. */
+  writable: boolean
 }
 
 export interface SearchHit {
@@ -653,8 +655,13 @@ export class Repo {
   replaceCalendars(calendars: S.Calendar[]) {
     transaction(this.db, () => {
       this.run('DELETE FROM calendars')
-      for (const c of calendars)
-        this.run('INSERT INTO calendars (id, name, kind, color) VALUES (?, ?, ?, ?)', c.id, n(c.name), c.kind, n(c.color))
+      for (const c of calendars) {
+        // Only calendars you own and that aren't subscribed feeds take new events (HEY answers
+        // 404 otherwise, as it does for its own unnamed "personal" list).
+        const x = c as { owned?: boolean | null; external?: boolean | null }
+        const writable = c.kind === 'normal' && x.owned === true && x.external !== true
+        this.run('INSERT INTO calendars (id, name, kind, color, writable) VALUES (?, ?, ?, ?, ?)', c.id, n(c.name), c.kind, n(c.color), b(writable))
+      }
     })
   }
 
@@ -703,7 +710,7 @@ export class Repo {
   }
 
   calendars(): CalendarRow[] {
-    return this.all<CalendarRow>('SELECT id, name, kind, color FROM calendars ORDER BY id')
+    return this.all<Omit<CalendarRow, 'writable'> & { writable: number }>('SELECT id, name, kind, color, writable FROM calendars ORDER BY id').map((c) => ({ ...c, writable: c.writable === 1 }))
   }
 
   replaceTodos(todos: S.Todo[]) {

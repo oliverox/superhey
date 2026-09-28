@@ -200,6 +200,8 @@ const MIGRATIONS: string[] = [
     created_at   TEXT NOT NULL
   );
   `,
+  // Whether new events can go on a calendar: yours, not a subscribed feed, not HEY's own list.
+  `ALTER TABLE calendars ADD COLUMN writable INTEGER NOT NULL DEFAULT 1;`,
 ]
 
 export type Db = DatabaseSync

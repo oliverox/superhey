@@ -43,8 +43,11 @@ const showTime = (hm: string) => clockFmt.format(new Date(2026, 0, 1, ...(hm.spl
  * colour. ⌘↵ adds; Esc cancels.
  */
 export function EventForm({ draft, calendars, onDone, onCancel }: { draft: EventDraft; calendars: CalendarRow[]; onDone: (id: number | null, event: NewEvent) => void; onCancel: () => void }) {
-  // Calendars you can add to: not HEY's "Maybe" list.
-  const choices = useMemo(() => calendars.filter((c) => c.kind !== 'maybe'), [calendars])
+  // Calendars you can add to: yours, not subscribed feeds or HEY's own lists. "Personal" first.
+  const choices = useMemo(() => {
+    const own = calendars.filter((c) => c.writable && c.kind === 'normal')
+    return [...own.filter((c) => c.name === 'Personal'), ...own.filter((c) => c.name !== 'Personal')]
+  }, [calendars])
   const [title, setTitle] = useState(draft.title)
   const [allDay, setAllDay] = useState(!draft.startTime)
   const [startsOn, setStartsOn] = useState(draft.startsOn)
