@@ -911,9 +911,9 @@ export class Repo {
    * activity), with their latest posting: what Today can say about mail. A thread with
    * something new since its analysis is left out until it's read again.
    */
-  currentAnalyses(sinceIso: string): Array<{ posting: PostingRow; analysis: Record<string, unknown> }> {
+  currentAnalyses(sinceIso: string): Array<{ posting: PostingRow; analysis: Record<string, unknown>; version: number }> {
     const rows = this.all<Record<string, unknown>>(
-      `SELECT p.*, a.json AS analysis_json FROM thread_analysis a
+      `SELECT p.*, a.json AS analysis_json, a.version AS analysis_version FROM thread_analysis a
        JOIN postings p ON p.topic_id = a.topic_id AND p.is_bundle = 0
          AND p.id = (SELECT q.id FROM postings q WHERE q.topic_id = a.topic_id AND q.is_bundle = 0 ORDER BY q.active_at DESC, q.id DESC LIMIT 1)
        WHERE p.active_at >= ? AND a.active_at >= p.active_at
@@ -923,7 +923,7 @@ export class Repo {
     const postings = this.withAnalysis(rows.map(toPostingRow))
     return rows.flatMap((r, i) => {
       try {
-        return [{ posting: postings[i]!, analysis: JSON.parse(r.analysis_json as string) as Record<string, unknown> }]
+        return [{ posting: postings[i]!, analysis: JSON.parse(r.analysis_json as string) as Record<string, unknown>, version: r.analysis_version as number }]
       } catch {
         return []
       }

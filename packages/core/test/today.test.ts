@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ANALYSIS_VERSION } from '../src/ai/analysis'
 import { openDb } from '../src/cache/db'
 import { Repo } from '../src/cache/repo'
 import * as S from '../src/cli/schemas'
@@ -7,9 +8,9 @@ import { alice, me, posting } from './fixtures'
 import { PostingId, TopicId } from '../src/ids'
 
 /** Records what the AI made of a thread, as of its latest activity. */
-function analyse(repo: Repo, topicId: number, activeAt: string, a: Record<string, unknown> = {}) {
+function analyse(repo: Repo, topicId: number, activeAt: string, a: Record<string, unknown> = {}, version = ANALYSIS_VERSION) {
   const full = { summary: 's', needsReply: false, replyReason: null, expectsReply: false, category: 'personal', actionItems: [], dates: [], amounts: [], ...a }
-  repo.saveAnalysis(TopicId(topicId), activeAt, 'claude', 'claude-haiku-4-5', full as never, 2)
+  repo.saveAnalysis(TopicId(topicId), activeAt, 'claude', 'claude-haiku-4-5', full as never, version)
 }
 
 const BOX = { imbox: 1, feedbox: 2, trailbox: 3, laterbox: 4, asidebox: 5, bubblebox: 6 } as const
@@ -127,6 +128,18 @@ describe('Today', () => {
     analyse(repo, 977, daysAgo(1), { category: 'promotion', actionItems: [{ ...offer, text: 'Claim your offer' }] })
     const t = buildToday(repo, input())
     expect(t.due.actions.map((a) => [a.text, a.amount])).toEqual([['Pre-invest up to $11,326.13', null]])
+  })
+
+  it('has what it shows from older readings read again', () => {
+    const { repo, put } = setup()
+    put('imbox', { id: 78, topic_id: 978, active_at: daysAgo(1) })
+    put('imbox', { id: 79, topic_id: 979, active_at: daysAgo(1) })
+    const offer = { actionItems: [{ text: 'Pre-invest', due: '2026-09-27', event: false, kind: 'task', amount: null, done: false }] }
+    analyse(repo, 978, daysAgo(1), offer, ANALYSIS_VERSION - 1)
+    analyse(repo, 979, daysAgo(1), { ...offer, actionItems: [{ ...offer.actionItems[0], text: 'Send the form' }] })
+    const t = buildToday(repo, input())
+    expect(t.comingUp.map((c) => c.label)).toEqual(['Pre-invest', 'Send the form'])
+    expect(t.needsAnalysis).toEqual([978])
   })
 
   it('says when a date clashes with the calendar, but not with itself once added', () => {

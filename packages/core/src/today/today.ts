@@ -1,4 +1,4 @@
-import type { ThreadAnalysis } from '../ai/analysis'
+import { ANALYSIS_VERSION, type ThreadAnalysis } from '../ai/analysis'
 import type { Contact, EventRow, PostingRow, Repo, TodoRow } from '../cache/repo'
 import type { TopicId } from '../ids'
 
@@ -101,7 +101,7 @@ export interface TodayView {
   newSince: { since: string | null; boxes: Array<{ boxId: number; kind: string; name: string; count: number; threads: PostingRow[] }> }
   /** How many items above are yours to handle (events, dates and new mail aren't). */
   toHandle: number
-  /** Threads Today can't judge until they're analysed (candidates for waiting on others). */
+  /** Threads to analyse: ones Today can't judge yet (waiting on others?), and shown ones read with older instructions. */
   needsAnalysis: TopicId[]
 }
 
@@ -230,6 +230,7 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
   // judges that; "you wrote last" alone is mostly files sent and thanks said).
   const candidates = repo.waitingOnOthers(input.myEmails, new Date(now.getTime() - WAITING_UNTIL_DAYS * DAY).toISOString(), new Date(now.getTime() - WAITING_AFTER_DAYS * DAY).toISOString())
   const needsAnalysis = candidates.filter((p) => !analysisOf.has(p.topicId!)).map((p) => p.topicId!)
+  const outdated = new Set(analysed.filter((r) => r.version < ANALYSIS_VERSION).map((r) => r.posting.topicId!))
   const waiting = items(
     candidates.filter((p) => analysisOf.get(p.topicId!)?.expectsReply),
     seen,
@@ -293,7 +294,13 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
         .map((b) => ({ ...b, threads: repo.unseenThreadsSince(b.boxId, input.since ?? startOfToday.toISOString(), NEW_SHOWN) })),
     },
     toHandle: todos.length + actions.length + bubbled.length + needsReply.length + replyLater.length + waiting.length,
-    needsAnalysis,
+    // Plus what's shown from a reading made with older instructions, so it's judged again.
+    needsAnalysis: [
+      ...new Set([
+        ...needsAnalysis,
+        ...[...actions, ...needsReply, ...waiting, ...comingUp.slice(0, 8)].map((i) => i.posting.topicId!).filter((id) => outdated.has(id)),
+      ]),
+    ],
   }
 }
 
