@@ -319,7 +319,7 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
             <button
               onClick={() => onOpen(c.key, c.posting)}
               aria-current={pick(c.key, c.posting.id) === 'on' || undefined}
-              className={`relative mx-2 flex w-[calc(100%-1rem)] items-baseline gap-3 rounded-ui py-2 pl-4 text-left pr-3 ${markClass(pick(c.key, c.posting.id))}`}
+              className={`relative mx-2 flex w-[calc(100%-1rem)] items-baseline gap-3 rounded-ui py-2 pl-4 text-left pr-3 ${markClass(pick(c.key, c.posting.id)).replaceAll('hover:bg-pane-sunk', 'group-hover/cu:bg-pane-sunk')}`}
             >
               <span className="w-[76px] shrink-0 text-[12px] text-ink-faint tabular-nums">
                 {dayName(c.date)}
