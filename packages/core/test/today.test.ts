@@ -124,10 +124,11 @@ describe('Today', () => {
     put('imbox', { id: 80, topic_id: 980, active_at: daysAgo(1) })
     analyse(repo, 980, daysAgo(1), {
       category: 'booking',
-      actionItems: [{ text: 'Check in for flight MK 288', due: '2026-09-28', event: false, kind: 'task', amount: null, done: false }],
+      actionItems: [{ text: 'Check in for flight MK 288', due: '2026-09-28', event: true, kind: 'appointment', amount: null, done: false }],
       dates: [{ label: 'Flight to Antananarivo', date: '2026-09-28', time: '14:20' }],
     })
-    expect(buildToday(repo, input()).comingUp.map((c) => [c.label, c.task ?? null])).toEqual([['Flight to Antananarivo', 'Check in for flight MK 288']])
+    // A check-in is a to-do, even when the model calls it an appointment.
+    expect(buildToday(repo, input()).comingUp.map((c) => [c.label, c.task ?? null, c.kind])).toEqual([['Flight to Antananarivo', 'Check in for flight MK 288', 'task']])
     const done = new Set([itemKey(980, 'Check in for flight MK 288')])
     expect(buildToday(repo, input({ done })).comingUp.map((c) => [c.label, c.task ?? null])).toEqual([['Flight to Antananarivo', null]])
   })
