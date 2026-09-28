@@ -183,7 +183,7 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose }: Rea
             )}
           </article>
         </div>
-        <PanelSlot show={showPanel}>{thread.data && <ContextPanel thread={thread.data} onOpenThread={onOpenThread} />}</PanelSlot>
+        <PanelSlot show={showPanel}>{thread.data && <ContextPanel thread={thread.data} onOpenThread={onOpenThread} onClose={panel.toggle} />}</PanelSlot>
       </div>
     </main>
   )

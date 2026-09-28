@@ -8,6 +8,7 @@ import { extension, formatBytes, visibleAttachments } from './Attachments'
 import { CopyButton } from './People'
 import { Avatar } from './Avatar'
 import { Tag } from './Tag'
+import { withShortcut } from '../shortcuts'
 
 const PEOPLE_PREVIEW = 6
 
@@ -15,14 +16,26 @@ const PEOPLE_PREVIEW = 6
  * Beside the email when the window is wide: what the AI made of the thread (when it has),
  * who is involved, what else they've sent, and every file in the thread.
  */
-export function ContextPanel({ thread, onOpenThread }: { thread: ThreadView; onOpenThread: (p: PostingRow) => void }) {
+export function ContextPanel({ thread, onOpenThread, onClose }: { thread: ThreadView; onOpenThread: (p: PostingRow) => void; onClose?: () => void }) {
   const entries = thread.entries
   // Latest sender who isn't you: the person this thread is "with".
   const counterpart = [...entries].reverse().find((e) => e.from && !e.from.isMe)?.from ?? null
   const files = entries.flatMap((e) => visibleAttachments(e.attachments))
 
   return (
-    <aside aria-label="Thread details" className="scroll w-[var(--panel-w)] shrink-0 border-l border-rule bg-pane px-5 pt-6 pb-10 text-[13px]">
+    <aside aria-label="Thread details" className="scroll relative w-[var(--panel-w)] shrink-0 border-l border-rule bg-pane px-5 pt-6 pb-10 text-[13px]">
+      {onClose && (
+        <button
+          onClick={onClose}
+          aria-label="Close details"
+          title={withShortcut('Close details', 'details')}
+          className="absolute top-4 right-4 z-10 flex size-7 items-center justify-center rounded-ui text-ink-faint hover:bg-pane-sunk hover:text-ink"
+        >
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden>
+            <path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
       <Understanding topicId={thread.topicId} subject={thread.subject ?? undefined} />
       <People thread={thread} />
       {counterpart && <MoreFrom person={counterpart} topicId={thread.topicId} onOpen={onOpenThread} />}
@@ -34,8 +47,8 @@ export function ContextPanel({ thread, onOpenThread }: { thread: ThreadView; onO
 /** A calm section: a small heading (and count), then its rows; sections are ruled apart. */
 function Section({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
   return (
-    <section className="border-t border-rule pt-4 pb-5 first:border-t-0 first:pt-0">
-      <h2 className="eyebrow mb-2 flex items-baseline px-2">
+    <section className="group/section border-t border-rule pt-4 pb-5 first-of-type:border-t-0 first-of-type:pt-0">
+      <h2 className="eyebrow mb-2 flex min-h-7 items-center px-2 group-first-of-type/section:pr-10">
         {title}
         {count != null && <span className="ml-auto font-normal tabular-nums">{count}</span>}
       </h2>
