@@ -39,6 +39,7 @@ const todo = (id: number, title: string, daysLate: number): TodoItem => ({ key: 
 function data(over: Partial<TodayData> = {}): TodayData {
   const d: TodayData = {
     generatedAt: '2026-09-25T08:00:00Z',
+    alerts: [],
     due: { todos: [todo(1, 'File the declaration', 3)], actions: [], bubbled: [thread(2, 'Reflections on Growth', 40)] },
     needsReply: [],
     replyLater: [thread(3, 'Invitation to the field day', 9)],
@@ -152,6 +153,32 @@ describe('forms, bills, RSVPs and clashes', () => {
     await click([...coming.querySelectorAll('button')].find((b) => b.textContent === 'Done')!)
     expect(calls).toContainEqual(['markItemDone', [80, 'Pay the school trip']])
     expect([...coming.querySelectorAll('button')].some((b) => b.textContent === 'Ask to move')).toBe(true)
+  })
+})
+
+describe('from Paper Trail', () => {
+  it('asks about a security alert first, and “It was me” takes it off', async () => {
+    const onOpen = vi.fn()
+    const t = data({ alerts: [{ key: 'alert:7', posting: posting(7, 'Chase security alert', 'Chase'), text: 'New device signed in to Chase', days: 0, box: 'Paper Trail' }] })
+    act(() => root.render(createElement(Today.TodayList, { today: t, selectedId: null, onOpen, onGoToBox: vi.fn() })))
+    const first = host.querySelector('section')!
+    expect(first.getAttribute('aria-label')).toBe('Was this you?')
+    expect(first.textContent).toContain('New device signed in to ChaseChase · today · Paper Trail')
+    await click([...first.querySelectorAll('button')].find((b) => b.textContent === 'It was me')!)
+    expect(calls).toContainEqual(['markItemDone', [70, 'New device signed in to Chase']])
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it('says when a bill pays itself, and doesn’t nudge about it', () => {
+    const t = data({
+      comingUp: [
+        { key: 'date:8:0', posting: posting(8, 'Statement'), label: 'Pay the Chase statement', date: '2099-01-02', time: null, isDeadline: true, kind: 'bill', amount: { amount: 412, currency: 'USD' }, soon: true, autopay: { how: 'likely', notice: 'Your automatic payment is scheduled', at: '2099-01-01T10:00:00Z' } },
+      ],
+    })
+    act(() => root.render(createElement(Today.TodayList, { today: t, selectedId: null, onOpen: vi.fn(), onGoToBox: vi.fn() })))
+    const coming = host.querySelector('section[aria-label="Coming up"]')!
+    expect(coming.textContent).toContain('Pay the Chase statementAutopay likely')
+    expect(coming.querySelector('.text-attn')).toBeNull()
   })
 })
 

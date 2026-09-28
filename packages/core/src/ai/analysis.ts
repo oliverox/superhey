@@ -55,6 +55,11 @@ export const ThreadAnalysis = z.object({
     )
     .describe('At most 5 dates the user takes part in or must act by, from today on: their deadlines, bookings, check-ins, renewals, appointments. Not events advertised to them (launches, webinars, livestreams). Past dates only if they are missed deadlines. No duplicates.'),
   amounts: z.array(z.object({ label: z.string(), amount: z.number(), currency: z.string() })).describe('At most 5 sums of money that matter: totals paid or due, payouts, fees.'),
+  securityAlert: z
+    .string()
+    .nullable()
+    .describe('When the email reports something done on one of the user\'s accounts that they should check was them (a sign-in from a new device or place, a password, email or phone change, a new payee, card or bank account): one short line of what happened, e.g. "New device signed in to Chase". Else null. Not security advice or marketing.'),
+  autopay: z.boolean().describe('True when the thread says a payment will be or was taken automatically (autopay, direct debit, "your automatic payment is scheduled").'),
 })
 export type ThreadAnalysis = z.infer<typeof ThreadAnalysis>
 
@@ -86,13 +91,15 @@ Rules:
 - expectsReply: only when the user wrote the latest message: true if it asks the others for an answer or action ("Can you send the invoice?", "Let me know"), false for sending files, thanks, or FYI.
 - Dates: resolve relative dates ("Friday", "next week") against the message's date, as YYYY-MM-DD. Leave out dates you are unsure of. An action item has a due date only when the thread states one.
 - Only the user's own dates: events a company advertises to them (launches, webinars, livestreams, sales) are not their dates.
+- Statements and bills: a balance the user has to pay by a date is an action item (kind bill, the amount due and the due date), even when autopay will pay it; say autopay in the autopay field. A statement with nothing to pay has no action item.
+- Deadlines in paperwork (a shareholder vote, a benefits election, "respond by") are action items with that due date.
 - Marketing is not a to-do: an offer or nudge to buy, invest, upgrade, subscribe or claim something ("don't miss out", "reserve your spot", "invest up to $X", "offer ends Friday") is category promotion, even from a service the user has an account with. It has no action items and no dates; its sums are not amounts due. Action items are only what the user owes, has agreed to, or is required to do.
 - Times: give them as the thread states them, with the time zone it names (as an IANA name); the app converts them to the user's time. No zone named: the user's own time.
 - Never repeat secrets: one-time codes, passwords, PINs, verification or security codes, full card or account numbers. Say "a one-time code" instead.
 - Keep everything short and plain. Start summaries with the substance; the app already shows the sender. Write in the thread's language.`
 
 /** Bumped when the instructions change, so threads are read again as they come up. */
-export const ANALYSIS_VERSION = 9
+export const ANALYSIS_VERSION = 10
 
 /** The prompt: the thread as data, newest messages kept when it's long. */
 export function analysisPrompt(
@@ -294,6 +301,8 @@ function tidy(a: ThreadAnalysis): ThreadAnalysis {
     actionItems: advertising(a) ? [] : a.actionItems.slice(0, 5).map((i) => ({ ...i, text: scrub(i.text), amount: i.kind === 'bill' ? i.amount : null })),
     dates: a.dates.slice(0, 5).map((d) => inLocalTime(d)),
     amounts: a.amounts.slice(0, 5),
+    securityAlert: a.securityAlert ? clipWords(scrub(a.securityAlert.trim()), 90) : null,
+    autopay: a.autopay === true,
   }
 }
 

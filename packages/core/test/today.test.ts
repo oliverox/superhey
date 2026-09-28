@@ -119,6 +119,36 @@ describe('Today', () => {
     expect(after.comingUp).toEqual([])
   })
 
+  it('raises security alerts from Paper Trail until you say it was you, not from the Imbox', () => {
+    const { repo, put } = setup()
+    put('trailbox', { id: 81, topic_id: 981, active_at: daysAgo(1), seen: true })
+    put('imbox', { id: 82, topic_id: 982, active_at: daysAgo(1) })
+    put('trailbox', { id: 83, topic_id: 983, active_at: daysAgo(20), seen: true })
+    analyse(repo, 981, daysAgo(1), { category: 'notification', securityAlert: 'New device signed in to Chase' })
+    analyse(repo, 982, daysAgo(1), { category: 'notification', securityAlert: 'New sign-in to Vercel' }) // the Imbox shows it already
+    analyse(repo, 983, daysAgo(20), { category: 'notification', securityAlert: 'Password changed' }) // too old
+    const t = buildToday(repo, input())
+    expect(t.alerts.map((a) => [a.text, a.box, a.days])).toEqual([['New device signed in to Chase', 'trailbox', 1]])
+    expect(t.toHandle).toBe(1)
+    expect(buildToday(repo, input({ done: new Set([itemKey(981, 'New device signed in to Chase')]) })).alerts).toEqual([])
+  })
+
+  it('says when a bill will pay itself: from its own email, or likely from the sender’s autopay notice', () => {
+    const { repo, put } = setup()
+    const chase = { id: 30, name: 'Chase', email_address: 'no.reply.alerts@chase.com' }
+    const bill = (text: string) => ({ category: 'bill', actionItems: [{ text, due: '2026-09-25', event: false, kind: 'bill', amount: { amount: 412, currency: 'USD' }, done: false }] })
+    put('trailbox', { id: 84, topic_id: 984, active_at: daysAgo(2), creator: chase, seen: true })
+    put('trailbox', { id: 85, topic_id: 985, active_at: daysAgo(1), creator: chase, seen: true, name: 'Your automatic payment is scheduled' })
+    put('trailbox', { id: 86, topic_id: 986, active_at: daysAgo(3), seen: true })
+    put('trailbox', { id: 87, topic_id: 987, active_at: daysAgo(3), seen: true, creator: bob })
+    analyse(repo, 984, daysAgo(2), bill('Pay the Chase statement'))
+    analyse(repo, 985, daysAgo(1), { category: 'bill', autopay: true })
+    analyse(repo, 986, daysAgo(3), { ...bill('Pay the water bill'), autopay: true })
+    analyse(repo, 987, daysAgo(3), bill('Pay the phone bill'))
+    const by = Object.fromEntries(buildToday(repo, input()).due.actions.map((a) => [a.text, a.autopay?.how ?? null]))
+    expect(by).toEqual({ 'Pay the Chase statement': 'likely', 'Pay the water bill': 'yes', 'Pay the phone bill': null })
+  })
+
   it('keeps the date when its to-do is done', () => {
     const { repo, put } = setup()
     put('imbox', { id: 80, topic_id: 980, active_at: daysAgo(1) })

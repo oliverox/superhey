@@ -12,6 +12,7 @@ import {
   AiError,
   ThreadAnalyzer,
   ANALYSIS_VERSION,
+  worthReading,
   AiSettings,
   aiMode,
   checkKey,
@@ -59,6 +60,8 @@ export interface SecretStore {
 }
 
 const BACKFILL_DELAY_MS = 1_000
+/** How far back Paper Trail is read for Today (a statement's bill can be due weeks later). */
+const PAPER_TRAIL_DAYS = 45
 
 export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements Api {
   private core: Core | null = null
@@ -646,9 +649,18 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
       if (topicId === this.openTopic && (core.repo.analysis(topicId) as { needsReply?: boolean } | null)?.needsReply) drafter.enqueue(topicId)
     })
     analyzer.on('error', (err) => console.error('[analysis]', err.message))
-    core.engine.on('mail', ({ topicId, boxKind }) => topicId != null && boxKind === 'imbox' && analyzer.enqueue(topicId))
+    // Paper Trail: only what looks like a security alert, a bill or a deadline (shown on Today).
+    const readPaperTrail = () => {
+      const since = new Date(Date.now() - PAPER_TRAIL_DAYS * 86_400_000).toISOString()
+      for (const t of core.repo.unanalysedInBox('trailbox', since, 40, ANALYSIS_VERSION)) if (worthReading(t.subject)) analyzer.enqueue(t.topicId)
+    }
+    core.engine.on('mail', ({ topicId, boxKind }) => {
+      if (topicId != null && boxKind === 'imbox') analyzer.enqueue(topicId)
+      if (boxKind === 'trailbox') readPaperTrail()
+    })
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
     for (const topicId of core.repo.unanalysedUnread('imbox', weekAgo, 25, ANALYSIS_VERSION)) analyzer.enqueue(topicId)
+    readPaperTrail()
   }
 
   private needAi(): AiClient {

@@ -84,6 +84,8 @@ const ANSWER: ThreadAnalysis = {
   actionItems: [{ text: 'Answer Alice about Friday lunch', due: '2026-09-26', event: false, kind: 'task', amount: null, done: false }],
   dates: [{ label: 'Lunch', date: '2026-09-26', time: null, endDate: null, endTime: null, timeZone: null, link: null }],
   amounts: [],
+  securityAlert: null,
+  autopay: false,
 }
 
 function setup(opts: { settings?: AiSettings; key?: string | null; answer?: ThreadAnalysis } = {}) {

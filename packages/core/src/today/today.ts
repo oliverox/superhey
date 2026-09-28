@@ -37,6 +37,22 @@ export interface ActionItem {
   /** What sort of thing it is (a form to return, a bill to pay…), and a bill's sum. */
   kind: TaskKind
   amount: Money | null
+  /** A bill: paid automatically ('yes': this email says so; 'likely': the sender sent an autopay notice lately). */
+  autopay?: Autopay
+}
+
+/** Whether a bill will be paid without you: 'yes' from its own email, 'likely' from the sender's recent autopay notice. */
+export type Autopay = { how: 'yes' } | { how: 'likely'; notice: string; at: string }
+
+/** Something done on one of your accounts to check was you (a sign-in, a new payee), from mail you don't see often. */
+export interface AlertItem {
+  key: string
+  posting: PostingRow
+  /** What happened, in a line: "New device signed in to Chase". */
+  text: string
+  days: number
+  /** Which box it's in ("Paper Trail"). */
+  box: string
 }
 
 export type TaskKind = 'form' | 'bill' | 'rsvp' | 'appointment' | 'task'
@@ -67,6 +83,7 @@ export interface ComingUpItem {
   /** The kind of thing to do (for a deadline, or the task above), and a bill's sum. */
   kind?: TaskKind
   amount?: Money | null
+  autopay?: Autopay
   /** Within the next two days: nudged. */
   soon?: boolean
   /** An event already in the calendar at that time. */
@@ -86,6 +103,8 @@ export interface TodoItem {
 
 export interface TodayView {
   generatedAt: string
+  /** Security alerts from boxes you don't read closely (Paper Trail, The Feed): was it you? */
+  alerts: AlertItem[]
   /** To-dos overdue or for today, what mail says is due by today, and threads bubbled up now. */
   due: { todos: TodoItem[]; actions: ActionItem[]; bubbled: ThreadItem[] }
   /** Threads the AI judged need your reply (and you haven't parked in Reply Later). */
@@ -127,6 +146,10 @@ export const itemKey = (topicId: number, text: string) => `${topicId}|${text.tri
 const ANALYSED_DAYS = 60
 /** How far ahead Coming up looks. */
 const COMING_UP_DAYS = 7
+/** How long a security alert stays on Today (unless you say it was you). */
+const ALERT_DAYS = 14
+/** How far apart a statement and its sender's autopay notice may be and still be paired. */
+const AUTOPAY_PAIR_DAYS = 20
 
 /**
  * Whether an action item is being somewhere at a set time rather than work to finish. Told
@@ -210,13 +233,27 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
   // A sum is only owed on a bill (older readings put an offer's amount on a plain task).
   const owed = (i: ThreadAnalysis['actionItems'][number]) => (i.kind === 'bill' ? (i.amount ?? null) : null)
 
+  // Autopay notices by sender ("Your automatic payment is scheduled"), to pair with bills.
+  const notices = analysed.filter((r) => r.a.autopay === true && r.posting.senderEmail != null)
+  const autopayOf = (posting: PostingRow, a: ThreadAnalysis, i: ThreadAnalysis['actionItems'][number]): Autopay | undefined => {
+    if (kindOf(i) !== 'bill') return undefined
+    if (a.autopay === true) return { how: 'yes' }
+    const near = notices.find(
+      (r) =>
+        r.posting.id !== posting.id &&
+        r.posting.senderEmail === posting.senderEmail &&
+        Math.abs(Date.parse(r.posting.activeAt ?? '') - Date.parse(posting.activeAt ?? '')) <= AUTOPAY_PAIR_DAYS * DAY,
+    )
+    return near ? { how: 'likely', notice: near.posting.subject, at: near.posting.activeAt ?? '' } : undefined
+  }
+
   const actions: ActionItem[] = []
   for (const { posting, a } of analysed) {
     if (!shown(posting) || seen.has(posting.topicId!) || lapsed(a) || a.category === 'newsletter' || a.category === 'promotion') continue
     // A call or meeting that has passed is simply over, not late.
     const due = open(posting.topicId!, a).filter((i) => i.due != null && (isEvent(i) ? i.due === today : i.due <= today))
     due.forEach((i, n) =>
-      actions.push({ key: `action:${posting.id}:${n}`, posting, text: i.text, due: i.due!, daysLate: Math.round((dayStart(today) - dayStart(i.due!)) / DAY), kind: kindOf(i), amount: owed(i) }),
+      actions.push({ key: `action:${posting.id}:${n}`, posting, text: i.text, due: i.due!, daysLate: Math.round((dayStart(today) - dayStart(i.due!)) / DAY), kind: kindOf(i), amount: owed(i), autopay: autopayOf(posting, a, i) }),
     )
     if (due.length) seen.add(posting.topicId!)
   }
@@ -257,11 +294,11 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
       if (!i.due || i.due <= today) continue
       // A task due on the day of one of the email's dates belongs with it (one row, not two).
       const sameDay = comingUp.find((c) => c.posting.id === posting.id && !c.isDeadline && c.date === i.due && !c.task)
-      if (sameDay) Object.assign(sameDay, { task: i.text, kind: kindOf(i), amount: owed(i) })
+      if (sameDay) Object.assign(sameDay, { task: i.text, kind: kindOf(i), amount: owed(i), autopay: autopayOf(posting, a, i) })
       else {
         add(i.text, i.due, null, true)
         const row = comingUp.at(-1)
-        if (row?.label === i.text && row.date === i.due) Object.assign(row, { kind: kindOf(i), amount: owed(i) })
+        if (row?.label === i.text && row.date === i.due) Object.assign(row, { kind: kindOf(i), amount: owed(i), autopay: autopayOf(posting, a, i) })
       }
     }
   }
@@ -281,8 +318,23 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
     daysLate: t.dueAt ? Math.max(0, Math.round((startOfToday.getTime() - dayStart(t.dueAt)) / DAY)) : 0,
   }))
 
+  // Security alerts from boxes you don't read closely: the Imbox puts them in front of you
+  // already. Until you say it was you (Done), or two weeks pass.
+  const boxList = repo.boxes()
+  const imbox = boxList.find((b) => b.kind === 'imbox')?.id
+  const alertSeen = new Set<number>()
+  const alerts: AlertItem[] = analysed
+    .filter(({ posting, a }) => {
+      if (!a.securityAlert || posting.boxId === imbox || !shown(posting) || daysSince(posting.activeAt) > ALERT_DAYS) return false
+      if (input.done?.has(itemKey(posting.topicId!, a.securityAlert)) || alertSeen.has(posting.topicId!)) return false
+      alertSeen.add(posting.topicId!)
+      return true
+    })
+    .map(({ posting, a }) => ({ key: `alert:${posting.id}`, posting, text: a.securityAlert!, days: daysSince(posting.activeAt), box: boxList.find((b) => b.id === posting.boxId)?.name ?? '' }))
+
   return {
     generatedAt: now.toISOString(),
+    alerts,
     due: { todos, actions, bubbled },
     needsReply,
     replyLater,
@@ -297,12 +349,12 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
         .filter((b) => b.count > 0 && b.kind !== 'bubblebox' && b.kind !== 'laterbox')
         .map((b) => ({ ...b, threads: repo.unseenThreadsSince(b.boxId, input.since ?? startOfToday.toISOString(), NEW_SHOWN) })),
     },
-    toHandle: todos.length + actions.length + bubbled.length + needsReply.length + replyLater.length + waiting.length,
+    toHandle: alerts.length + todos.length + actions.length + bubbled.length + needsReply.length + replyLater.length + waiting.length,
     // Plus what's shown from a reading made with older instructions, so it's judged again.
     needsAnalysis: [
       ...new Set([
         ...needsAnalysis,
-        ...[...actions, ...needsReply, ...waiting, ...comingUp.slice(0, 8)].map((i) => i.posting.topicId!).filter((id) => outdated.has(id)),
+        ...[...alerts, ...actions, ...needsReply, ...waiting, ...comingUp.slice(0, 8)].map((i) => i.posting.topicId!).filter((id) => outdated.has(id)),
       ]),
     ],
   }
