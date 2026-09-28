@@ -13,6 +13,7 @@ export function Avatar({
   size = 36,
   stacked = false,
   blockedTrackers = false,
+  muted = false,
   seed,
 }: {
   avatar: PostingRow['avatar']
@@ -22,12 +23,17 @@ export function Avatar({
   /** Several emails bundled into one row. */
   stacked?: boolean
   blockedTrackers?: boolean
+  /** A quiet tint of the colour with the letters in its shade, for lists (logos unchanged). */
+  muted?: boolean
 }) {
   const [loaded, setLoaded] = useState(false)
   const letters = avatar.initials.slice(0, 3)
   // HEY fits the letters to the width; scale down as they get more numerous.
   const fontSize = size * (letters.length >= 3 ? 0.3 : letters.length === 2 ? 0.36 : 0.44)
-  const face = { width: size, height: size, background: avatar.color ?? paletteColor(seed ?? avatar.initials) }
+  const hue = avatar.color ?? paletteColor(seed ?? avatar.initials)
+  const face = muted
+    ? { width: size, height: size, background: `color-mix(in oklab, ${hue} 24%, var(--pane))`, color: `color-mix(in oklab, ${hue} 55%, var(--ink))` }
+    : { width: size, height: size, background: hue }
 
   return (
     <span className="relative inline-flex shrink-0" style={{ width: size, height: size }} aria-hidden>
@@ -35,7 +41,7 @@ export function Avatar({
         <span className="avatar-shape absolute opacity-45" style={{ ...face, transform: `translate(${size * 0.14}px, ${-size * 0.14}px)` }} />
       )}
       <span
-        className="avatar-shape relative flex items-center justify-center overflow-hidden font-extrabold tracking-[-0.03em] text-black/85"
+        className={`avatar-shape relative flex items-center justify-center overflow-hidden tracking-[-0.03em] ${muted ? 'font-bold' : 'font-extrabold text-black/85'}`}
         style={{ ...face, fontSize, fontFamily: 'var(--font-ui)' }}
       >
         {letters}

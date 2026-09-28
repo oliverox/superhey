@@ -228,6 +228,8 @@ describe('mailing-list tags', () => {
 
 describe('kinds of subject tag', () => {
   it('tells what needs you from a list name, and hides a tag that repeats the sender', () => {
+    expect(tagKind('NSA', 'National Spiritual Assembly')).toBe('sender')
+    expect(tagKind('NSA', 'National Spiritual Assembly (NSA)')).toBe('sender')
     expect(tagKind('Action required', 'Stripe')).toBe('action')
     expect(tagKind('URGENT', 'Bank')).toBe('action')
     expect(tagKind('Reminder', null)).toBe('action')
