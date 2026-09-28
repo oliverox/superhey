@@ -76,13 +76,24 @@ export function TodayList({
   // The row you clicked: an email can appear in several sections, and only that one is
   // highlighted; the others get a thin mark (see `pick`).
   const [clicked, setClicked] = useState<string | null>(null)
+  // The new email you opened stays in "New since you last looked" (no longer bold) until you
+  // open another, instead of vanishing as it's marked seen.
+  const [held, setHeld] = useState<{ posting: PostingRow; box: { boxId: number; kind: string; name: string } } | null>(null)
   useEffect(() => {
     listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
   }, [selectedId])
 
   if (!today) return <p className="px-5 py-10 text-center text-ink-faint">Loading…</p>
   const { due, needsReply, replyLater, waiting, comingUp } = today
-  const fresh = today.newSince.boxes
+  const boxes = today.newSince.boxes
+  const fresh =
+    held && !boxes.some((b) => b.boxId === held.box.boxId)
+      ? [...boxes, { ...held.box, count: 1, threads: [{ ...held.posting, seen: true }] }]
+      : boxes.map((b) => {
+          if (!held || held.box.boxId !== b.boxId || b.threads.some((p) => p.id === held.posting.id)) return b
+          const threads = [...b.threads, { ...held.posting, seen: true }].sort((x, y) => (y.activeAt ?? '').localeCompare(x.activeAt ?? ''))
+          return { ...b, threads, count: b.count + 1 }
+        })
   // Every row of the open email, in the order they're drawn; the one to highlight is the
   // one clicked, else the first.
   const rowsOfOpen = [
@@ -98,6 +109,8 @@ export function TodayList({
   const pick = (key: string, postingId: number): Mark => (postingId !== selectedId ? null : key === primary ? 'on' : 'echo')
   const openFrom = (key: string, p: PostingRow) => {
     setClicked(key)
+    const box = key.startsWith('new:') ? fresh.find((b) => b.threads.some((t) => t.id === p.id)) : undefined
+    setHeld(box ? { posting: p, box: { boxId: box.boxId, kind: box.kind, name: box.name } } : null)
     onOpen(p)
   }
 
