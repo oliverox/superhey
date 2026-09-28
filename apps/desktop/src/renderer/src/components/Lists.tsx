@@ -150,16 +150,18 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
                 <div className="flex items-center gap-2">
                   {!p.seen && <span className="size-1.5 shrink-0 rounded-full bg-new" aria-label="Unseen" />}
                   <span className={`min-w-0 truncate text-[14px] ${p.seen ? 'text-ink-soft' : 'font-semibold text-ink'}`}>{mark(senderLabel(p))}</span>
-                  {p.isBundle && <BundleCount posting={p} />}
-                  {!p.isBundle && (p.entryCount ?? 0) > 1 && <span className="shrink-0 text-[12px] text-ink-faint tabular-nums">{p.entryCount}</span>}
+                  {(p.isBundle ? bundleSize(p) : (p.entryCount ?? 0)) > 1 && (
+                    <span className="shrink-0 text-[12px] text-ink-faint tabular-nums" title={p.isBundle ? 'Emails in this bundle' : 'Messages in this thread'}>
+                      {p.isBundle ? bundleSize(p) : p.entryCount}
+                    </span>
+                  )}
                   <span className="ml-auto flex shrink-0 items-center gap-2 pl-2">
                     {p.ai?.needsReply && (
-                      <span className="flex items-center gap-1 text-[12px] font-medium text-accent" title={p.ai.replyReason ? `Needs your reply: ${p.ai.replyReason}` : 'Needs your reply'}>
-                        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <span className="text-accent" title={p.ai.replyReason ? `Needs your reply: ${p.ai.replyReason}` : 'Needs your reply'} aria-label="Needs your reply">
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                           <path d="M6.5 3.5 2.5 7.5l4 4" />
                           <path d="M2.5 7.5h7a4 4 0 0 1 4 4V13" />
                         </svg>
-                        Reply
                       </span>
                     )}
                     {p.hasAttachments && <Paperclip />}
@@ -281,20 +283,9 @@ function senderLabel(p: PostingRow) {
   return name || p.senderEmail || 'Unknown'
 }
 
-/**
- * "2 new" for a bundle: from the cache, or HEY's joined subjects when not yet loaded. A read
- * bundle keeps the subjects of what it once held, so they don't count as new.
- */
-function bundleNote(p: PostingRow) {
-  if (p.seen && !p.bundleCount) return 'all read'
-  const n = Math.max(p.bundleCount ?? 0, p.subject.split(' • ').length)
-  return n > 1 ? `${n} new` : 'new'
-}
-
-/** A bundle's count, as a chip: "5 new", or "all read". */
-function BundleCount({ posting: p }: { posting: PostingRow }) {
-  const note = bundleNote(p)
-  return <span className={`shrink-0 rounded-full px-1.5 text-[11px] leading-[17px] font-medium tabular-nums ${note === 'all read' ? 'bg-pane-sunk text-ink-faint' : 'bg-accent-wash text-accent'}`}>{note}</span>
+/** How many emails a bundle holds: from the cache, or HEY's joined subjects when not yet loaded. */
+function bundleSize(p: PostingRow) {
+  return Math.max(p.bundleCount ?? 0, p.subject.split(' • ').length)
 }
 
 const monthYear = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' })
