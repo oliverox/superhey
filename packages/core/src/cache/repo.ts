@@ -931,6 +931,20 @@ export class Repo {
   }
 
   /** Unread threads in a box since `sinceIso` that haven't been analysed as they are now: the first run's backlog. */
+  /** A box's threads since a date without a current analysis, read or not, newest first, with their subject. */
+  unanalysedInBox(boxKind: string, sinceIso: string, limit: number, version = 1): Array<{ topicId: TopicId; subject: string }> {
+    return this.all<{ topic_id: number; subject: string }>(
+      `SELECT p.topic_id, p.subject FROM postings p
+       WHERE p.box_id IN (SELECT id FROM boxes WHERE kind = ?) AND p.is_bundle = 0 AND p.topic_id IS NOT NULL AND p.active_at >= ?
+         AND NOT EXISTS (SELECT 1 FROM thread_analysis a WHERE a.topic_id = p.topic_id AND a.active_at >= p.active_at AND a.version >= ?)
+       ORDER BY p.active_at DESC LIMIT ?`,
+      boxKind,
+      sinceIso,
+      version,
+      limit,
+    ).map((r) => ({ topicId: TopicId(r.topic_id), subject: r.subject }))
+  }
+
   unanalysedUnread(boxKind: string, sinceIso: string, limit: number, version = 1): TopicId[] {
     return this.all<{ topic_id: number }>(
       `SELECT p.topic_id FROM postings p

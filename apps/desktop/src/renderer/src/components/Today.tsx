@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import type { ActionItem, ComingUpItem, Money, PostingRow, TaskKind, ThreadItem, TodayView, TodoItem } from '@shared/api'
+import type { ActionItem, AlertItem, Autopay, ComingUpItem, Money, PostingRow, TaskKind, ThreadItem, TodayView, TodoItem } from '@shared/api'
 import { replyWith } from '../outbox'
 import { AddToCalendar } from './AddToCalendar'
 import { Tag } from './Tag'
@@ -38,6 +38,8 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 export function doneFor(t: TodayData | null, postingId: number): (() => Promise<unknown>) | null {
   if (!t) return null
   const on = (items: Array<{ posting: PostingRow }>) => items.find((i) => i.posting.id === postingId)?.posting
+  const alert = t.alerts.find((a) => a.posting.id === postingId)
+  if (alert?.posting.topicId != null) return () => api.markItemDone(alert.posting.topicId!, alert.text)
   const handled = on(t.due.actions) ?? on(t.needsReply) ?? on(t.waiting)
   if (handled?.topicId != null) return () => api.markHandled(handled.topicId!)
   if (on(t.due.bubbled)) return () => api.runAction({ type: 'unbubble', postingId })
@@ -54,7 +56,7 @@ export function todayRows(t: TodayData | null): PostingRow[] {
 
 export function todayThreads(t: TodayData | null): PostingRow[] {
   if (!t) return []
-  const all = [...t.due.actions.map((a) => a.posting), ...t.due.bubbled.map((i) => i.posting), ...[...t.needsReply, ...t.replyLater, ...t.waiting].map((i) => i.posting)]
+  const all = [...t.alerts.map((a) => a.posting), ...t.due.actions.map((a) => a.posting), ...t.due.bubbled.map((i) => i.posting), ...[...t.needsReply, ...t.replyLater, ...t.waiting].map((i) => i.posting)]
   return all.filter((p, i) => all.findIndex((q) => q.id === p.id) === i)
 }
 
@@ -86,7 +88,7 @@ export function TodayList({
   }, [selectedId])
 
   if (!today) return <p className="px-5 py-10 text-center text-ink-faint">Loading…</p>
-  const { due, needsReply, replyLater, waiting, comingUp } = today
+  const { alerts, due, needsReply, replyLater, waiting, comingUp } = today
   const boxes = today.newSince.boxes
   const fresh =
     held && !boxes.some((b) => b.boxId === held.box.boxId)
@@ -99,6 +101,7 @@ export function TodayList({
   // Every row of the open email, in the order they're drawn; the one to highlight is the
   // one clicked, else the first.
   const rowsOfOpen = [
+    ...alerts.map((a) => [a.key, a.posting.id] as const),
     ...due.actions.map((a) => [a.key, a.posting.id] as const),
     ...[...due.bubbled, ...needsReply, ...replyLater, ...waiting].map((i) => [i.key, i.posting.id] as const),
     ...comingUp.map((c) => [c.key, c.posting.id] as const),
@@ -125,6 +128,15 @@ export function TodayList({
     <div ref={listRef} className="scroll min-h-0 flex-1 pb-6">
       {/* Full width when nothing's open: kept to a readable measure. */}
       <div className="mx-auto w-full max-w-[760px]">
+      {alerts.length > 0 && (
+        <Section title="Was this you?" count={alerts.length}>
+          {(limit) =>
+            alerts
+              .slice(0, limit)
+              .map((a) => <AlertRow key={a.key} item={a} mark={pick(a.key, a.posting.id)} onOpen={() => openFrom(a.key, a.posting)} onDone={() => void api.markItemDone(a.posting.topicId!, a.text)} />)
+          }
+        </Section>
+      )}
       {due.todos.length + due.actions.length + due.bubbled.length > 0 && (
         <Section title="Due" count={due.todos.length + due.actions.length + due.bubbled.length}>
           {(limit) => (
@@ -255,6 +267,51 @@ function NewRow({ posting: p, mark, onOpen }: { posting: PostingRow; mark: Mark;
   )
 }
 
+/**
+ * A security alert from mail you don't read closely: what happened, and where it came
+ * from. Done (it was you) takes it off; otherwise it stays two weeks.
+ */
+function AlertRow({ item, mark, onOpen, onDone }: { item: AlertItem; mark: Mark; onOpen: () => void; onDone: () => void }) {
+  const selected = mark === 'on'
+  const p = item.posting
+  return (
+    <li
+      role="option"
+      aria-selected={selected}
+      onClick={onOpen}
+      className={`group relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2.5 pr-3 pl-4 ${markClass(mark)}`}
+      style={{ '--row-bg': selected ? 'var(--selection)' : 'var(--pane-sunk)' } as React.CSSProperties}
+    >
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-attn-wash text-attn" aria-hidden>
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M8 1.75 2.75 3.75v4c0 3.1 2.2 5.4 5.25 6.5 3.05-1.1 5.25-3.4 5.25-6.5v-4L8 1.75Z" />
+          <path d="M8 5.25v3.25M8 10.75v.01" />
+        </svg>
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-medium text-ink">{item.text}</div>
+        <div className="mt-0.5 truncate text-[13px] text-ink-faint">
+          <span className="text-ink-soft">{p.senderName ? quietName(p.senderName) : p.senderEmail}</span> · {item.days === 0 ? 'today' : item.days === 1 ? 'yesterday' : `${item.days} days ago`}
+          {item.box && ` · ${item.box}`}
+        </div>
+      </div>
+      <RowActions onDone={onDone} doneLabel="It was me" />
+    </li>
+  )
+}
+
+/** Whether a bill pays itself: "Autopay" when its email says so, "Autopay likely" from the sender's recent notice. */
+function AutopayNote({ autopay }: { autopay?: Autopay }) {
+  if (!autopay) return null
+  return autopay.how === 'yes' ? (
+    <span className="shrink-0 text-[12px] font-medium text-ok">Autopay</span>
+  ) : (
+    <span className="shrink-0 text-[12px] text-ink-faint" title={`From “${autopay.notice}”${autopay.at ? `, ${shortDate(autopay.at)}` : ''}`}>
+      Autopay likely
+    </span>
+  )
+}
+
 /** A deadline found in mail: what to do, from which thread, and how late. */
 function ActionRow({ item, mark, onOpen, onDone }: { item: ActionItem; mark: Mark; onOpen: () => void; onDone: () => void }) {
   const selected = mark === 'on'
@@ -270,8 +327,9 @@ function ActionRow({ item, mark, onOpen, onDone }: { item: ActionItem; mark: Mar
       <Avatar avatar={p.avatar} size={32} seed={p.senderEmail ?? undefined} />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
-          {item.kind !== 'task' && <KindTag kind={item.kind} amount={item.amount} />}
+          {item.kind !== 'task' && <KindTag kind={item.kind} amount={item.amount} pressing={!item.autopay} />}
           <span className="truncate font-medium text-ink">{item.text}</span>
+          <AutopayNote autopay={item.autopay} />
         </div>
         <div className="mt-0.5 truncate text-[13px] text-ink-faint">
           <span className={item.daysLate > 0 ? 'text-danger' : 'text-ink-soft'}>{why.action(item)}</span> · {p.subject ? stripSubjectPrefixes(p.subject) : p.senderName}
@@ -283,7 +341,7 @@ function ActionRow({ item, mark, onOpen, onDone }: { item: ActionItem; mark: Mar
 }
 
 /** Done and Not now, shown on hover (or keyboard focus), without opening the row. */
-function RowActions({ onDone, onNotNow }: { onDone?: () => void; onNotNow?: () => void }) {
+function RowActions({ onDone, onNotNow, doneLabel = 'Done' }: { onDone?: () => void; onNotNow?: () => void; doneLabel?: string }) {
   const button = (label: string, title: string, run: () => void, strong = false) => (
     <button
       onClick={(e) => {
@@ -298,7 +356,7 @@ function RowActions({ onDone, onNotNow }: { onDone?: () => void; onNotNow?: () =
   )
   return (
     <span className="row-actions pointer-events-none absolute inset-y-0 right-0 flex items-center rounded-r-ui pr-2 pl-8 opacity-0 transition-opacity duration-(--dur-1) group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
-      {onDone && button('Done', withShortcut('Done: you’ve dealt with it', 'done'), onDone, true)}
+      {onDone && button(doneLabel, withShortcut(doneLabel === 'Done' ? 'Done: you’ve dealt with it' : `${doneLabel}: take it off Today`, 'done'), onDone, true)}
       {onNotNow && button('Not now', 'Not now: off Today until tomorrow, or until something new arrives', onNotNow)}
     </span>
   )
@@ -357,7 +415,7 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
       <ul>
         {items.map((c) => {
           // Coloured only when it needs you soon, clashes, or costs something.
-          const pressing = (c.soon && (c.isDeadline || !!c.task)) || !!c.clash || (c.kind === 'bill' && !!c.amount)
+          const pressing = !c.autopay && ((c.soon && (c.isDeadline || !!c.task)) || !!c.clash || (c.kind === 'bill' && !!c.amount))
           const from = c.posting.senderName ? quietName(c.posting.senderName) : (c.posting.senderEmail ?? '')
           const subject = c.posting.subject ? stripSubjectPrefixes(c.posting.subject) : null
           const reply = c.clash ? canReply(c.posting, 'move') : (c.kind === 'rsvp' || c.kind === 'appointment') && canReply(c.posting, 'confirm')
@@ -368,7 +426,7 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
               aria-current={pick(c.key, c.posting.id) === 'on' || undefined}
               className={`relative mx-2 flex w-[calc(100%-1rem)] items-baseline gap-3 rounded-ui py-2 pl-4 text-left pr-3 ${markClass(pick(c.key, c.posting.id)).replaceAll('hover:bg-pane-sunk', 'group-hover/cu:bg-pane-sunk')}`}
             >
-              <span className={`w-[76px] shrink-0 text-[12px] tabular-nums ${c.soon && (c.isDeadline || c.task) ? 'font-medium text-attn' : 'text-ink-faint'}`}>
+              <span className={`w-[76px] shrink-0 text-[12px] tabular-nums ${c.soon && (c.isDeadline || c.task) && !c.autopay ? 'font-medium text-attn' : 'text-ink-faint'}`}>
                 {dayName(c.date)}
                 {c.time && <span className="block">{clockHm(c.time)}</span>}
               </span>
@@ -376,6 +434,7 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
                 <span className="flex min-w-0 items-center gap-1.5 text-ink">
                   {c.isDeadline && <KindTag kind={c.kind ?? 'task'} amount={c.amount} due pressing={pressing} />}
                   <span className="truncate">{c.label}</span>
+                  {c.isDeadline && <AutopayNote autopay={c.autopay} />}
                 </span>
                 {c.task && (
                   <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px] text-ink-soft">
@@ -383,6 +442,7 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
                     <span className="truncate" title={c.task}>
                       {taskUnder(c.task, c.label)}
                     </span>
+                    <AutopayNote autopay={c.autopay} />
                   </span>
                 )}
                 {c.clash && (
