@@ -25,12 +25,15 @@ import type {
   ThreadItem,
   TodoItem,
   ActionItem,
+  Money,
+  TaskKind,
+  Clash,
   ComingUpItem,
   ReplyDraftRow,
   StoredVoice,
 } from '@superhey/core'
 
-export type { CalendarRow, NewEvent, OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, HeySearchPage, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId, TodayView, ThreadItem, TodoItem, ActionItem, ComingUpItem, ReplyDraftRow, StoredVoice }
+export type { Clash, Money, TaskKind, CalendarRow, NewEvent, OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, HeySearchPage, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId, TodayView, ThreadItem, TodoItem, ActionItem, ComingUpItem, ReplyDraftRow, StoredVoice }
 
 /** Everything Settings shows about AI. API keys themselves never leave the main process. */
 export interface AiStatus {
@@ -171,6 +174,8 @@ export interface Api {
   hideFromToday(key: string, activeAt: string): Promise<void>
   /** "Done" for a thread you dealt with elsewhere: no longer needs your reply, nor you theirs. */
   markHandled(topicId: number): Promise<ActionRecord>
+  /** A to-do from mail ticked Done (off Today), or not (`done: false`). */
+  markItemDone(topicId: number, text: string, done?: boolean): Promise<void>
   /** What the AI made of a thread: summary, needs reply, action items, dates, amounts. */
   analysis(topicId: number): Promise<ThreadAnalysisView | null>
   aiStatus(): Promise<AiStatus>
@@ -184,7 +189,7 @@ export interface Api {
   testAi(engine: ProviderId | 'local'): Promise<AiTestResult>
 }
 
-export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'searchHey', 'searchPeople', 'voice', 'buildVoice', 'setVoiceNotes', 'forgetVoice', 'replyDraft', 'draftReply', 'draftReplyTo', 'discardDraft', 'forwardedOriginal', 'findPostings', 'events', 'calendarRange', 'addEvent', 'deleteEvent', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'analysis', 'summarize', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
+export const API_METHODS = ['status', 'retry', 'boxes', 'postings', 'thread', 'threadHtml', 'search', 'searchHey', 'searchPeople', 'voice', 'buildVoice', 'setVoiceNotes', 'forgetVoice', 'replyDraft', 'draftReply', 'draftReplyTo', 'discardDraft', 'forwardedOriginal', 'findPostings', 'events', 'calendarRange', 'addEvent', 'deleteEvent', 'senderThreads', 'openAttachment', 'posting', 'bundleThreads', 'labels', 'runAction', 'undoAction', 'recentActions', 'senders', 'pickFiles', 'sendMessage', 'cancelSend', 'saveDraft', 'screener', 'refreshScreener', 'today', 'hideFromToday', 'markHandled', 'markItemDone', 'analysis', 'summarize', 'aiStatus', 'setAiSettings', 'setApiKey', 'localModels', 'testAi'] as const satisfies ReadonlyArray<keyof Api>
 export type ApiMethod = (typeof API_METHODS)[number]
 
 export type ApiEvent =

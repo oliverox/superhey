@@ -81,7 +81,7 @@ const ANSWER: ThreadAnalysis = {
   replyOptions: ['Yes, Friday works', 'Suggest another day'],
   expectsReply: false,
   category: 'personal',
-  actionItems: [{ text: 'Answer Alice about Friday lunch', due: '2026-09-26', event: false }],
+  actionItems: [{ text: 'Answer Alice about Friday lunch', due: '2026-09-26', event: false, kind: 'task', amount: null, done: false }],
   dates: [{ label: 'Lunch', date: '2026-09-26', time: null, endDate: null, endTime: null, timeZone: null, link: null }],
   amounts: [],
 }
@@ -159,7 +159,7 @@ describe('ThreadAnalyzer', () => {
   })
 
   it('stores only what the prompt allows (short summary, reason only when a reply is needed, 5 items)', async () => {
-    const noisy: ThreadAnalysis = { ...ANSWER, summary: 'x'.repeat(300), needsReply: false, replyReason: 'n/a', actionItems: Array.from({ length: 9 }, (_, i) => ({ text: `do ${i}`, due: null, event: false })) }
+    const noisy: ThreadAnalysis = { ...ANSWER, summary: 'x'.repeat(300), needsReply: false, replyReason: 'n/a', actionItems: Array.from({ length: 9 }, (_, i) => ({ text: `do ${i}`, due: null, event: false, kind: 'task', amount: null, done: false })) }
     const { repo, analyzer } = setup({ answer: noisy })
     analyzer.enqueue(TopicId(900))
     await analyzer.idle()
@@ -220,7 +220,7 @@ describe('instructions versions', () => {
   })
 
   it('stores summaries, reasons and action items scrubbed', async () => {
-    const { repo, analyzer } = setup({ answer: { ...ANSWER, summary: 'Your one-time password: 998877', actionItems: [{ text: 'Enter code 445566', due: null, event: false }] } })
+    const { repo, analyzer } = setup({ answer: { ...ANSWER, summary: 'Your one-time password: 998877', actionItems: [{ text: 'Enter code 445566', due: null, event: false, kind: 'task', amount: null, done: false }] } })
     analyzer.enqueue(TopicId(900))
     await analyzer.idle()
     const a = repo.analysis(TopicId(900)) as unknown as ThreadAnalysis

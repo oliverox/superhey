@@ -34,6 +34,22 @@ export interface ActionItem {
   due: string
   /** Whole days past its deadline; 0 when it's today. */
   daysLate: number
+  /** What sort of thing it is (a form to return, a bill to pay…), and a bill's sum. */
+  kind: TaskKind
+  amount: Money | null
+}
+
+export type TaskKind = 'form' | 'bill' | 'rsvp' | 'appointment' | 'task'
+export interface Money {
+  amount: number
+  currency: string
+}
+
+/** A calendar event at the same time as a date in mail. */
+export interface Clash {
+  title: string
+  startsAt: string
+  endsAt: string | null
 }
 
 /** A date found in mail, in the next week. */
@@ -48,6 +64,13 @@ export interface ComingUpItem {
   isDeadline: boolean
   /** Something to do by then from the same email ("Confirm attendance"), shown with the date. */
   task?: string | null
+  /** The kind of thing to do (for a deadline, or the task above), and a bill's sum. */
+  kind?: TaskKind
+  amount?: Money | null
+  /** Within the next two days: nudged. */
+  soon?: boolean
+  /** An event already in the calendar at that time. */
+  clash?: Clash | null
   /** When it ends, and its meeting link, when the mail says (for adding it to the calendar). */
   endDate?: string | null
   endTime?: string | null
@@ -93,7 +116,12 @@ export interface TodayInput {
    * return when the thread changes, or when the time comes. (A bare string: activity only.)
    */
   hidden: Record<string, string | { at: string; until: string | null }>
+  /** Items you ticked Done (see `itemKey`). */
+  done?: ReadonlySet<string>
 }
+
+/** A to-do's identity for Done: its thread and its words. */
+export const itemKey = (topicId: number, text: string) => `${topicId}|${text.trim().toLowerCase().replace(/\s+/g, ' ')}`
 
 /** How far back Today looks in analysed mail. */
 const ANALYSED_DAYS = 60
@@ -109,6 +137,28 @@ export function isEvent(i: { text: string; event?: boolean }): boolean {
 }
 
 const DAY = 86_400_000
+
+const words = (s: string) => new Set(s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter((w) => w.length >= 4))
+
+/**
+ * An event in the calendar that overlaps a timed date from mail (an hour when no end is
+ * given); not the event itself, once it has been added (same start, or a word in common).
+ */
+export function clashWith(c: { label: string; date: string; time: string | null; endTime?: string | null; endDate?: string | null }, events: EventRow[]): Clash | null {
+  if (!c.time) return null
+  const start = new Date(`${c.date}T${c.time}:00`)
+  const end = c.endTime ? new Date(`${c.endDate ?? c.date}T${c.endTime}:00`) : new Date(start.getTime() + 60 * 60_000)
+  const mine = words(c.label)
+  for (const e of events) {
+    if (e.allDay || !e.endsAt) continue
+    const s = new Date(e.startsAt)
+    const f = new Date(e.endsAt)
+    if (!(s < end && f > start)) continue
+    if (s.getTime() === start.getTime() || [...words(e.title)].some((w) => mine.has(w))) continue
+    return { title: e.title, startsAt: e.startsAt, endsAt: e.endsAt }
+  }
+  return null
+}
 
 export function buildToday(repo: Repo, input: TodayInput): TodayView {
   const { now } = input
@@ -148,12 +198,19 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
   }
   const lapsed = (a: ThreadAnalysis) => (a.dates ?? []).length > 0 && (a.dates ?? []).every(over)
 
+  // Done: you ticked it, a later message says so, or (an RSVP) you've since replied.
+  const isDone = (topicId: number, i: ThreadAnalysis['actionItems'][number]) =>
+    i.done === true || (input.done?.has(itemKey(topicId, i.text)) ?? false) || (i.kind === 'rsvp' && repo.lastEntryIsMine(topicId as TopicId))
+  const open = (topicId: number, a: ThreadAnalysis) => (a.actionItems ?? []).filter((i) => !isDone(topicId, i))
+
   const actions: ActionItem[] = []
   for (const { posting, a } of analysed) {
     if (!shown(posting) || seen.has(posting.topicId!) || lapsed(a)) continue
     // A call or meeting that has passed is simply over, not late.
-    const due = (a.actionItems ?? []).filter((i) => i.due != null && (isEvent(i) ? i.due === today : i.due <= today))
-    due.forEach((i, n) => actions.push({ key: `action:${posting.id}:${n}`, posting, text: i.text, due: i.due!, daysLate: Math.round((dayStart(today) - dayStart(i.due!)) / DAY) }))
+    const due = open(posting.topicId!, a).filter((i) => i.due != null && (isEvent(i) ? i.due === today : i.due <= today))
+    due.forEach((i, n) =>
+      actions.push({ key: `action:${posting.id}:${n}`, posting, text: i.text, due: i.due!, daysLate: Math.round((dayStart(today) - dayStart(i.due!)) / DAY), kind: i.kind ?? 'task', amount: i.amount ?? null }),
+    )
     if (due.length) seen.add(posting.topicId!)
   }
   actions.sort((x, y) => x.due.localeCompare(y.due))
@@ -188,15 +245,27 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
       comingUp.push({ key: `date:${posting.id}:${comingUp.length}`, posting, label, date, time, isDeadline, ...more })
     }
     for (const d of a.dates ?? []) add(d.label, d.date, d.time, false, { endDate: d.endDate ?? null, endTime: d.endTime ?? null, link: d.link ?? null })
-    for (const i of a.actionItems ?? []) {
+    for (const i of open(posting.topicId!, a)) {
       if (!i.due || i.due <= today) continue
       // A task due on the day of one of the email's dates belongs with it (one row, not two).
       const sameDay = comingUp.find((c) => c.posting.id === posting.id && !c.isDeadline && c.date === i.due && !c.task)
-      if (sameDay) sameDay.task = i.text
-      else add(i.text, i.due, null, true)
+      if (sameDay) Object.assign(sameDay, { task: i.text, kind: i.kind ?? 'task', amount: i.amount ?? null })
+      else {
+        add(i.text, i.due, null, true)
+        const row = comingUp.at(-1)
+        if (row?.label === i.text && row.date === i.due) Object.assign(row, { kind: i.kind ?? 'task', amount: i.amount ?? null })
+      }
     }
   }
   comingUp.sort((x, y) => x.date.localeCompare(y.date) || (x.time ?? '').localeCompare(y.time ?? ''))
+
+  // Nudges and clashes: what's within two days, and what the calendar already has then.
+  const inTwoDays = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2))
+  const calendar = repo.events(startOfToday.toISOString(), new Date(startOfToday.getTime() + (COMING_UP_DAYS + 2) * DAY).toISOString())
+  for (const c of comingUp) {
+    c.soon = c.date <= inTwoDays
+    c.clash = c.time ? clashWith(c, calendar) : null
+  }
 
   const todos = repo.todosDue(ymd(startOfTomorrow)).map((t) => ({
     key: `todo:${t.id}`,

@@ -5,6 +5,7 @@ import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join } from 'node:path'
 import {
   buildToday,
+  itemKey,
   AI_TASK_IDS,
   AI_TASKS,
   AiClient,
@@ -370,7 +371,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     const core = this.need()
     // Your addresses tell which threads you wrote last; without them, that section is empty.
     const myEmails = await this.senders().then((s) => s.map((x) => x.email), () => [])
-    const view = buildToday(core.repo, { now: new Date(), myEmails, since, hidden: this.hiddenOnToday() })
+    const view = buildToday(core.repo, { now: new Date(), myEmails, since, hidden: this.hiddenOnToday(), done: new Set(Object.keys(this.doneItems())) })
     // What Today couldn't judge yet (have you been waiting on them?) gets read in the background.
     for (const topicId of view.needsAnalysis) this.analyzer?.enqueue(topicId)
     return { ...view, screener: core.engine.screenerEntries().length }
@@ -462,6 +463,26 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     const record = await this.need().actions.run({ type: 'handled', topicId: id }, 'user')
     this.emit('event', { type: 'analysis', topicId: id })
     return record
+  }
+
+  /** A to-do from mail ticked Done (or not): it leaves Today; kept for 120 days. */
+  async markItemDone(topicId: unknown, text: unknown, done: unknown = true) {
+    if (typeof text !== 'string' || !text.trim() || text.length > 500) throw new Error('bad item')
+    const key = itemKey(int(topicId), text)
+    const cutoff = Date.now() - 120 * 86_400_000
+    const kept = Object.fromEntries(Object.entries(this.doneItems()).filter(([k, at]) => k !== key && Date.parse(at) > cutoff))
+    if (done !== false) kept[key] = new Date().toISOString()
+    this.need().repo.setState('today:done', JSON.stringify(kept))
+    this.emit('event', { type: 'today' })
+  }
+
+  private doneItems(): Record<string, string> {
+    try {
+      const v = JSON.parse(this.need().repo.getState('today:done') ?? '{}') as unknown
+      return v && typeof v === 'object' ? (v as Record<string, string>) : {}
+    } catch {
+      return {}
+    }
   }
 
   private hiddenOnToday(): Record<string, string | { at: string; until: string | null }> {

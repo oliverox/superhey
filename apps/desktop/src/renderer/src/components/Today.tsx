@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import type { ActionItem, ComingUpItem, PostingRow, ThreadItem, TodayView, TodoItem } from '@shared/api'
+import type { ActionItem, ComingUpItem, Money, PostingRow, TaskKind, ThreadItem, TodayView, TodoItem } from '@shared/api'
+import { replyWith } from '../outbox'
 import { AddToCalendar } from './AddToCalendar'
 import { Tag } from './Tag'
 import { MarkRead } from './MarkRead'
 import { api } from '../api'
-import { dayName, shortDate } from '../format'
+import { clock, dayName, shortDate } from '../format'
 import { stripSubjectPrefixes } from '../mail/forwarded'
 import { withShortcut } from '../shortcuts'
 import { Avatar } from './Avatar'
@@ -131,7 +132,7 @@ export function TodayList({
                 <TodoRow key={t.key} item={t} />
               ))}
               {due.actions.slice(0, Math.max(0, limit - due.todos.length)).map((a) => (
-                <ActionRow key={a.key} item={a} mark={pick(a.key, a.posting.id)} onOpen={() => openFrom(a.key, a.posting)} onDone={() => void api.markHandled(a.posting.topicId!)} />
+                <ActionRow key={a.key} item={a} mark={pick(a.key, a.posting.id)} onOpen={() => openFrom(a.key, a.posting)} onDone={() => void api.markItemDone(a.posting.topicId!, a.text)} />
               ))}
               {due.bubbled.slice(0, Math.max(0, limit - due.todos.length - due.actions.length)).map((i) => row(i, why.bubbled()))}
             </>
@@ -267,7 +268,10 @@ function ActionRow({ item, mark, onOpen, onDone }: { item: ActionItem; mark: Mar
     >
       <Avatar avatar={p.avatar} size={32} seed={p.senderEmail ?? undefined} />
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium text-ink">{item.text}</div>
+        <div className="flex min-w-0 items-center gap-1.5">
+          {item.kind !== 'task' && <KindTag kind={item.kind} amount={item.amount} />}
+          <span className="truncate font-medium text-ink">{item.text}</span>
+        </div>
         <div className="mt-0.5 truncate text-[13px] text-ink-faint">
           <span className={item.daysLate > 0 ? 'text-danger' : 'text-ink-soft'}>{why.action(item)}</span> · {p.subject ? stripSubjectPrefixes(p.subject) : p.senderName}
         </div>
@@ -299,6 +303,39 @@ function RowActions({ onDone, onNotNow }: { onDone?: () => void; onNotNow?: () =
   )
 }
 
+const KIND_LABEL: Record<TaskKind, string> = { form: 'Form', bill: 'Bill', rsvp: 'RSVP', appointment: 'Appointment', task: 'To do' }
+const money = (m: Money) => {
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: m.currency, maximumFractionDigits: m.amount % 1 ? 2 : 0 }).format(m.amount)
+  } catch {
+    return `${m.amount} ${m.currency}`
+  }
+}
+/** What sort of to-do: FORM, BILL · €40, RSVP… (a deadline says DUE when it's a plain task). */
+function KindTag({ kind, amount, due }: { kind: TaskKind; amount?: Money | null; due?: boolean }) {
+  return (
+    <Tag kind={due && kind === 'task' ? 'reply' : 'action'}>
+      {due && kind === 'task' ? 'Due' : KIND_LABEL[kind]}
+      {amount ? ` · ${money(amount)}` : ''}
+    </Tag>
+  )
+}
+
+function HoverButton({ onClick, title, children }: { onClick: () => void; title: string; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick()
+      }}
+      title={title}
+      className="h-7 shrink-0 rounded-ui bg-pane px-2.5 text-[12px] font-medium text-ink-soft shadow-[0_0_0_1px_var(--rule-strong)] hover:text-ink"
+    >
+      {children}
+    </button>
+  )
+}
+
 type Mark = 'on' | 'echo' | null
 /** The open email's row is highlighted; its other rows on Today get a thin bar at the edge. */
 const markClass = (m: Mark) =>
@@ -321,30 +358,55 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
               aria-current={pick(c.key, c.posting.id) === 'on' || undefined}
               className={`relative mx-2 flex w-[calc(100%-1rem)] items-baseline gap-3 rounded-ui py-2 pl-4 text-left pr-3 ${markClass(pick(c.key, c.posting.id)).replaceAll('hover:bg-pane-sunk', 'group-hover/cu:bg-pane-sunk')}`}
             >
-              <span className="w-[76px] shrink-0 text-[12px] text-ink-faint tabular-nums">
+              <span className={`w-[76px] shrink-0 text-[12px] tabular-nums ${c.soon && (c.isDeadline || c.task) ? 'font-medium text-attn' : 'text-ink-faint'}`}>
                 {dayName(c.date)}
                 {c.time && <span className="block">{c.time}</span>}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-ink">
-                  {c.isDeadline && <span className="font-medium text-danger">Due: </span>}
-                  {c.label}
+                <span className="flex min-w-0 items-center gap-1.5 text-ink">
+                  {c.isDeadline && <KindTag kind={c.kind ?? 'task'} amount={c.amount} due />}
+                  <span className="truncate">{c.label}</span>
                 </span>
                 {c.task && (
                   <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px] text-ink-soft">
-                    <Tag kind="action">To do</Tag>
+                    <KindTag kind={c.kind ?? 'task'} amount={c.amount} />
                     <span className="truncate">{c.task}</span>
+                  </span>
+                )}
+                {c.clash && (
+                  <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12px] text-attn">
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="shrink-0">
+                      <path d="M8 2.5 14 13H2L8 2.5ZM8 6.5v3M8 11.5v.01" />
+                    </svg>
+                    <span className="truncate">
+                      Clashes with {c.clash.title} · {clock(c.clash.startsAt)}
+                      {c.clash.endsAt ? `–${clock(c.clash.endsAt)}` : ''}
+                    </span>
                   </span>
                 )}
                 <span className="block truncate text-[12px] text-ink-faint">{c.posting.subject ? stripSubjectPrefixes(c.posting.subject) : c.posting.senderName}</span>
               </span>
             </button>
-            {!c.isDeadline && (
-              // Add appears on hover, over the end of the row; once added (Undo) it stays.
-              <span className="row-actions absolute top-1 right-2 flex rounded-r-ui pr-3 pl-8 opacity-0 transition-opacity duration-(--dur-1) group-hover/cu:opacity-100 focus-within:opacity-100 has-[.keep-visible]:opacity-100">
-                <AddToCalendar item={c} source={c.posting.subject ? stripSubjectPrefixes(c.posting.subject) : undefined} />
-              </span>
-            )}
+            {/* On hover, over the end of the row: reply (an RSVP, or to move a clash), Done, Add. Added · Undo stays. */}
+            <span className="row-actions absolute top-1 right-2 flex items-center gap-1 rounded-r-ui pr-3 pl-8 opacity-0 transition-opacity duration-(--dur-1) group-hover/cu:opacity-100 focus-within:opacity-100 has-[.keep-visible]:opacity-100">
+              {(c.clash || c.kind === 'rsvp' || c.kind === 'appointment') && (
+                <HoverButton
+                  onClick={() => {
+                    replyWith(c.posting.topicId!, c.clash ? `Ask to move it: it clashes with ${c.clash.title} at ${clock(c.clash.startsAt)}` : c.kind === 'rsvp' ? 'Yes, I’ll be there' : 'Confirm the appointment')
+                    onOpen(c.key, c.posting)
+                  }}
+                  title={c.clash ? 'Reply asking to move it (drafted in your voice with ⌘J)' : 'Reply (drafted in your voice with ⌘J)'}
+                >
+                  {c.clash ? 'Ask to move' : 'Reply'}
+                </HoverButton>
+              )}
+              {(c.task || c.isDeadline) && (
+                <HoverButton onClick={() => void api.markItemDone(c.posting.topicId!, c.task ?? c.label)} title="Done: you’ve dealt with it (it leaves Today)">
+                  Done
+                </HoverButton>
+              )}
+              {!c.isDeadline && <AddToCalendar item={c} source={c.posting.subject ? stripSubjectPrefixes(c.posting.subject) : undefined} />}
+            </span>
           </li>
         ))}
       </ul>
