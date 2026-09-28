@@ -492,7 +492,7 @@ export class Repo {
           e.id,
           topicId,
           n(e.kind),
-          n(from?.name),
+          n(e.sender?.name ?? e.alternative_sender_name ?? e.creator?.name),
           email,
           e.created_at,
           recipients ? JSON.stringify(recipients) : null,
@@ -1173,7 +1173,8 @@ function toPostingRow(r: Record<string, unknown>): PostingRow {
 function fromRaw(rawJson: string, senderName: string | null): Pick<PostingRow, 'labels' | 'avatar' | 'blockedTrackers'> {
   type Raw = {
     folders?: Array<{ name?: unknown }> | null
-    creator?: { avatar_url?: unknown; avatar_background_color?: unknown; initials?: unknown } | null
+    creator?: { name?: unknown; avatar_url?: unknown; avatar_background_color?: unknown; initials?: unknown } | null
+    alternative_sender_name?: unknown
     blocked_trackers?: unknown
   }
   let raw: Raw = {}
@@ -1183,12 +1184,15 @@ function fromRaw(rawJson: string, senderName: string | null): Pick<PostingRow, '
     // keep defaults
   }
   const str = (v: unknown) => (typeof v === 'string' && v ? v : null)
+  // Sent under another name than HEY's contact for the address: that contact's photo and
+  // initials would be someone else's.
+  const other = str(raw.alternative_sender_name) != null && str(raw.alternative_sender_name) !== str(raw.creator?.name)
   return {
     labels: (raw.folders ?? []).flatMap((f) => (typeof f.name === 'string' ? [f.name] : [])),
     avatar: {
-      url: str(raw.creator?.avatar_url),
+      url: other ? null : str(raw.creator?.avatar_url),
       color: str(raw.creator?.avatar_background_color),
-      initials: str(raw.creator?.initials) ?? initialsOf(senderName),
+      initials: (other ? null : str(raw.creator?.initials)) ?? initialsOf(senderName),
     },
     blockedTrackers: raw.blocked_trackers === true,
   }

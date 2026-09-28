@@ -80,6 +80,9 @@ export const Entry = z.looseObject({
   creator: nullish(Contact),
   // The actual From address when HEY recorded one separately from the creator.
   sender: nullish(Contact),
+  // The From name on this email, when it differs from HEY's contact for the address (one
+  // no-reply address used by several apps: "Cockpit" on this email, "Qatalyst Demo" in contacts).
+  alternative_sender_name: nullish(z.string()),
   recipients: nullish(Recipients),
 })
 export type Entry = z.infer<typeof Entry>

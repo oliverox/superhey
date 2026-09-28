@@ -140,10 +140,17 @@ describe('Repo postings', () => {
     expect(r.findPostings('%')).toHaveLength(1)
   })
 
-  it('prefers the alternative sender name', () => {
+  it('prefers the alternative sender name, and doesn’t borrow the contact’s face', () => {
     const r = repo()
-    r.upsertPostings([P({ alternative_sender_name: 'Example Newsletter' })])
+    r.upsertPostings([P({ alternative_sender_name: 'Example Newsletter', creator: { ...alice, initials: 'AL', avatar_url: 'https://x/alice.png' } })])
     expect(r.posting(PostingId(100))).toMatchObject({ senderName: 'Example Newsletter', senderEmail: 'alice@example.com' })
+    expect(r.posting(PostingId(100))!.avatar).toMatchObject({ url: null, initials: 'EN' })
+  })
+
+  it('names each message by its own From name, not the address’s contact', () => {
+    const r = repo()
+    r.storeThread(TopicId(901), [S.Entry.parse(entry({ alternative_sender_name: 'Cockpit' }))], null)
+    expect(r.thread(TopicId(901))!.entries[0]!.from).toMatchObject({ name: 'Cockpit', email: 'alice@example.com' })
   })
 
   it('lists other recent threads from a sender, once each, newest first', () => {
