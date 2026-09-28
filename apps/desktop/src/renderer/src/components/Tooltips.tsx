@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 /** How long the pointer rests before the first tip shows; after that, neighbours show at once. */
-const DELAY = 450
+const DELAY = 700
 const WARM_FOR = 400
 const GAP = 6
 const EDGE = 8
@@ -25,11 +25,14 @@ export function Tooltips() {
   const timer = useRef<number | undefined>(undefined)
   const warmUntil = useRef(0)
   const current = useRef<HTMLElement | null>(null)
+  const showing = useRef(false)
 
   useEffect(() => {
     const hide = () => {
       window.clearTimeout(timer.current)
-      if (current.current) warmUntil.current = Date.now() + WARM_FOR
+      // Only a tip that was actually seen warms up its neighbours; passing over things doesn't.
+      if (showing.current) warmUntil.current = Date.now() + WARM_FOR
+      showing.current = false
       current.current = null
       setTip(null)
     }
@@ -40,9 +43,11 @@ export function Tooltips() {
       current.current = el
       const open = () => {
         if (current.current !== el || !el.isConnected) return
+        showing.current = true
         setTip({ ...splitShortcut(el.dataset.tip ?? text), anchor: el.getBoundingClientRect() })
       }
-      if (immediate || Date.now() < warmUntil.current) open()
+      // Straight from one tip to the next, or just after one: no second wait.
+      if (immediate || showing.current || Date.now() < warmUntil.current) open()
       else timer.current = window.setTimeout(open, DELAY)
     }
 
