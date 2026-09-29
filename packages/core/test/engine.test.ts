@@ -60,6 +60,21 @@ describe('SyncEngine watch handling', () => {
     expect(engine.screenerEntries().map((e) => e.id)).toEqual([7])
   })
 
+  it('shows a network failure in plain words, and clears it once HEY answers again', async () => {
+    vi.useFakeTimers()
+    let down = true
+    const { engine } = setup([
+      ['screener list', () => (down ? { stdout: JSON.stringify({ ok: false, error: 'Get "https://app.hey.com": transport failure', code: 'api' }), stderr: '', exitCode: 7 } : ok([]))],
+    ])
+    engine.requestScreenerRefresh()
+    await vi.runAllTimersAsync()
+    expect(engine.getStatus().lastError).toBe('Can’t reach HEY right now. SuperHey will keep trying.')
+    down = false
+    engine.requestScreenerRefresh()
+    await vi.runAllTimersAsync()
+    expect(engine.getStatus().lastError).toBeNull()
+  })
+
   it('removes deleted postings', () => {
     const { repo, feed } = setup()
     feed({ change: 'added', box: imbox, posting: posting() })

@@ -55,6 +55,8 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
   private screenerTimer: ReturnType<typeof setTimeout> | null = null
   private screenerPoll: ReturnType<typeof setInterval> | null = null
   private status: SyncStatus = { watch: 'stopped', initialSyncDone: false, lastError: null }
+  /** What's failing now, by source (a box, the Screener, the calendar, the watch), newest last. */
+  private readonly failing = new Map<string, string>()
 
   constructor(
     private readonly client: HeyClient,
@@ -65,8 +67,11 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
     super()
     this.watcher = new Watcher(runner, () => repo.getState('watch_since'))
     this.watcher.on('line', (line) => this.onWatchLine(line))
-    this.watcher.on('status', (watch) => this.setStatus({ watch }))
-    this.watcher.on('error', (err) => this.fail(err))
+    this.watcher.on('status', (watch) => {
+      this.setStatus({ watch })
+      if (watch === 'live') this.recovered('watch')
+    })
+    this.watcher.on('error', (err) => this.fail(err, 'watch'))
   }
 
   getStatus(): SyncStatus {
@@ -76,7 +81,7 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
   async start() {
     await this.initialSync()
     this.watcher.start()
-    this.screenerPoll = setInterval(() => void this.refreshScreener().catch((e) => this.fail(e)), SCREENER_POLL_MS)
+    this.screenerPoll = setInterval(() => void this.refreshScreener().catch((e) => this.fail(e, 'screener')), SCREENER_POLL_MS)
   }
 
   stop() {
@@ -111,6 +116,7 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
 
   async refreshBox(boxId: number) {
     const page = await this.client.boxPage(boxId)
+    this.recovered(`box:${boxId}`)
     this.repo.upsertPostings(page.postings, boxId)
     // Backfill resumes from page 2 onward; remember where page 1 ended the first time.
     if (!this.repo.getState(`backfill:${boxId}`))
@@ -163,6 +169,7 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
   /** Who's waiting in The Screener (held in memory; it's small and always re-read). */
   async refreshScreener(): Promise<ScreenerEntry[]> {
     this.screener = await this.client.screenerList()
+    this.recovered('screener')
     this.emit('change', { kind: 'screener' })
     return this.screener
   }
@@ -176,7 +183,7 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
     if (this.screenerTimer) clearTimeout(this.screenerTimer)
     this.screenerTimer = setTimeout(() => {
       this.screenerTimer = null
-      void this.refreshScreener().catch((e) => this.fail(e))
+      void this.refreshScreener().catch((e) => this.fail(e, 'screener'))
     }, SCREENER_REFRESH_DEBOUNCE_MS)
   }
 
@@ -345,7 +352,7 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
       boxId,
       setTimeout(() => {
         this.boxTimers.delete(boxId)
-        this.refreshBox(boxId).catch((e) => this.fail(e))
+        this.refreshBox(boxId).catch((e) => this.fail(e, `box:${boxId}`))
       }, BOX_REFRESH_DEBOUNCE_MS),
     )
   }
@@ -354,14 +361,28 @@ export class SyncEngine extends EventEmitter<EngineEvents> {
     if (this.calendarTimer) clearTimeout(this.calendarTimer)
     this.calendarTimer = setTimeout(() => {
       this.calendarTimer = null
-      Promise.all([this.refreshCalendar(), this.refreshTodos()]).catch((e) => this.fail(e))
+      Promise.all([this.refreshCalendar(), this.refreshTodos()]).then(
+        () => this.recovered('calendar'),
+        (e) => this.fail(e, 'calendar'),
+      )
     }, CALENDAR_REFRESH_DEBOUNCE_MS)
   }
 
-  private fail(err: unknown) {
+  /**
+   * Something that syncs failed: shown until that same thing next works (a network blip
+   * shouldn't stay on screen once HEY answers again).
+   */
+  private fail(err: unknown, source: string) {
     const error = err instanceof Error ? err : new Error(String(err))
-    this.setStatus({ lastError: error.message })
+    this.failing.delete(source)
+    this.failing.set(source, plainError(error.message))
+    this.setStatus({ lastError: [...this.failing.values()].at(-1) ?? null })
     this.emit('error', error)
+  }
+
+  private recovered(source: string) {
+    if (!this.failing.delete(source)) return
+    this.setStatus({ lastError: [...this.failing.values()].at(-1) ?? null })
   }
 
   private setStatus(patch: Partial<SyncStatus>) {
@@ -383,4 +404,11 @@ function startOfLocalDay(d: Date) {
 function ymd(d: Date) {
   const p = (x: number) => String(x).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+/** A failure as the sidebar says it: a network problem in plain words, anything else as is. */
+export function plainError(message: string): string {
+  if (/transport failure|dial tcp|no such host|ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|network is unreachable|i\/o timeout|TLS handshake/i.test(message))
+    return 'Can’t reach HEY right now. SuperHey will keep trying.'
+  return message
 }
