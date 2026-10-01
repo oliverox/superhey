@@ -285,10 +285,10 @@ const vars = (c: Colors, dark: boolean) =>
 export function themeCss(): string {
   const out: string[] = []
   for (const t of DEFAULT_THEMES.slice(1)) {
-    const on = `:root[data-palette='${t.id}']:not([data-theme='omarchy'])`
+    const on = `:root[data-palette='${t.id}'][data-theme='default']`
     out.push(`${on}{${vars(t.light, false)}}`)
     out.push(`@media (prefers-color-scheme: dark){${on}:not([data-scheme='light']){${vars(t.dark, true)};color-scheme:dark}}`)
-    out.push(`:root[data-palette='${t.id}'][data-scheme='dark']:not([data-theme='omarchy']){${vars(t.dark, true)};color-scheme:dark}`)
+    out.push(`:root[data-palette='${t.id}'][data-scheme='dark'][data-theme='default']{${vars(t.dark, true)};color-scheme:dark}`)
   }
   for (const t of OMARCHY_THEMES.slice(1)) {
     const c = t.colors

@@ -22,6 +22,7 @@ import { AiSpend } from './AiSpend'
 import { AiSparkle } from './DraftReply'
 import { Composer, type ComposeRequest } from './Composer'
 import { PersonChip, RecipientsButton } from './People'
+import { ToolbarWords } from './Menu'
 import { ReplyArea } from './ReplyArea'
 
 export interface ReaderTarget {
@@ -64,9 +65,14 @@ interface ReaderProps {
   onLeaveBox: () => void
   /** Closes the reader, giving the list the room (absent in The Screener). */
   onClose?: () => void
+  /**
+   * `column`: the Column style's reader, unrolled inside the list's column: no top bar or
+   * scroller of its own, the actions as words under the email, details beside the column.
+   */
+  variant?: 'pane' | 'column'
 }
 
-export function Reader({ target, active, onOpenThread, onLeaveBox, onClose }: ReaderProps) {
+export function Reader({ target, active, onOpenThread, onLeaveBox, onClose, variant = 'pane' }: ReaderProps) {
   if (!target) {
     return (
       <main className="pane flex flex-col bg-pane-alt" data-active={active}>
@@ -80,10 +86,10 @@ export function Reader({ target, active, onOpenThread, onLeaveBox, onClose }: Re
       </main>
     )
   }
-  return <ThreadReader key={`${target.postingId}-${target.topicId}`} target={target} active={active} onOpenThread={onOpenThread} onLeaveBox={onLeaveBox} onClose={onClose} />
+  return <ThreadReader key={`${target.postingId}-${target.topicId}`} target={target} active={active} onOpenThread={onOpenThread} onLeaveBox={onLeaveBox} onClose={onClose} variant={variant} />
 }
 
-function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose }: ReaderProps & { target: ReaderTarget }) {
+function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose, variant }: ReaderProps & { target: ReaderTarget }) {
   const { topicId } = target
   const thread = useLive<ThreadView | null>(
     () => (topicId == null ? Promise.resolve(null) : api.thread(topicId, target.entryCount)),
@@ -104,6 +110,82 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose }: Rea
   const [members, setMembers] = useState<{ bundleId: number; rows: PostingRow[] } | null>(null)
   const bundleRows = members && members.bundleId === target.postingId ? members.rows : []
 
+  // The parts both readers share: the subject, the AI's line, and the thread (or bundle).
+  const heading = (
+    <>
+      {/* A bundle draws its own heading (the sender, with their avatar). */}
+      {!target.isBundle && listTags(subject).tags.some((t) => tagKind(t, target.sender ?? null) !== 'sender') && (
+        <div className="rise mb-2 flex flex-wrap gap-1.5" aria-label="Subject tags">
+          {listTags(subject)
+            .tags.filter((t) => tagKind(t, target.sender ?? null) !== 'sender')
+            .map((tag) =>
+              tagKind(tag, target.sender ?? null) === 'action' ? (
+                <Tag key={tag} kind="action">
+                  {tag}
+                </Tag>
+              ) : (
+                <Tag key={tag} kind="list" title="Mailing list">
+                  {tag}
+                </Tag>
+              ),
+            )}
+        </div>
+      )}
+      {!target.isBundle && <h1 className="reader-title rise font-title text-[length:var(--title-size,26px)] leading-[1.2] font-semibold tracking-[-0.02em] text-balance">{title}</h1>}
+      {!target.isBundle && topicId != null && <SummaryStrip topicId={topicId} detailsOpen={showPanel} onDetails={panel.toggle} />}
+    </>
+  )
+  const body =
+    target.isBundle ? (
+      target.postingId != null && <BundleView bundleId={target.postingId} sender={target.sender ?? 'this sender'} onLeaveBox={onLeaveBox} onMembers={(rows) => setMembers({ bundleId: target.postingId!, rows })} />
+    ) : topicId == null ? (
+      // Not a thread (a HEY World post, say): nothing the CLI can read.
+      <p className="mt-6 text-ink-soft">
+        This isn't an email thread, so SuperHey can't show it.{' '}
+        {target.appUrl && (
+          <a href={target.appUrl} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline">
+            Open it in HEY ↗
+          </a>
+        )}
+      </p>
+    ) : thread.error ? (
+      <p className="mt-6 text-danger">Couldn't load this thread: {thread.error}</p>
+    ) : !thread.data ? (
+      <ReaderSkeleton />
+    ) : null
+  const actions =
+    target.postingId != null &&
+    (target.isBundle ? (
+      <BundleActionBar members={bundleRows} sender={target.sender ?? 'this sender'} onLeaveBox={onLeaveBox} />
+    ) : (
+      <ActionBar postingId={target.postingId} onLeaveBox={onLeaveBox} />
+    ))
+
+  if (variant === 'column') {
+    return (
+      <div ref={mainRef as React.RefObject<HTMLDivElement>} className="column-reader [view-transition-name:reader]" data-pane="reader" data-active={active}>
+        {heading}
+        {target.isBundle && <div className="column-actions mt-4"><ToolbarWords.Provider value>{actions}</ToolbarWords.Provider></div>}
+        {body ?? (
+          thread.data && (
+            <>
+              <ThreadTopic.Provider value={thread.data.topicId}>
+                <Conversation entries={thread.data.entries} subject={subject} htmlByEntry={html.data ?? {}} canReply={target.screeningId == null} />
+                <OutgoingReplies topicId={thread.data.topicId} entries={thread.data.entries} />
+              </ThreadTopic.Provider>
+              {/* What you can do, as words with their keys; then the reply. */}
+              <div className="column-actions mt-8 flex flex-wrap items-center gap-x-1 gap-y-1 border-t border-rule pt-4 -ml-1.5">
+                <ToolbarWords.Provider value>{actions}</ToolbarWords.Provider>
+              </div>
+              {target.screeningId == null && <ReplyArea key={thread.data.topicId} thread={thread.data} />}
+            </>
+          )
+        )}
+        <PanelSlot show={showPanel} beside>{thread.data && <ContextPanel thread={thread.data} onOpenThread={onOpenThread} onClose={panel.toggle} />}</PanelSlot>
+      </div>
+    )
+  }
+
   return (
     <main ref={mainRef} className="pane flex min-h-0 flex-col bg-pane-alt [view-transition-name:reader]" data-active={active}>
       <header className="drag flex h-[52px] shrink-0 items-center justify-end gap-1 border-b border-rule bg-pane px-4">
@@ -119,14 +201,7 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose }: Rea
             </svg>
           </button>
         )}
-        <div className="mr-auto">
-          {target.postingId != null &&
-            (target.isBundle ? (
-              <BundleActionBar members={bundleRows} sender={target.sender ?? 'this sender'} onLeaveBox={onLeaveBox} />
-            ) : (
-              <ActionBar postingId={target.postingId} onLeaveBox={onLeaveBox} />
-            ))}
-        </div>
+        <div className="mr-auto">{actions}</div>
         {target.appUrl && (
           <a
             href={target.appUrl}
@@ -144,44 +219,9 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose }: Rea
       <div className="flex min-h-0 flex-1">
         <div className="scroll min-h-0 min-w-0 flex-1 [container-type:inline-size]">
           <article className="reading-column mx-auto px-10 pt-9 pb-24">
-            {/* A bundle draws its own heading (the sender, with their avatar). */}
-          {!target.isBundle && listTags(subject).tags.some((t) => tagKind(t, target.sender ?? null) !== 'sender') && (
-            <div className="rise mb-2 flex flex-wrap gap-1.5" aria-label="Subject tags">
-              {listTags(subject)
-                .tags.filter((t) => tagKind(t, target.sender ?? null) !== 'sender')
-                .map((tag) =>
-                  tagKind(tag, target.sender ?? null) === 'action' ? (
-                    <Tag key={tag} kind="action">
-                      {tag}
-                    </Tag>
-                  ) : (
-                    <Tag key={tag} kind="list" title="Mailing list">
-                      {tag}
-                    </Tag>
-                  ),
-                )}
-            </div>
-          )}
-          {!target.isBundle && <h1 className="rise font-app text-[26px] leading-[1.2] font-semibold tracking-[-0.02em] text-balance">{title}</h1>}
-          {!target.isBundle && topicId != null && <SummaryStrip topicId={topicId} detailsOpen={showPanel} onDetails={panel.toggle} />}
-
-            {target.isBundle ? (
-              target.postingId != null && <BundleView bundleId={target.postingId} sender={target.sender ?? 'this sender'} onLeaveBox={onLeaveBox} onMembers={(rows) => setMembers({ bundleId: target.postingId!, rows })} />
-            ) : topicId == null ? (
-              // Not a thread (a HEY World post, say): nothing the CLI can read.
-              <p className="mt-6 text-ink-soft">
-                This isn't an email thread, so SuperHey can't show it.{' '}
-                {target.appUrl && (
-                  <a href={target.appUrl} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline">
-                    Open it in HEY ↗
-                  </a>
-                )}
-              </p>
-            ) : thread.error ? (
-              <p className="mt-6 text-danger">Couldn't load this thread: {thread.error}</p>
-            ) : !thread.data ? (
-              <ReaderSkeleton />
-            ) : (
+            {heading}
+            {body ?? (
+              thread.data && (
               <>
                 <ThreadTopic.Provider value={thread.data.topicId}>
                   <Conversation entries={thread.data.entries} subject={subject} htmlByEntry={html.data ?? {}} canReply={target.screeningId == null} />
@@ -190,6 +230,7 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose }: Rea
                 {/* No replying to someone who hasn't been let in yet. */}
                 {target.screeningId == null && <ReplyArea key={thread.data.topicId} thread={thread.data} />}
               </>
+              )
             )}
           </article>
         </div>
@@ -199,10 +240,16 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose }: Rea
   )
 }
 
-/** The details panel's place: it opens to the panel's width and closes to nothing. */
-function PanelSlot({ show, children }: { show: boolean; children: React.ReactNode }) {
+/** The details panel's place: it opens to the panel's width and closes to nothing. `beside`: fixed at the window's right edge, beside the column. */
+function PanelSlot({ show, beside = false, children }: { show: boolean; beside?: boolean; children: React.ReactNode }) {
   const { mounted, shown } = usePresence(show)
   if (!mounted) return null
+  if (beside)
+    return (
+      <div className="panel-slot fixed top-[52px] right-0 bottom-0 z-20 flex justify-end border-l border-rule bg-pane" style={{ width: shown ? 'var(--panel-w)' : 0 }}>
+        {children}
+      </div>
+    )
   return (
     <div className="panel-slot flex shrink-0 justify-end" style={{ width: shown ? 'var(--panel-w)' : 0 }}>
       {children}
@@ -404,14 +451,26 @@ function Message({
             {entry.from ? <PersonChip person={entry.from} className="font-semibold" /> : <span className="font-semibold">Unknown</span>}
             <RecipientsButton to={entry.to} cc={entry.cc} className="text-[13px]" />
           </div>
+          {/* A designed email: as its sender built it, or as text in the app's own type. */}
           {designed && (
-            <button
-              onClick={toggle}
-              title={showOriginal ? 'Show as plain text in the app’s style' : 'Show as the sender designed it'}
-              className="shrink-0 self-center rounded-ui px-1.5 py-0.5 text-[12px] font-medium text-ink-faint hover:bg-pane-sunk hover:text-ink"
-            >
-              {showOriginal ? 'Simplified' : 'Original'}
-            </button>
+            <span role="group" aria-label="Show this email" className="flex shrink-0 items-baseline gap-2.5 self-center text-[12px]">
+              {(
+                [
+                  [true, 'As designed', 'As the sender designed it'],
+                  [false, 'As text', 'As text, in the app’s own type'],
+                ] as const
+              ).map(([original, label, title]) => (
+                <button
+                  key={label}
+                  onClick={() => showOriginal !== original && toggle()}
+                  aria-pressed={showOriginal === original}
+                  title={title}
+                  className={`border-b pb-px font-medium transition-colors ${showOriginal === original ? 'border-ink-soft text-ink' : 'border-transparent text-ink-faint hover:text-ink-soft'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </span>
           )}
           {time}
           {onCollapse && (

@@ -169,6 +169,13 @@ Press `?` in the app for the full list. The main ones:
 
 **Settings → Appearance** (or the switch at the bottom of the sidebar):
 
+- **Column style** (the default): SuperHey's own look, in **light, dark or system**. One
+  column to read down: the open email unrolls inside the list, the emails around it fade
+  back, and a day rail in the margin marks what's unread and what needs you. Mail is set in
+  a reading serif (Newsreader), the interface in Geist, times and counts in Geist Mono, with
+  one signal colour for what needs you. The sidebar becomes a drawer: click the box's name
+  ("Imbox ▾"). Designed (HTML) emails show **As designed** on their own sheet, or **As text**
+  in the app's type.
 - **Default style:** SuperHey's own look, in **light, dark or system**. Themes:
   **Cobalt** (the default), **Graphite** (black and greys), **Linen**, **Fjord**, **Moss** and
   **Plum**. Each has a light and a dark version.

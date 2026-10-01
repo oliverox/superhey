@@ -4,6 +4,10 @@
  * Themes are sets of tokens on <html data-theme>. Components only use the tokens, so a
  * theme can change colour, type, corners and pane layout without touching components.
  *
+ *   column   — SuperHey's own look: warm paper or warm charcoal, one ground for every pane,
+ *              a reading serif (Newsreader) for mail, Geist for the interface, Geist Mono
+ *              for times and counts, one vermilion signal for what needs you. Light or
+ *              dark as the system is, or as chosen.
  *   default  — graphite sidebar, white panes, one cobalt accent. Light or dark as the system
  *              is, or as chosen (<html data-scheme>: auto, light, dark).
  *   omarchy  — Omarchy / Hyprland: tiled panes with gaps, square corners, monospace,
@@ -16,8 +20,10 @@
  *   14  body UI text (--text)
  *   15  email text (--read-size), dialog titles, composer
  *   17  pane headings
+ *   18  email text in the Column style (a serif reads smaller than a sans)
  *   20  loading screen
  *   26  email subject, setup title
+ *   30  email subject in the Column style
  */
 
 :root,
@@ -76,7 +82,7 @@
 
 /* Dark: when the system is (unless Light is chosen), or when Dark is chosen. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='omarchy']):not([data-scheme='light']) {
+  :root:not([data-theme='omarchy']):not([data-theme='column']):not([data-scheme='light']) {
     --bg: #0b0c0f;
     --side-bg: #0f1013;
     --side-sel: #1d2026;
@@ -104,7 +110,7 @@
     color-scheme: dark;
   }
 }
-:root[data-scheme='dark']:not([data-theme='omarchy']) {
+:root[data-scheme='dark']:not([data-theme='omarchy']):not([data-theme='column']) {
   --bg: #0b0c0f;
   --side-bg: #0f1013;
   --side-sel: #1d2026;
@@ -129,6 +135,125 @@
   --tip-bg: #262a31;
   --tip-ink: #eceef2;
   --tip-rule: #33373f;
+  color-scheme: dark;
+}
+
+/* Column: one warm ground for every pane; the email is the thing that stands out. */
+:root[data-theme='column'] {
+  --bg: #f5f3ed;
+  --side-bg: #f5f3ed;
+  --side-ink: #1c1d1a;
+  --side-soft: #4a4a44;
+  --side-faint: #6c6a61;
+  --side-sel: #e9e6dd;
+  --side-rule: #e2ded3;
+  --pane: #f5f3ed;
+  --pane-alt: #f5f3ed;
+  --pane-sunk: #ebe8df;
+  --ink: #1c1d1a;
+  --ink-soft: #4a4a44;
+  --ink-faint: #6c6a61;
+  --rule: #e2ded3;
+  --rule-strong: #d3cfc3;
+  /* The signal: what needs you, and the one action that matters. */
+  --accent: #c8421a;
+  --accent-ink: #ffffff;
+  --accent-wash: #f6e2d9;
+  /* Unread is ink, not colour: colour is kept for what needs you. */
+  --new: #1c1d1a;
+  --side-accent: #1c1d1a;
+  --side-accent-ink: #f5f3ed;
+  --danger: #c22a2a;
+  --ok: #2f7d4a;
+  --attn: #a83c12;
+  --attn-wash: #f6e2d9;
+  --selection: #e9e6dd;
+  --tip-bg: #1c1d1a;
+  --tip-ink: #f5f3ed;
+  --tip-rule: #1c1d1a;
+  --tip-key-rule: rgba(245, 243, 237, 0.28);
+  --font-ui: 'Geist Variable', ui-sans-serif, sans-serif;
+  --font-read: 'Newsreader Variable', Georgia, serif;
+  --font-title: var(--font-read);
+  --font-meta: 'Geist Mono Variable', ui-monospace, monospace;
+  --r: 8px;
+  --r-lg: 12px;
+  --avatar-r: 9999px;
+  --gap: 0px;
+  --pane-border: 0px;
+  --text: 14px;
+  --read-size: 18px;
+  --title-size: 30px;
+  --measure: 34em;
+  --measure-wide: 40em;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme='column']:not([data-scheme='light']) {
+    --bg: #131412;
+    --side-bg: #131412;
+    --side-ink: #ecebe4;
+    --side-soft: #bdbab0;
+    --side-faint: #8d8b81;
+    --side-sel: #1f201d;
+    --side-rule: #232421;
+    --pane: #131412;
+    --pane-alt: #131412;
+    --pane-sunk: #1c1d1a;
+    --ink: #ecebe4;
+    --ink-soft: #bdbab0;
+    --ink-faint: #8d8b81;
+    --rule: #262724;
+    --rule-strong: #33342f;
+    --accent: #ff6a3d;
+    --accent-ink: #131412;
+    --accent-wash: #2b1c15;
+    --new: #ecebe4;
+    --side-accent: #ecebe4;
+    --side-accent-ink: #131412;
+    --danger: #ff6b6b;
+    --ok: #7fbf8e;
+    --attn: #ff8a5e;
+    --attn-wash: #2b1c15;
+    --selection: #1f201d;
+    --tip-bg: #262724;
+    --tip-ink: #ecebe4;
+    --tip-rule: #33342f;
+    --tip-key-rule: #45463f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme='column'][data-scheme='dark'] {
+  --bg: #131412;
+  --side-bg: #131412;
+  --side-ink: #ecebe4;
+  --side-soft: #bdbab0;
+  --side-faint: #8d8b81;
+  --side-sel: #1f201d;
+  --side-rule: #232421;
+  --pane: #131412;
+  --pane-alt: #131412;
+  --pane-sunk: #1c1d1a;
+  --ink: #ecebe4;
+  --ink-soft: #bdbab0;
+  --ink-faint: #8d8b81;
+  --rule: #262724;
+  --rule-strong: #33342f;
+  --accent: #ff6a3d;
+  --accent-ink: #131412;
+  --accent-wash: #2b1c15;
+  --new: #ecebe4;
+  --side-accent: #ecebe4;
+  --side-accent-ink: #131412;
+  --danger: #ff6b6b;
+  --ok: #7fbf8e;
+  --attn: #ff8a5e;
+  --attn-wash: #2b1c15;
+  --selection: #1f201d;
+  --tip-bg: #262724;
+  --tip-ink: #ecebe4;
+  --tip-rule: #33342f;
+  --tip-key-rule: #45463f;
   color-scheme: dark;
 }
 
@@ -182,6 +307,11 @@
 @theme {
   --font-app: var(--font-ui);
   --font-body: var(--font-read);
+  /* Subjects: the interface font, or the reading serif in the Column style (its tokens
+     override these on <html>). */
+  --font-title: var(--font-ui);
+  /* Times, counts and keys: the interface font, or Geist Mono in the Column style. */
+  --font-meta: var(--font-ui);
   --radius-ui: var(--r);
   --radius-ui-lg: var(--r-lg);
   --color-bg: var(--bg);
@@ -1013,4 +1143,91 @@ mark {
 }
 [data-theme='omarchy'] .cal-event {
   border-radius: 0;
+}
+
+/* ---- The Column style ---- */
+
+/* The sidebar as a drawer over the left edge. */
+.drawer-in {
+  animation: drawer-in var(--dur-2, 220ms) var(--ease-out, cubic-bezier(0.2, 0.8, 0.2, 1));
+}
+@keyframes drawer-in {
+  from {
+    transform: translateX(-24px);
+    opacity: 0;
+  }
+}
+
+/*
+ * The day rail: a quiet line in the list's margin, with a notch per email. A notch is
+ * thicker and in ink while the email is unread, and in the signal colour when it needs you.
+ * Drawn on the list itself (background-attachment: local), so it scrolls with the rows.
+ */
+[data-theme='column'] .column-list ul[aria-label='Threads'],
+[data-theme='column'] .column-thread {
+  padding-left: 56px;
+  background: linear-gradient(var(--rule-strong), var(--rule-strong)) 26px 0 / 1px 100% no-repeat local;
+}
+[data-theme='column'] .column-thread {
+  padding-left: 56px;
+  background-position: 26px 0;
+}
+[data-theme='column'] .column-list li[role='option']::after,
+[data-theme='column'] .column-neighbour::after,
+[data-theme='column'] .column-open::before {
+  content: '';
+  position: absolute;
+  /* From the rail into the gap before the row. */
+  left: -38px;
+  top: 22px;
+  width: 12px;
+  height: 1px;
+  border-radius: 2px;
+  background: var(--rule-strong);
+  transition: width var(--dur-2, 220ms) ease;
+}
+[data-theme='column'] .column-neighbour {
+  position: relative;
+}
+[data-theme='column'] .column-neighbour::after {
+  left: -30px;
+  top: 21px;
+}
+[data-theme='column'] .column-open::before {
+  left: -30px;
+  top: 10px;
+  /* The open email's notch reaches into the column, like a bookmark. */
+  width: 24px;
+  height: 3px;
+  background: var(--ink);
+}
+[data-theme='column'] .column-list li[data-unread]::after,
+[data-theme='column'] .column-neighbour[data-unread]::after {
+  height: 3px;
+  background: var(--ink);
+  top: 21px;
+}
+[data-theme='column'] .column-list li[data-needs]::after,
+[data-theme='column'] .column-neighbour[data-needs]::after {
+  height: 3px;
+  background: var(--accent);
+  top: 21px;
+}
+[data-theme='column'] .column-list li[role='option'][aria-selected='true']::after {
+  width: 26px;
+}
+
+/* The open email in the column: the subject in the reading serif, room around it. */
+.column-reader {
+  padding-top: 6px;
+}
+[data-theme='column'] .reader-title {
+  margin-top: 10px;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+  line-height: 1.15;
+}
+.column-open {
+  padding: 14px 0 8px;
+  margin: 10px 0 18px;
 }
