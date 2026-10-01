@@ -457,21 +457,26 @@ function Message({
           </div>
           {/* A designed email: as its sender built it, or as text in the app's own type. */}
           {designed && (
-            <span role="group" aria-label="Show this email" className="flex shrink-0 items-baseline gap-2.5 self-center text-[12px]">
+            <span role="group" aria-label="Show this email" className="flex shrink-0 items-center gap-0.5 self-center">
               {(
                 [
-                  [true, 'As designed', 'As the sender designed it'],
-                  [false, 'As text', 'As text, in the app’s own type'],
+                  // As designed: a layout (a picture above a block of text).
+                  [true, 'As designed: as the sender built it', <><rect x="2.5" y="2.5" width="11" height="11" rx="1.5" /><path d="M2.5 7.5h11M5 10h6" /></>],
+                  // As text: lines of text.
+                  [false, 'As text: in the app’s own type', <path d="M3 4h10M3 7h10M3 10h10M3 13h6" />],
                 ] as const
-              ).map(([original, label, title]) => (
+              ).map(([original, label, glyph]) => (
                 <button
                   key={label}
                   onClick={() => showOriginal !== original && toggle()}
                   aria-pressed={showOriginal === original}
-                  title={title}
-                  className={`border-b pb-px font-medium transition-colors ${showOriginal === original ? 'border-ink-soft text-ink' : 'border-transparent text-ink-faint hover:text-ink-soft'}`}
+                  aria-label={label}
+                  title={label}
+                  className={`flex size-6 items-center justify-center rounded-ui transition-colors ${showOriginal === original ? 'bg-pane-sunk text-ink' : 'text-ink-faint hover:text-ink-soft'}`}
                 >
-                  {label}
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden>
+                    {glyph}
+                  </svg>
                 </button>
               ))}
             </span>

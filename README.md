@@ -174,7 +174,7 @@ Press `?` in the app for the full list. The main ones:
   back. Mail is set in
   a reading serif (Newsreader), the interface in Geist, times and counts in Geist Mono, with
   one signal colour for what needs you. The sidebar stays at
-  the side, faded until you point at it. Designed (HTML) emails show **As designed** on their own sheet, or **As text**
+  the side, faded until you point at it. Designed (HTML) emails show as designed on their own sheet, or as text
   in the app's type.
 - **Default style:** SuperHey's own look, in **light, dark or system**. Themes:
   **Cobalt** (the default), **Graphite** (black and greys), **Linen**, **Fjord**, **Moss** and
