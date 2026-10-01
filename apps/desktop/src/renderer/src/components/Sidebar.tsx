@@ -60,7 +60,7 @@ interface Props {
   active: boolean
   onOpenActivity: () => void
   onOpenSettings: () => void
-  /** Today, above the boxes: whether it's showing, and how much is left to handle. */
+  /** The Briefing (the Today page), above the boxes: whether it's showing, and how much is left to handle. */
   today: { active: boolean; count: number | null; onSelect: () => void }
   /** The calendar, below the boxes; `onOpen` with a day shows that day. */
   calendar: { active: boolean; onOpen: (day?: string) => void }
@@ -83,7 +83,7 @@ export function Sidebar({ boxes, activeBoxId, onSelectBox, status, theme, onThem
               }`}
             >
               <span className="mr-2.5 flex shrink-0 opacity-80"><TodayIcon /></span>
-              <span className="font-medium">Today</span>
+              <span className="font-medium">Briefing</span>
               {!!todayNav.count && <span className="ml-2 text-[12px] text-side-faint tabular-nums">{todayNav.count}</span>}
               <kbd className={`sidebar-key ml-auto ${todayNav.active ? 'is-selected' : ''}`} title="Press 0">
                 0

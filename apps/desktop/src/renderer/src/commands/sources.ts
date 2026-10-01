@@ -13,6 +13,7 @@ const NOT_COMMANDS = new Set<ShortcutId>(['palette', 'nextThread', 'prevThread',
 
 /** Other words people reach for. */
 const KEYWORDS: Partial<Record<ShortcutId, string[]>> = {
+  today: ['today', 'home', 'what needs me'],
   replyLater: ['later', 'todo', 'follow up'],
   setAside: ['save', 'keep', 'pin'],
   bubbleMenu: ['remind', 'snooze', 'later'],

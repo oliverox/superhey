@@ -30,7 +30,7 @@ every HEY app, and HEY stays the one source of truth.
 
 **Reading and triage**
 
-- **Today:** a single page of what needs you: what's due or late, emails that need a
+- **Briefing:** a single page of what needs you: what's due or late, emails that need a
   reply, Reply Later, people you're waiting on, what's new since you last looked, and
   what's coming up in the next week (from your HEY calendar and dates found in your mail).
 - **All of HEY's boxes** (Imbox, The Feed, Paper Trail, Reply Later, Set Aside, Bubble Up),
@@ -51,7 +51,7 @@ every HEY app, and HEY stays the one source of truth.
 - The sidebar leads with what's happening now or next ("In 10 min", with Join), then the
   rest of today and tomorrow.
 - **Add dates from email to the calendar:** calls, bookings and trips the AI finds in a
-  thread get an **Add** button (in the details panel and in Today's Coming up) that opens a
+  thread get an **Add** button (in the details panel and in the Briefing's Coming up) that opens a
   filled-in event to check first. Dates already in your calendar say **In calendar**.
 
 **Writing**
@@ -157,10 +157,10 @@ Press `?` in the app for the full list. The main ones:
 
 | | |
 | --- | --- |
-| **Navigate** | `j` / `k` next and previous · `0` Today · `1`–`6` boxes · `7` Calendar · `/` search · `Esc` close the email or leave search |
+| **Navigate** | `j` / `k` next and previous · `0` Briefing · `1`–`6` boxes · `7` Calendar · `/` search · `Esc` close the email or leave search |
 | **Calendar** | `←` / `→` previous and next · `T` today · `D` `W` `M` day, week, month · double-click a time to add an event |
 | **Thread** | `;` expand or collapse all · `i` details |
-| **Act** | `r` Reply Later · `s` Set Aside · `b` Bubble Up… · `m` Move to… · `f` The Feed · `p` Paper Trail · `l` Labels… · `u` seen/unseen · `#` Trash · `e` Done (on Today) · `z` undo |
+| **Act** | `r` Reply Later · `s` Set Aside · `b` Bubble Up… · `m` Move to… · `f` The Feed · `p` Paper Trail · `l` Labels… · `u` seen/unseen · `#` Trash · `e` Done (on the Briefing) · `z` undo |
 | **Write** | `⇧R` reply · `a` reply all · `⇧F` forward · `c` new message · `⌘↵` send · `⌘J` draft in your voice |
 | **Screener** | `⇧S` open · `y` let them in · `n` screen out · `!` spam |
 | **App** | `⌘K` command bar · `⌘,` Settings · `⇧T` switch style · `⇧D` light or dark |
@@ -205,7 +205,7 @@ This is a pnpm monorepo:
 ```
 packages/core     @superhey/core: no Electron. The HEY CLI adapter, SQLite cache
                   (node:sqlite), sync engine and `hey watch`, actions and outbox,
-                  search, Today, and the AI (analysis, voice, drafts) via the AI SDK.
+                  search, the Briefing (Today), and the AI (analysis, voice, drafts) via the AI SDK.
 apps/desktop      @superhey/desktop: Electron main process and preload, the React 19
                   renderer (Tailwind v4), and a dev web server that serves the same UI
                   in a browser.

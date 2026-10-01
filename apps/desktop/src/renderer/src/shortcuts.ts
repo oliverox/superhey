@@ -15,7 +15,7 @@ export interface ShortcutDef {
 export const SHORTCUTS = {
   nextThread: { keys: ['j', 'ArrowDown'], label: 'Next thread', group: 'Navigate' },
   prevThread: { keys: ['k', 'ArrowUp'], label: 'Previous thread', group: 'Navigate' },
-  today: { keys: ['0'], label: 'Today', group: 'Navigate' },
+  today: { keys: ['0'], label: 'Briefing', group: 'Navigate' },
   box1: { keys: ['1'], label: 'Imbox', group: 'Navigate' },
   box2: { keys: ['2'], label: 'The Feed', group: 'Navigate' },
   box3: { keys: ['3'], label: 'Paper Trail', group: 'Navigate' },
@@ -37,7 +37,7 @@ export const SHORTCUTS = {
   labelsMenu: { keys: ['l'], label: 'Labels…', group: 'Act' },
   toggleSeen: { keys: ['u'], label: 'Mark seen / unseen', group: 'Act' },
   trash: { keys: ['#'], label: 'Move to Trash', group: 'Act' },
-  done: { keys: ['e'], label: 'Done (on Today)', group: 'Act' },
+  done: { keys: ['e'], label: 'Done (on the Briefing)', group: 'Act' },
   undo: { keys: ['z', 'mod+z'], label: 'Undo last action', group: 'Act' },
 
   reply: { keys: ['R'], label: 'Reply', group: 'Act' },

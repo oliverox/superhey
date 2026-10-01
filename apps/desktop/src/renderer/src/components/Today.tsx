@@ -356,8 +356,8 @@ function RowActions({ onDone, onNotNow, doneLabel = 'Done' }: { onDone?: () => v
   )
   return (
     <span className="row-actions pointer-events-none absolute inset-y-0 right-0 flex items-center rounded-r-ui pr-2 pl-8 opacity-0 transition-opacity duration-(--dur-1) group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
-      {onDone && button(doneLabel, withShortcut(doneLabel === 'Done' ? 'Done: you’ve dealt with it' : `${doneLabel}: take it off Today`, 'done'), onDone, true)}
-      {onNotNow && button('Not now', 'Not now: off Today until tomorrow, or until something new arrives', onNotNow)}
+      {onDone && button(doneLabel, withShortcut(doneLabel === 'Done' ? 'Done: you’ve dealt with it' : `${doneLabel}: take it off the Briefing`, 'done'), onDone, true)}
+      {onNotNow && button('Not now', 'Not now: off the Briefing until tomorrow, or until something new arrives', onNotNow)}
     </span>
   )
 }
@@ -475,7 +475,7 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
                 </HoverButton>
               )}
               {(c.task || c.isDeadline) && (
-                <HoverButton onClick={() => void api.markItemDone(c.posting.topicId!, c.task ?? c.label)} title="Done: you’ve dealt with it (it leaves Today)">
+                <HoverButton onClick={() => void api.markItemDone(c.posting.topicId!, c.task ?? c.label)} title="Done: you’ve dealt with it (it leaves the Briefing)">
                   Done
                 </HoverButton>
               )}
