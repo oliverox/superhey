@@ -349,9 +349,8 @@ function Workspace({ status }: { status: AppStatus }) {
             ) : query ? (
               'Search'
             ) : onToday ? (
-              <span className="flex items-baseline gap-2">
-                Briefing <span className="text-[13px] font-normal text-ink-faint">{todayLabel()}</span>
-              </span>
+              // The sidebar already says Briefing: the title is the day.
+              todayLabel()
             ) : (
               (activeBox?.name ?? '')
             )}
