@@ -13,6 +13,8 @@ import { installShortcuts } from './shortcuts'
 // Apply before first paint so the window never flashes the wrong theme.
 applyStoredLook()
 installShortcuts()
+// The Mac draws its window buttons over the top-left corner (styles.css makes room for them).
+if (/Mac/.test(navigator.platform)) document.documentElement.dataset.mac = ''
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
