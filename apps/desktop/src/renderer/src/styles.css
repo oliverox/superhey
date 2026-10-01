@@ -1157,14 +1157,14 @@ mark {
   border-color: transparent;
 }
 
-/* The sidebar stays, faded back so the column leads, and comes forward when you point at it
-   (or tab into it). */
+/* The sidebar stays, faded back so the column leads, and comes forward while you point at it
+   (or move through it with the keyboard; a clicked button keeping focus doesn't count). */
 [data-theme='column'] [data-pane='sidebar'] {
   opacity: 0.42;
   transition: opacity var(--dur-2, 220ms) ease;
 }
 [data-theme='column'] [data-pane='sidebar']:hover,
-[data-theme='column'] [data-pane='sidebar']:focus-within {
+[data-theme='column'] [data-pane='sidebar']:has(:focus-visible) {
   opacity: 1;
 }
 
