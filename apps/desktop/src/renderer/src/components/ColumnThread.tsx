@@ -25,7 +25,7 @@ export function ColumnThread({ list, posting, where, onOpen, onClose, children }
         {before.map((p) => (
           <Neighbour key={p.id} posting={p} onOpen={onOpen} />
         ))}
-        <section className="column-open relative" data-unread={posting && !posting.seen ? true : undefined}>
+        <section className="column-open relative">
           {/* Where you are, and the way back (the message's own header says who and when). */}
           <div className="flex items-baseline gap-4 font-meta text-[12px] text-ink-faint">
             <button type="button" onClick={onClose} title="Back to the list (Esc)" className="flex flex-1 items-baseline gap-2 text-left hover:text-ink-soft">
@@ -47,7 +47,7 @@ export function ColumnThread({ list, posting, where, onOpen, onClose, children }
 /** An email around the open one: faded back until you point at it. */
 function Neighbour({ posting: p, onOpen }: { posting: PostingRow; onOpen: (p: PostingRow) => void }) {
   return (
-    <button type="button" onClick={() => onOpen(p)} className="column-neighbour block w-full py-3 text-left opacity-35 transition-opacity duration-(--dur-1) hover:opacity-80" data-unread={!p.seen || undefined}>
+    <button type="button" onClick={() => onOpen(p)} className="block w-full py-3 text-left opacity-35 transition-opacity duration-(--dur-1) hover:opacity-80">
       <span className="flex items-baseline gap-3">
         <span className={`truncate text-[14px] ${p.seen ? 'text-ink-soft' : 'font-semibold text-ink'}`}>{p.senderName ?? p.senderEmail}</span>
         <span className="flex-1" />

@@ -1168,53 +1168,6 @@ mark {
   opacity: 1;
 }
 
-/*
- * The day rail: a quiet line in the list's margin that marks only what's worth finding from
- * the edge: where a day begins (a tick at "Today", "Yesterday"…), the emails that need you
- * (a short mark in the signal colour), and the selected email (a longer mark in ink).
- * Ordinary rows get nothing; unread is already the dot and the bold name.
- * Drawn on the list itself (background-attachment: local), so it scrolls with the rows.
- */
-[data-theme='column'] .column-list ul[aria-label='Threads'] {
-  padding-left: 56px;
-  background: linear-gradient(var(--rule), var(--rule)) 26px 0 / 1px 100% no-repeat local;
-}
-[data-theme='column'] .column-list ul[aria-label='Threads'] li[data-needs]::after,
-[data-theme='column'] .column-list ul[aria-label='Threads'] li[role='option'][aria-selected='true']::after,
-[data-theme='column'] .column-list .list-day::before,
-[data-theme='column'] .column-list .list-group::before {
-  content: '';
-  position: absolute;
-  height: 3px;
-  border-radius: 2px;
-  transition: width var(--dur-2, 220ms) ease;
-}
-/* Needs you: a short signal mark from the rail. */
-[data-theme='column'] .column-list ul[aria-label='Threads'] li[data-needs]::after {
-  left: -38px;
-  top: 21px;
-  width: 9px;
-  background: var(--accent);
-}
-/* The selected email: a longer mark in ink, reaching toward the row like a bookmark. */
-[data-theme='column'] .column-list ul[aria-label='Threads'] li[role='option'][aria-selected='true']::after {
-  left: -38px;
-  top: 21px;
-  width: 26px;
-  background: var(--ink);
-}
-/* Where a day, or a group, begins: a fine tick across the rail beside its heading. */
-[data-theme='column'] .column-list .list-day::before,
-[data-theme='column'] .column-list .list-group::before {
-  left: -34px;
-  top: calc(50% - 0.5px);
-  width: 9px;
-  height: 1px;
-  background: var(--ink-faint);
-}
-[data-theme='column'] .column-list .list-day::before {
-  top: calc(50% + 4px);
-}
 /* The list's subjects in the reading serif, like the email they open. */
 [data-theme='column'] .column-list .row-subject {
   font-family: var(--font-title);
