@@ -171,7 +171,7 @@ Press `?` in the app for the full list. The main ones:
 
 - **Column style** (the default): SuperHey's own look, in **light, dark or system**. One
   column to read down: the open email unrolls inside the list, the emails around it fade
-  back, and a day rail in the margin marks what's unread and what needs you. Mail is set in
+  back, and a day rail in the margin marks where each day starts and what needs you. Mail is set in
   a reading serif (Newsreader), the interface in Geist, times and counts in Geist Mono, with
   one signal colour for what needs you. The sidebar becomes a drawer: click the page's title
   ("Imbox ▾", "Today ▾") or press `\`. Designed (HTML) emails show **As designed** on their own sheet, or **As text**

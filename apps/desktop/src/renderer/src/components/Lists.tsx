@@ -109,7 +109,7 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
         return (
           <Fragment key={p.id}>
             {showHeader && (
-              <li className="sticky top-0 z-10 bg-pane/95 backdrop-blur">
+              <li className="list-group sticky top-0 z-10 bg-pane/95 backdrop-blur">
                 {onToggleGroup ? (
                   <button
                     type="button"
@@ -129,7 +129,7 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
                 )}
               </li>
             )}
-            {!folded && !search && day && <li aria-hidden className="px-5 pt-3 pb-1 text-[11px] font-medium text-ink-faint">{day}</li>}
+            {!folded && !search && day && <li aria-hidden className="list-day relative px-5 pt-3 pb-1 text-[11px] font-medium text-ink-faint">{day}</li>}
             {!folded && <li
               ref={gone ? foldShut : undefined}
               role={gone ? undefined : 'option'}
@@ -180,7 +180,7 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
                     </Tag>
                   ))}
                   <span className="min-w-0 truncate">
-                    <span className={p.seen ? 'text-ink-soft' : 'font-medium text-ink'}>
+                    <span className={`row-subject ${p.seen ? 'text-ink-soft' : 'font-medium text-ink'}`}>
                       {p.subject ? mark(stripSubjectPrefixes(p.isBundle ? p.subject.split(' • ')[0]! : p.subject)) : '(no subject)'}
                     </span>
                     {!p.isBundle && (p.ai?.summary ?? p.summary) && <span className="text-ink-faint"> – {mark((p.ai?.summary ?? p.summary)!)}</span>}
