@@ -27,7 +27,7 @@ const KEYWORDS: Partial<Record<ShortcutId, string[]>> = {
   forward: ['share', 'fwd'],
   search: ['find'],
   details: ['sidebar', 'info', 'context'],
-  theme: ['omarchy', 'default'],
+  theme: ['omarchy', 'default', 'column', 'style'],
   appearance: ['dark', 'light', 'night', 'appearance', 'mode'],
   help: ['keys', 'keyboard', 'shortcuts'],
   settings: ['preferences', 'ai', 'claude', 'api key', 'budget', 'model'],

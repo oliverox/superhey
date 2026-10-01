@@ -135,6 +135,8 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
               role={gone ? undefined : 'option'}
               aria-hidden={gone || undefined}
               aria-selected={gone ? undefined : selected}
+              data-unread={!p.seen || undefined}
+              data-needs={p.ai?.needsReply || undefined}
               onClick={gone ? undefined : () => onOpen(p)}
               className={`group/row relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2 pr-3 pl-3 transition-colors duration-(--dur-1) ${
                 gone ? 'row-leave pointer-events-none' : 'rise'

@@ -307,7 +307,8 @@ function AppearanceMenu({ theme, scheme, onTheme, onScheme }: { theme: Theme; sc
   const choose = (look: Look) => {
     if (look === 'omarchy') onTheme('omarchy')
     else {
-      onTheme('default')
+      // Light and dark belong to Column and Default; from Omarchy, they lead back to Column.
+      if (theme === 'omarchy') onTheme('column')
       onScheme(look)
     }
     setOpen(false)

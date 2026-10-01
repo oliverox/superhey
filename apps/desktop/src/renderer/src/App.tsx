@@ -5,6 +5,7 @@ import type { AppStatus, BoxRow, PostingRow } from '@shared/api'
 import { api, useLive } from './api'
 import { useAppStatus } from './hooks'
 import { Sidebar } from './components/Sidebar'
+import { ColumnThread } from './components/ColumnThread'
 import { ListResizer, useListWidth } from './components/ListResizer'
 import { groupOf, inGroupOrder, PostingList, useCollapsedGroups } from './components/Lists'
 import { SearchField, SearchFilters, SearchResults } from './components/Search'
@@ -118,7 +119,6 @@ function Workspace({ status }: { status: AppStatus }) {
   }, [])
   useShortcut('screener', openScreener, waiting.length > 0 && !screening)
   const searchRef = useRef<HTMLInputElement>(null)
-  const { theme, setTheme, toggle: toggleTheme, scheme, setScheme, toggleDark } = useTheme()
   const [activePane, setActivePane] = useState<PaneId>('list')
   const [showActivity, setShowActivity] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
@@ -157,7 +157,16 @@ function Workspace({ status }: { status: AppStatus }) {
   const boxRows = useMemo(() => boxList.filter((p) => !groups.collapsed.has(groupOf(p, heldNew))), [boxList, groups.collapsed, heldNew])
   // With nothing open there's nothing for a reader to show: the list (a box, Today, search
   // results) takes the whole width until you open something. The Screener keeps its reader.
-  const listAlone = !screening && !target
+  const { theme, setTheme, toggle: toggleTheme, scheme, setScheme, toggleDark } = useTheme()
+  // The Column style: one column. The sidebar is a drawer, an open email unrolls in the list.
+  const column = theme === 'column'
+  const columnOpen = column && !!target && !screening
+  const [drawer, setDrawer] = useState(false)
+  const listAlone = (!screening && !target) || columnOpen
+  // The drawer closes once you've gone somewhere from it.
+  useEffect(() => {
+    setDrawer(false)
+  }, [boxId, onToday, onCalendar, showSettings, showActivity])
   const gridRef = useRef<HTMLDivElement>(null)
   const listWidth = useListWidth()
   const list = searching ? searchRows : onToday ? todayRows(todayData) : boxRows
@@ -192,8 +201,9 @@ function Workspace({ status }: { status: AppStatus }) {
   const firstOnToday = todayThreads(todayData)[0]
   const [todayClosed, setTodayClosed] = useState(false)
   useEffect(() => {
-    if (onToday && !todayClosed && !screening && !query && !target && firstOnToday) open(firstOnToday, false)
-  }, [onToday, todayClosed, screening, query, target, firstOnToday, open])
+    // Not in the Column style: there Today is the list you read down, nothing opened for you.
+    if (onToday && !column && !todayClosed && !screening && !query && !target && firstOnToday) open(firstOnToday, false)
+  }, [onToday, column, todayClosed, screening, query, target, firstOnToday, open])
   useEffect(() => {
     if (target) setTodayClosed(false)
   }, [target])
@@ -201,6 +211,13 @@ function Workspace({ status }: { status: AppStatus }) {
     if (onToday) setTodayClosed(true)
     setTarget(null)
     setActivePane('list')
+  }
+  // An action took the open thread out of the box: move on to the next one (or the previous one at the end), like HEY.
+  const leaveBox = () => {
+    const i = list.findIndex((p) => p.id === target?.postingId)
+    const next = i < 0 ? undefined : (list[i + 1] ?? list[i - 1])
+    if (next) open(next)
+    else setTarget(null)
   }
   const closeReaderRef = useRef(closeReader)
   closeReaderRef.current = closeReader
@@ -221,7 +238,7 @@ function Workspace({ status }: { status: AppStatus }) {
   useShortcut('search', () => searchRef.current?.focus())
   useShortcut('theme', toggleTheme)
   // Light and dark are the Default theme's (Omarchy is dark).
-  useShortcut('appearance', toggleDark, theme === 'default')
+  useShortcut('appearance', toggleDark, theme !== 'omarchy')
   const showBox = (id: number) => {
     setOnCalendar(false)
     setOnToday(false)
@@ -290,12 +307,16 @@ function Workspace({ status }: { status: AppStatus }) {
     <div
       ref={gridRef}
       style={{ '--list-w': `${listWidth.width}px` } as React.CSSProperties}
-      className={`tiles grid h-full ${listAlone || onCalendar ? 'grid-cols-[232px_1fr]' : 'grid-cols-[232px_var(--list-w)_1fr]'}`}
+      className={`tiles grid h-full ${
+        column ? (screening && !onCalendar ? 'grid-cols-[var(--list-w)_1fr]' : 'grid-cols-[1fr]') : listAlone || onCalendar ? 'grid-cols-[232px_1fr]' : 'grid-cols-[232px_var(--list-w)_1fr]'
+      }`}
       onMouseDown={(e) => {
         const pane = (e.target as HTMLElement).closest<HTMLElement>('[data-pane]')?.dataset.pane as PaneId | undefined
         if (pane) setActivePane(pane)
       }}
     >
+      {(!column || drawer) && (
+      <SidebarSlot drawer={column} onClose={() => setDrawer(false)}>
       <Sidebar
         boxes={ordered}
         activeBoxId={onToday || screening || onCalendar ? null : (activeBox?.id ?? null)}
@@ -311,6 +332,8 @@ function Workspace({ status }: { status: AppStatus }) {
         onOpenActivity={() => setShowActivity(true)}
         onOpenSettings={() => setShowSettings(true)}
       />
+      </SidebarSlot>
+      )}
 
       {onCalendar ? (
         <CalendarView focus={calendarFocus} />
@@ -339,6 +362,12 @@ function Workspace({ status }: { status: AppStatus }) {
               <span className="flex items-baseline gap-2">
                 Today <span className="text-[13px] font-normal text-ink-faint">{todayLabel()}</span>
               </span>
+            ) : column ? (
+              // The sidebar's place in the Column style: a word that opens it.
+              <button onClick={() => setDrawer(true)} title="Boxes, calendar and settings" className="no-drag flex items-baseline gap-1.5 hover:text-ink-soft">
+                {activeBox?.name ?? ''}
+                <span className="text-[11px] text-ink-faint">▾</span>
+              </button>
             ) : (
               (activeBox?.name ?? '')
             )}
@@ -359,8 +388,13 @@ function Workspace({ status }: { status: AppStatus }) {
           {/* With a thread open, the reader's top bar shows it instead. */}
           {!searchExpanded && listAlone && <AiSpend onOpen={() => setSettingsTab('usage')} />}
         </header>
-        {/* Standing alone, the list keeps a readable measure. */}
-        <div className={listAlone ? 'mx-auto flex min-h-0 w-full max-w-[780px] flex-1 flex-col' : 'contents'}>
+        {columnOpen && (
+          <ColumnThread list={list} posting={list.find((p) => p.id === target?.postingId) ?? null} where={query ? 'Search' : onToday ? 'Today' : (activeBox?.name ?? '')} appUrl={target?.appUrl ?? null} onOpen={open} onClose={closeReader}>
+            <Reader target={target} active={activePane === 'reader'} onOpenThread={open} onClose={closeReader} onLeaveBox={leaveBox} variant="column" />
+          </ColumnThread>
+        )}
+        {/* Standing alone, the list keeps a readable measure (kept, hidden, while an email is unrolled, so it keeps its place). */}
+        <div className={columnOpen ? 'hidden' : listAlone ? `mx-auto flex min-h-0 w-full flex-1 flex-col ${column ? 'column-list max-w-[860px]' : 'max-w-[780px]'}` : 'contents'}>
         {screening ? (
           <ScreenerList
             items={waiting}
@@ -415,21 +449,7 @@ function Workspace({ status }: { status: AppStatus }) {
       </section>
 
       <div data-pane="reader" className="contents">
-        {!listAlone && (
-        <Reader
-          target={target}
-          active={activePane === 'reader'}
-          onOpenThread={open}
-          onClose={screening ? undefined : closeReader}
-          onLeaveBox={() => {
-            // Move on to the next thread (or the previous one at the end), like HEY.
-            const i = list.findIndex((p) => p.id === target?.postingId)
-            const next = i < 0 ? undefined : (list[i + 1] ?? list[i - 1])
-            if (next) open(next)
-            else setTarget(null)
-          }}
-        />
-        )}
+        {!listAlone && <Reader target={target} active={activePane === 'reader'} onOpenThread={open} onClose={screening ? undefined : closeReader} onLeaveBox={leaveBox} />}
       </div>
       </>
       )}
@@ -463,6 +483,30 @@ function Workspace({ status }: { status: AppStatus }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * Where the sidebar sits: its grid column, or in the Column style a drawer over the left
+ * edge, closed by Esc or a click beside it.
+ */
+function SidebarSlot({ drawer, onClose, children }: { drawer: boolean; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    if (!drawer) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      e.preventDefault()
+      onClose()
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
+  }, [drawer, onClose])
+  if (!drawer) return <>{children}</>
+  return (
+    <div className="fixed inset-0 z-40" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="drawer-in absolute inset-y-0 left-0 grid w-[264px] border-r border-rule shadow-[16px_0_40px_-24px_rgba(0,0,0,0.5)]">{children}</div>
     </div>
   )
 }
