@@ -15,7 +15,7 @@ import { SetupScreen, StartingScreen } from './components/Setup'
 import { useTheme } from './theme'
 import { markSeenOnOpen } from './prefs'
 import { rememberSearch } from './mail/search'
-import { useShortcut, withShortcut } from './shortcuts'
+import { useShortcut } from './shortcuts'
 import { ShortcutHelp } from './components/ShortcutHelp'
 import { Tooltips } from './components/Tooltips'
 import { CommandBar } from './components/CommandBar'
@@ -158,16 +158,11 @@ function Workspace({ status }: { status: AppStatus }) {
   // With nothing open there's nothing for a reader to show: the list (a box, Today, search
   // results) takes the whole width until you open something. The Screener keeps its reader.
   const { theme, setTheme, toggle: toggleTheme, scheme, setScheme, toggleDark } = useTheme()
-  // The Column style: one column. The sidebar is a drawer, an open email unrolls in the list.
+  // The Column style: one column, where an open email unrolls in the list (the sidebar stays,
+  // faded until you point at it).
   const column = theme === 'column'
   const columnOpen = column && !!target && !screening
-  const [drawer, setDrawer] = useState(false)
   const listAlone = (!screening && !target) || columnOpen
-  useShortcut('drawer', () => setDrawer((d) => !d), column)
-  // The drawer closes once you've gone somewhere from it.
-  useEffect(() => {
-    setDrawer(false)
-  }, [boxId, onToday, onCalendar, showSettings, showActivity])
   const gridRef = useRef<HTMLDivElement>(null)
   const listWidth = useListWidth()
   const list = searching ? searchRows : onToday ? todayRows(todayData) : boxRows
@@ -308,16 +303,12 @@ function Workspace({ status }: { status: AppStatus }) {
     <div
       ref={gridRef}
       style={{ '--list-w': `${listWidth.width}px` } as React.CSSProperties}
-      className={`tiles grid h-full ${
-        column ? (screening && !onCalendar ? 'grid-cols-[var(--list-w)_1fr]' : 'grid-cols-[1fr]') : listAlone || onCalendar ? 'grid-cols-[232px_1fr]' : 'grid-cols-[232px_var(--list-w)_1fr]'
-      }`}
+      className={`tiles grid h-full ${listAlone || onCalendar ? 'grid-cols-[232px_1fr]' : 'grid-cols-[232px_var(--list-w)_1fr]'}`}
       onMouseDown={(e) => {
         const pane = (e.target as HTMLElement).closest<HTMLElement>('[data-pane]')?.dataset.pane as PaneId | undefined
         if (pane) setActivePane(pane)
       }}
     >
-      {(!column || drawer) && (
-      <SidebarSlot drawer={column} onClose={() => setDrawer(false)}>
       <Sidebar
         boxes={ordered}
         activeBoxId={onToday || screening || onCalendar ? null : (activeBox?.id ?? null)}
@@ -333,8 +324,6 @@ function Workspace({ status }: { status: AppStatus }) {
         onOpenActivity={() => setShowActivity(true)}
         onOpenSettings={() => setShowSettings(true)}
       />
-      </SidebarSlot>
-      )}
 
       {onCalendar ? (
         <CalendarView focus={calendarFocus} />
@@ -357,19 +346,14 @@ function Workspace({ status }: { status: AppStatus }) {
                 </button>
                 The Screener
               </span>
+            ) : query ? (
+              'Search'
+            ) : onToday ? (
+              <span className="flex items-baseline gap-2">
+                Today <span className="text-[13px] font-normal text-ink-faint">{todayLabel()}</span>
+              </span>
             ) : (
-              // In the Column style the title opens the sidebar's drawer (\ too).
-              <TitleSlot drawer={column} onOpen={() => setDrawer(true)}>
-                {query ? (
-                  'Search'
-                ) : onToday ? (
-                  <span className="flex items-baseline gap-2">
-                    Today <span className="text-[13px] font-normal text-ink-faint">{todayLabel()}</span>
-                  </span>
-                ) : (
-                  (activeBox?.name ?? '')
-                )}
-              </TitleSlot>
+              (activeBox?.name ?? '')
             )}
           </h1>
           <SearchField
@@ -483,41 +467,6 @@ function Workspace({ status }: { status: AppStatus }) {
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-/** The list's title; in the Column style, a button that opens the sidebar's drawer. */
-function TitleSlot({ drawer, onOpen, children }: { drawer: boolean; onOpen: () => void; children: React.ReactNode }) {
-  if (!drawer) return <>{children}</>
-  return (
-    <button onClick={onOpen} title={withShortcut('Boxes, calendar and settings', 'drawer')} className="no-drag flex items-baseline gap-1.5 hover:text-ink-soft">
-      {children}
-      <span className="text-[11px] text-ink-faint">▾</span>
-    </button>
-  )
-}
-
-/**
- * Where the sidebar sits: its grid column, or in the Column style a drawer over the left
- * edge, closed by Esc or a click beside it.
- */
-function SidebarSlot({ drawer, onClose, children }: { drawer: boolean; onClose: () => void; children: React.ReactNode }) {
-  useEffect(() => {
-    if (!drawer) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      e.stopPropagation()
-      e.preventDefault()
-      onClose()
-    }
-    document.addEventListener('keydown', onKey, true)
-    return () => document.removeEventListener('keydown', onKey, true)
-  }, [drawer, onClose])
-  if (!drawer) return <>{children}</>
-  return (
-    <div className="fixed inset-0 z-40" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="drawer-in absolute inset-y-0 left-0 grid w-[264px] border-r border-rule shadow-[16px_0_40px_-24px_rgba(0,0,0,0.5)]">{children}</div>
     </div>
   )
 }

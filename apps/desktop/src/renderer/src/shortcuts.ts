@@ -24,7 +24,6 @@ export const SHORTCUTS = {
   box6: { keys: ['6'], label: 'Bubble Up', group: 'Navigate' },
   calendar: { keys: ['7'], label: 'Calendar', group: 'Navigate' },
   search: { keys: ['/'], label: 'Search', group: 'Navigate' },
-  drawer: { keys: ['\\'], label: 'Boxes, calendar and settings (Column style)', group: 'Navigate' },
 
   toggleAll: { keys: [';'], label: 'Expand or collapse all messages', group: 'Thread' },
   details: { keys: ['i'], label: 'Show or hide details', group: 'Thread' },

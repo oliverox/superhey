@@ -157,7 +157,7 @@ Press `?` in the app for the full list. The main ones:
 
 | | |
 | --- | --- |
-| **Navigate** | `j` / `k` next and previous · `0` Today · `1`–`6` boxes · `7` Calendar · `\` boxes and settings (Column style) · `/` search · `Esc` close the email or leave search |
+| **Navigate** | `j` / `k` next and previous · `0` Today · `1`–`6` boxes · `7` Calendar · `/` search · `Esc` close the email or leave search |
 | **Calendar** | `←` / `→` previous and next · `T` today · `D` `W` `M` day, week, month · double-click a time to add an event |
 | **Thread** | `;` expand or collapse all · `i` details |
 | **Act** | `r` Reply Later · `s` Set Aside · `b` Bubble Up… · `m` Move to… · `f` The Feed · `p` Paper Trail · `l` Labels… · `u` seen/unseen · `#` Trash · `e` Done (on Today) · `z` undo |
@@ -173,8 +173,8 @@ Press `?` in the app for the full list. The main ones:
   column to read down: the open email unrolls inside the list, the emails around it fade
   back, and a day rail in the margin marks where each day starts and what needs you. Mail is set in
   a reading serif (Newsreader), the interface in Geist, times and counts in Geist Mono, with
-  one signal colour for what needs you. The sidebar becomes a drawer: click the page's title
-  ("Imbox ▾", "Today ▾") or press `\`. Designed (HTML) emails show **As designed** on their own sheet, or **As text**
+  one signal colour for what needs you. The sidebar stays at
+  the side, faded until you point at it. Designed (HTML) emails show **As designed** on their own sheet, or **As text**
   in the app's type.
 - **Default style:** SuperHey's own look, in **light, dark or system**. Themes:
   **Cobalt** (the default), **Graphite** (black and greys), **Linen**, **Fjord**, **Moss** and

@@ -1147,21 +1147,15 @@ mark {
 
 /* ---- The Column style ---- */
 
-/* With no sidebar under them, the Mac's window buttons sit over the first pane's header: it
-   starts after them. */
-:root[data-theme='column'][data-mac] .tiles > :first-child header.drag {
-  padding-left: 84px;
+/* The sidebar stays, faded back so the column leads, and comes forward when you point at it
+   (or tab into it). */
+[data-theme='column'] [data-pane='sidebar'] {
+  opacity: 0.42;
+  transition: opacity var(--dur-2, 220ms) ease;
 }
-
-/* The sidebar as a drawer over the left edge. */
-.drawer-in {
-  animation: drawer-in var(--dur-2, 220ms) var(--ease-out, cubic-bezier(0.2, 0.8, 0.2, 1));
-}
-@keyframes drawer-in {
-  from {
-    transform: translateX(-24px);
-    opacity: 0;
-  }
+[data-theme='column'] [data-pane='sidebar']:hover,
+[data-theme='column'] [data-pane='sidebar']:focus-within {
+  opacity: 1;
 }
 
 /*
