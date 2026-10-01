@@ -15,7 +15,7 @@ import { SetupScreen, StartingScreen } from './components/Setup'
 import { useTheme } from './theme'
 import { markSeenOnOpen } from './prefs'
 import { rememberSearch } from './mail/search'
-import { useShortcut } from './shortcuts'
+import { useShortcut, withShortcut } from './shortcuts'
 import { ShortcutHelp } from './components/ShortcutHelp'
 import { Tooltips } from './components/Tooltips'
 import { CommandBar } from './components/CommandBar'
@@ -163,6 +163,7 @@ function Workspace({ status }: { status: AppStatus }) {
   const columnOpen = column && !!target && !screening
   const [drawer, setDrawer] = useState(false)
   const listAlone = (!screening && !target) || columnOpen
+  useShortcut('drawer', () => setDrawer((d) => !d), column)
   // The drawer closes once you've gone somewhere from it.
   useEffect(() => {
     setDrawer(false)
@@ -356,20 +357,19 @@ function Workspace({ status }: { status: AppStatus }) {
                 </button>
                 The Screener
               </span>
-            ) : query ? (
-              'Search'
-            ) : onToday ? (
-              <span className="flex items-baseline gap-2">
-                Today <span className="text-[13px] font-normal text-ink-faint">{todayLabel()}</span>
-              </span>
-            ) : column ? (
-              // The sidebar's place in the Column style: a word that opens it.
-              <button onClick={() => setDrawer(true)} title="Boxes, calendar and settings" className="no-drag flex items-baseline gap-1.5 hover:text-ink-soft">
-                {activeBox?.name ?? ''}
-                <span className="text-[11px] text-ink-faint">▾</span>
-              </button>
             ) : (
-              (activeBox?.name ?? '')
+              // In the Column style the title opens the sidebar's drawer (\ too).
+              <TitleSlot drawer={column} onOpen={() => setDrawer(true)}>
+                {query ? (
+                  'Search'
+                ) : onToday ? (
+                  <span className="flex items-baseline gap-2">
+                    Today <span className="text-[13px] font-normal text-ink-faint">{todayLabel()}</span>
+                  </span>
+                ) : (
+                  (activeBox?.name ?? '')
+                )}
+              </TitleSlot>
             )}
           </h1>
           <SearchField
@@ -484,6 +484,17 @@ function Workspace({ status }: { status: AppStatus }) {
         </div>
       )}
     </div>
+  )
+}
+
+/** The list's title; in the Column style, a button that opens the sidebar's drawer. */
+function TitleSlot({ drawer, onOpen, children }: { drawer: boolean; onOpen: () => void; children: React.ReactNode }) {
+  if (!drawer) return <>{children}</>
+  return (
+    <button onClick={onOpen} title={withShortcut('Boxes, calendar and settings', 'drawer')} className="no-drag flex items-baseline gap-1.5 hover:text-ink-soft">
+      {children}
+      <span className="text-[11px] text-ink-faint">▾</span>
+    </button>
   )
 }
 
