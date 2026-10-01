@@ -147,6 +147,19 @@ describe('Repo postings', () => {
     expect(r.posting(PostingId(100))!.avatar).toMatchObject({ url: null, initials: 'EN' })
   })
 
+  it('names a bundle after its newest email, not the shared address’s contact', () => {
+    const r = repo()
+    const shared = { id: 70, name: 'QR.ezCheck', email_address: 'notifications@accounts.dev', initials: 'QE' }
+    r.upsertPostings([
+      P({ id: 1, kind: 'bundle', topic_id: 901, name: 'Verification code', creator: shared, active_at: '2026-10-01T12:48:00Z' }),
+      P({ id: 2, kind: 'topic', topic_id: 902, name: 'Old code', creator: shared, alternative_sender_name: 'Dental Pro', active_at: '2026-09-01T00:00:00Z' }),
+      P({ id: 3, kind: 'topic', topic_id: 903, name: 'Verification code', creator: shared, alternative_sender_name: 'Cockpit', active_at: '2026-10-01T12:48:00Z' }),
+    ])
+    const bundle = r.postings(1).find((p) => p.isBundle)!
+    expect(bundle).toMatchObject({ senderName: 'Cockpit', avatar: { initials: 'C' } })
+    expect(r.posting(PostingId(1))).toMatchObject({ senderName: 'Cockpit' })
+  })
+
   it('names each message by its own From name, not the address’s contact', () => {
     const r = repo()
     r.storeThread(TopicId(901), [S.Entry.parse(entry({ alternative_sender_name: 'Cockpit' }))], null)

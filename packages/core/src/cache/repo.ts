@@ -306,6 +306,7 @@ export class Repo {
          SELECT id, sender_email FROM postings WHERE box_id = ?1 AND is_bundle = 1
        )
        SELECT p.*,
+         CASE WHEN p.is_bundle = 1 THEN (SELECT m.sender_name FROM postings m WHERE m.box_id = p.box_id AND m.sender_email = p.sender_email AND m.is_bundle = 0 ORDER BY m.active_at DESC LIMIT 1) END AS member_name,
          CASE WHEN p.is_bundle = 1 THEN
            (SELECT count(*) FROM postings m
              WHERE m.box_id = ?1 AND m.sender_email = p.sender_email AND m.is_bundle = 0)
@@ -454,7 +455,10 @@ export class Repo {
   }
 
   posting(id: PostingId): PostingRow | null {
-    const row = this.get<Record<string, unknown>>('SELECT * FROM postings WHERE id = ?', id)
+    const row = this.get<Record<string, unknown>>(
+      `SELECT p.*, CASE WHEN p.is_bundle = 1 THEN (SELECT m.sender_name FROM postings m WHERE m.box_id = p.box_id AND m.sender_email = p.sender_email AND m.is_bundle = 0 ORDER BY m.active_at DESC LIMIT 1) END AS member_name FROM postings p WHERE p.id = ?`,
+      id,
+    )
     return row ? this.withAnalysis([toPostingRow(row)])[0]! : null
   }
 
@@ -1162,13 +1166,17 @@ const ATTACHMENT_MATCH: Record<Exclude<AttachmentKind, 'any'>, string[]> = {
 }
 
 function toPostingRow(r: Record<string, unknown>): PostingRow {
+  // A bundle is named for its newest email: one address can send for several apps
+  // ("Cockpit", "Dental Pro"), and the bundle itself only carries HEY's contact name for it.
+  const member = (r.member_name as string | null | undefined) ?? null
+  const name = member ?? (r.sender_name as string | null)
   return {
     id: PostingId(r.id as number),
     topicId: r.topic_id == null ? null : TopicId(r.topic_id as number),
     boxId: r.box_id as number,
     subject: r.subject as string,
     summary: r.summary as string | null,
-    senderName: r.sender_name as string | null,
+    senderName: name,
     senderEmail: r.sender_email as string | null,
     seen: r.seen === 1,
     bubbledUp: r.bubbled_up === 1,
@@ -1177,14 +1185,14 @@ function toPostingRow(r: Record<string, unknown>): PostingRow {
     isBundle: r.is_bundle === 1,
     activeAt: r.active_at as string | null,
     appUrl: r.app_url as string | null,
-    ...fromRaw(r.raw_json as string, (r.sender_name as string | null) ?? (r.sender_email as string | null)),
+    ...fromRaw(r.raw_json as string, name ?? (r.sender_email as string | null), member),
     bundleCount: r.is_bundle === 1 ? ((r.bundle_count as number | null) ?? null) : null,
     ai: null,
   }
 }
 
 /** Details kept only in the posting's raw JSON: labels, avatar, tracker flag. */
-function fromRaw(rawJson: string, senderName: string | null): Pick<PostingRow, 'labels' | 'avatar' | 'blockedTrackers'> {
+function fromRaw(rawJson: string, senderName: string | null, shownAs: string | null = null): Pick<PostingRow, 'labels' | 'avatar' | 'blockedTrackers'> {
   type Raw = {
     folders?: Array<{ name?: unknown }> | null
     creator?: { name?: unknown; avatar_url?: unknown; avatar_background_color?: unknown; initials?: unknown } | null
@@ -1200,7 +1208,8 @@ function fromRaw(rawJson: string, senderName: string | null): Pick<PostingRow, '
   const str = (v: unknown) => (typeof v === 'string' && v ? v : null)
   // Sent under another name than HEY's contact for the address: that contact's photo and
   // initials would be someone else's.
-  const other = str(raw.alternative_sender_name) != null && str(raw.alternative_sender_name) !== str(raw.creator?.name)
+  const as = shownAs ?? str(raw.alternative_sender_name)
+  const other = as != null && as !== str(raw.creator?.name)
   return {
     labels: (raw.folders ?? []).flatMap((f) => (typeof f.name === 'string' ? [f.name] : [])),
     avatar: {

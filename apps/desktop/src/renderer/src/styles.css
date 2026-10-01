@@ -1171,15 +1171,12 @@ mark {
  * Ordinary rows get nothing; unread is already the dot and the bold name.
  * Drawn on the list itself (background-attachment: local), so it scrolls with the rows.
  */
-[data-theme='column'] .column-list ul[aria-label='Threads'],
-[data-theme='column'] .column-thread {
+[data-theme='column'] .column-list ul[aria-label='Threads'] {
   padding-left: 56px;
   background: linear-gradient(var(--rule), var(--rule)) 26px 0 / 1px 100% no-repeat local;
 }
 [data-theme='column'] .column-list ul[aria-label='Threads'] li[data-needs]::after,
 [data-theme='column'] .column-list ul[aria-label='Threads'] li[role='option'][aria-selected='true']::after,
-[data-theme='column'] .column-neighbour[data-needs]::after,
-[data-theme='column'] .column-open::before,
 [data-theme='column'] .column-list .list-day::before,
 [data-theme='column'] .column-list .list-group::before {
   content: '';
@@ -1189,30 +1186,18 @@ mark {
   transition: width var(--dur-2, 220ms) ease;
 }
 /* Needs you: a short signal mark from the rail. */
-[data-theme='column'] .column-list ul[aria-label='Threads'] li[data-needs]::after,
-[data-theme='column'] .column-neighbour[data-needs]::after {
+[data-theme='column'] .column-list ul[aria-label='Threads'] li[data-needs]::after {
   left: -38px;
   top: 21px;
   width: 9px;
   background: var(--accent);
 }
-[data-theme='column'] .column-neighbour {
-  position: relative;
-}
-[data-theme='column'] .column-neighbour[data-needs]::after {
-  left: -30px;
-}
 /* The selected email: a longer mark in ink, reaching toward the row like a bookmark. */
-[data-theme='column'] .column-list ul[aria-label='Threads'] li[role='option'][aria-selected='true']::after,
-[data-theme='column'] .column-open::before {
+[data-theme='column'] .column-list ul[aria-label='Threads'] li[role='option'][aria-selected='true']::after {
   left: -38px;
   top: 21px;
   width: 26px;
   background: var(--ink);
-}
-[data-theme='column'] .column-open::before {
-  left: -30px;
-  top: 10px;
 }
 /* Where a day, or a group, begins: a fine tick across the rail beside its heading. */
 [data-theme='column'] .column-list .list-day::before,
