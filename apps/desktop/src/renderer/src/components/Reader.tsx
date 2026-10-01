@@ -22,7 +22,6 @@ import { AiSpend } from './AiSpend'
 import { AiSparkle } from './DraftReply'
 import { Composer, type ComposeRequest } from './Composer'
 import { PersonChip, RecipientsButton } from './People'
-import { ToolbarWords } from './Menu'
 import { ReplyArea } from './ReplyArea'
 
 export interface ReaderTarget {
@@ -164,8 +163,17 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose, varia
   if (variant === 'column') {
     return (
       <div ref={mainRef as React.RefObject<HTMLDivElement>} className="column-reader [view-transition-name:reader]" data-pane="reader" data-active={active}>
+        {/* The actions, pinned while you read down the email. */}
+        <div className="sticky top-0 z-10 -mx-2 mt-1 flex items-center gap-0.5 bg-pane/95 px-1 py-1 backdrop-blur">
+          {actions}
+          <span className="flex-1" />
+          {target.appUrl && (
+            <a href={target.appUrl} target="_blank" rel="noreferrer" className="rounded-ui px-2 py-1 text-[12px] text-ink-faint hover:bg-pane-sunk hover:text-ink">
+              Open in HEY ↗
+            </a>
+          )}
+        </div>
         {heading}
-        {target.isBundle && <div className="column-actions mt-4"><ToolbarWords.Provider value>{actions}</ToolbarWords.Provider></div>}
         {body ?? (
           thread.data && (
             <>
@@ -173,10 +181,6 @@ function ThreadReader({ target, active, onOpenThread, onLeaveBox, onClose, varia
                 <Conversation entries={thread.data.entries} subject={subject} htmlByEntry={html.data ?? {}} canReply={target.screeningId == null} />
                 <OutgoingReplies topicId={thread.data.topicId} entries={thread.data.entries} />
               </ThreadTopic.Provider>
-              {/* What you can do, as words with their keys; then the reply. */}
-              <div className="column-actions mt-8 flex flex-wrap items-center gap-x-1 gap-y-1 border-t border-rule pt-4 -ml-1.5">
-                <ToolbarWords.Provider value>{actions}</ToolbarWords.Provider>
-              </div>
               {target.screeningId == null && <ReplyArea key={thread.data.topicId} thread={thread.data} />}
             </>
           )

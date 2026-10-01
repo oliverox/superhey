@@ -8,7 +8,7 @@ import { stripSubjectPrefixes } from '../mail/forwarded'
  * around it, which fade back (a click opens one; Esc or the sender line closes it). One
  * column to read down, instead of a list beside a reader.
  */
-export function ColumnThread({ list, posting, where, appUrl, onOpen, onClose, children }: { list: PostingRow[]; posting: PostingRow | null; where: string; appUrl: string | null; onOpen: (p: PostingRow) => void; onClose: () => void; children: ReactNode }) {
+export function ColumnThread({ list, posting, where, onOpen, onClose, children }: { list: PostingRow[]; posting: PostingRow | null; where: string; onOpen: (p: PostingRow) => void; onClose: () => void; children: ReactNode }) {
   const i = posting ? list.findIndex((p) => p.id === posting.id) : -1
   const before = i < 0 ? [] : list.slice(Math.max(0, i - 2), i)
   const after = i < 0 ? [] : list.slice(i + 1, i + 4)
@@ -32,11 +32,6 @@ export function ColumnThread({ list, posting, where, appUrl, onOpen, onClose, ch
               <span>{where}</span>
               {i >= 0 && <span>· {i + 1} of {list.length}</span>}
             </button>
-            {appUrl && (
-              <a href={appUrl} target="_blank" rel="noreferrer" className="hover:text-ink-soft">
-                Open in HEY ↗
-              </a>
-            )}
             <span>esc closes</span>
           </div>
           {children}

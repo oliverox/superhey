@@ -1,5 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
-import { splitShortcut } from './Tooltips'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { useShortcut, withShortcut, type ShortcutId } from '../shortcuts'
 
 /**
@@ -130,12 +129,6 @@ export function MenuSeparator() {
   return <div className="my-1 h-px bg-rule" />
 }
 
-/**
- * Toolbar buttons as words ("Reply Later  L") instead of icons: the Column style's actions,
- * under the email. Menus inside take it too.
- */
-export const ToolbarWords = createContext(false)
-
 export function ToolbarButton({
   label,
   pressed,
@@ -149,22 +142,6 @@ export function ToolbarButton({
   onClick: () => void
   'aria-haspopup'?: 'menu'
 }) {
-  const words = useContext(ToolbarWords)
-  if (words) {
-    const { text, key } = splitShortcut(label)
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        aria-pressed={pressed}
-        className={`no-drag inline-flex items-baseline gap-1.5 rounded-ui px-1.5 py-1 text-[14px] transition-colors ${pressed ? 'bg-pane-sunk text-ink' : 'text-ink-soft hover:text-ink'}`}
-        {...rest}
-      >
-        {text}
-        {key && <span className="font-meta text-[11px] text-ink-faint">{key}</span>}
-      </button>
-    )
-  }
   return (
     <button
       type="button"
