@@ -425,6 +425,7 @@ function Workspace({ status }: { status: AppStatus }) {
             onOpen={open}
             collapsed={groups.collapsed}
             onToggleGroup={groups.toggle}
+            feed={activeBox?.kind === 'feedbox'}
           />
           </>
         )}

@@ -7,6 +7,7 @@ import { shortDate } from '../format'
 import { listTags, stripSubjectPrefixes, tagKind, tagMatchesLabel } from '../mail/forwarded'
 import { splitMatches } from '../mail/search'
 import { Avatar } from './Avatar'
+import { quietName } from '../today/comingUp'
 
 interface ListProps {
   postings: PostingRow[]
@@ -20,6 +21,8 @@ interface ListProps {
   onToggleGroup?: (group: string) => void
   /** The just-opened email kept in New for you (see groupOf). */
   heldNew?: number | null
+  /** The Feed: rows read as headlines, without the bold of unread. */
+  feed?: boolean
 }
 
 /**
@@ -78,7 +81,7 @@ export function useCollapsedGroups(boxId: number | null | undefined) {
   return { collapsed, toggle }
 }
 
-export function PostingList({ postings, loading, selectedId, onOpen, search, collapsed, onToggleGroup, heldNew = null }: ListProps) {
+export function PostingList({ postings, loading, selectedId, onOpen, search, collapsed, onToggleGroup, heldNew = null, feed = false }: ListProps) {
   const listRef = useRef<HTMLUListElement>(null)
   // Rows that just left the box stay a moment, folding shut, so the list closes the gap.
   const { rows: shown, leaving } = useLeavingRows(postings, !search)
@@ -142,49 +145,74 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
               style={{ animationDelay: `${Math.min(i, 12) * 18}ms`, '--row-bg': selected ? 'var(--selection)' : 'var(--pane-sunk)' } as React.CSSProperties}
             >
               {!gone && !search && <MarkRead posting={p} />}
-              <span>
-                <Avatar avatar={p.avatar} size={32} />
-              </span>
-              <div className="min-w-0 flex-1">
-                {/* Who, then when (and whether it wants a reply). */}
-                <div className="flex items-center gap-2">
-                  {!p.seen && <span className="size-1.5 shrink-0 rounded-full bg-new" aria-label="Unseen" />}
-                  <span className={`min-w-0 truncate text-[14px] ${p.seen ? 'text-ink-soft' : 'font-semibold text-ink'}`}>{mark(senderLabel(p))}</span>
-                  {(p.isBundle ? bundleSize(p) : (p.entryCount ?? 0)) > 1 && (
-                    <span className="shrink-0 text-[12px] text-ink-faint tabular-nums" title={p.isBundle ? 'Emails in this bundle' : 'Messages in this thread'}>
-                      {p.isBundle ? bundleSize(p) : p.entryCount}
-                    </span>
-                  )}
-                  <span className="ml-auto flex shrink-0 items-center gap-2 pl-2">
-                    {p.ai?.needsReply && (
-                      <span className="text-accent" title={p.ai.replyReason ? `Needs your reply: ${p.ai.replyReason}` : 'Needs your reply'} aria-label="Needs your reply">
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                          <path d="M6.5 3.5 2.5 7.5l4 4" />
-                          <path d="M2.5 7.5h7a4 4 0 0 1 4 4V13" />
-                        </svg>
+              {feed ? (
+                // The Feed reads like a newspaper's index: the headline first, the byline and
+                // what it's about under it, no bold (in the Feed, unread is the usual state).
+                <>
+                  <span className="self-start pt-[3px]">
+                    <Avatar avatar={p.avatar} size={24} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-3">
+                      <span className={`min-w-0 flex-1 truncate font-title text-[15px] ${p.seen ? 'text-ink-faint' : 'text-ink'}`}>
+                        {p.subject ? mark(quietName(stripSubjectPrefixes(p.isBundle ? p.subject.split(' • ')[0]! : p.subject))) : '(no subject)'}
+                      </span>
+                      <span className="shrink-0 font-meta text-[12px] text-ink-faint tabular-nums">{search ? shortDate(p.activeAt) : rowTime(p.activeAt, p.seen)}</span>
+                    </div>
+                    <div className="mt-0.5 truncate text-[13px] text-ink-faint">
+                      <span className={p.seen ? '' : 'text-ink-soft'}>{mark(senderLabel(p))}</span>
+                      {p.isBundle && bundleSize(p) > 1 && <span className="tabular-nums"> · {bundleSize(p)}</span>}
+                      {!p.isBundle && feedPreview(p) && <span> · {mark(feedPreview(p)!)}</span>}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                <span>
+                  <Avatar avatar={p.avatar} size={32} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  {/* Who, then when (and whether it wants a reply). */}
+                  <div className="flex items-center gap-2">
+                    {!p.seen && <span className="size-1.5 shrink-0 rounded-full bg-new" aria-label="Unseen" />}
+                    <span className={`min-w-0 truncate text-[14px] ${p.seen ? 'text-ink-soft' : 'font-semibold text-ink'}`}>{mark(senderLabel(p))}</span>
+                    {(p.isBundle ? bundleSize(p) : (p.entryCount ?? 0)) > 1 && (
+                      <span className="shrink-0 text-[12px] text-ink-faint tabular-nums" title={p.isBundle ? 'Emails in this bundle' : 'Messages in this thread'}>
+                        {p.isBundle ? bundleSize(p) : p.entryCount}
                       </span>
                     )}
-                    {p.hasAttachments && <Paperclip />}
-                    <span className={`text-[12px] tabular-nums ${p.seen ? 'text-ink-faint' : 'font-medium text-ink-soft'}`}>{search ? shortDate(p.activeAt) : rowTime(p.activeAt, p.seen)}</span>
-                  </span>
-                </div>
-                {/* What: tags, the subject, and the AI's line (or HEY's opening words). A bundle: its latest subject. */}
-                <div className="mt-px flex min-w-0 items-baseline gap-1.5 text-[13px]">
-                  {search?.boxNames[p.boxId] && <span className="shrink-0 text-[12px] font-medium text-ink-faint">{search.boxNames[p.boxId]}</span>}
-                  {!p.isBundle && <SubjectTags subject={p.subject} sender={senderLabel(p)} labels={p.labels} />}
-                  {p.labels.filter((label) => tagKind(label, senderLabel(p)) !== 'sender').map((label) => (
-                    <Tag key={label} kind="label">
-                      {label}
-                    </Tag>
-                  ))}
-                  <span className="min-w-0 truncate">
-                    <span className={`row-subject ${p.seen ? 'text-ink-soft' : 'font-medium text-ink'}`}>
-                      {p.subject ? mark(stripSubjectPrefixes(p.isBundle ? p.subject.split(' • ')[0]! : p.subject)) : '(no subject)'}
+                    <span className="ml-auto flex shrink-0 items-center gap-2 pl-2">
+                      {p.ai?.needsReply && (
+                        <span className="text-accent" title={p.ai.replyReason ? `Needs your reply: ${p.ai.replyReason}` : 'Needs your reply'} aria-label="Needs your reply">
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                            <path d="M6.5 3.5 2.5 7.5l4 4" />
+                            <path d="M2.5 7.5h7a4 4 0 0 1 4 4V13" />
+                          </svg>
+                        </span>
+                      )}
+                      {p.hasAttachments && <Paperclip />}
+                      <span className={`text-[12px] tabular-nums ${p.seen ? 'text-ink-faint' : 'font-medium text-ink-soft'}`}>{search ? shortDate(p.activeAt) : rowTime(p.activeAt, p.seen)}</span>
                     </span>
-                    {!p.isBundle && (p.ai?.summary ?? p.summary) && <span className="text-ink-faint"> – {mark((p.ai?.summary ?? p.summary)!)}</span>}
-                  </span>
+                  </div>
+                  {/* What: tags, the subject, and the AI's line (or HEY's opening words). A bundle: its latest subject. */}
+                  <div className="mt-px flex min-w-0 items-baseline gap-1.5 text-[13px]">
+                    {search?.boxNames[p.boxId] && <span className="shrink-0 text-[12px] font-medium text-ink-faint">{search.boxNames[p.boxId]}</span>}
+                    {!p.isBundle && <SubjectTags subject={p.subject} sender={senderLabel(p)} labels={p.labels} />}
+                    {p.labels.filter((label) => tagKind(label, senderLabel(p)) !== 'sender').map((label) => (
+                      <Tag key={label} kind="label">
+                        {label}
+                      </Tag>
+                    ))}
+                    <span className="min-w-0 truncate">
+                      <span className={`row-subject ${p.seen ? 'text-ink-soft' : 'font-medium text-ink'}`}>
+                        {p.subject ? mark(stripSubjectPrefixes(p.isBundle ? p.subject.split(' • ')[0]! : p.subject)) : '(no subject)'}
+                      </span>
+                      {!p.isBundle && (p.ai?.summary ?? p.summary) && <span className="text-ink-faint"> – {mark((p.ai?.summary ?? p.summary)!)}</span>}
+                    </span>
+                  </div>
                 </div>
-              </div>
+                </>
+              )}
             </li>}
           </Fragment>
         )
@@ -281,6 +309,18 @@ export function Highlighted({ text, terms }: { text: string; terms: string[] }) 
 function senderLabel(p: PostingRow) {
   const name = p.senderName?.replace(/^["'\s]+|["'\s]+$/g, '')
   return name || p.senderEmail || 'Unknown'
+}
+
+/**
+ * What a Feed email is about, from HEY's opening words (or the AI's line), without the
+ * subject or the sender's name repeated at its start.
+ */
+function feedPreview(p: PostingRow): string | null {
+  let text = (p.ai?.summary ?? p.summary ?? '').replace(/\s+/g, ' ').trim()
+  for (const lead of [stripSubjectPrefixes(p.subject), senderLabel(p)]) {
+    if (lead && text.toLowerCase().startsWith(lead.toLowerCase())) text = text.slice(lead.length).replace(/^[\s:–—-]+/, '')
+  }
+  return text || null
 }
 
 /**
