@@ -281,6 +281,40 @@ const vars = (c: Colors, dark: boolean) =>
     `--side-accent-ink:${c.sideAccentInk ?? c.accentInk}`,
   ].join(';')
 
+/** One of the Column style's accents, for light and dark: the colour, its wash, and the darker shade text takes on that wash. */
+interface AccentSide {
+  accent: string
+  wash: string
+  /** Text on the wash (tags like To do, Needs reply). */
+  attn: string
+  /** Text on the accent itself (a filled button). */
+  ink: string
+}
+export interface ColumnAccent {
+  id: string
+  name: string
+  blurb: string
+  light: AccentSide
+  dark: AccentSide
+}
+
+/**
+ * The Column style's accent colours (Settings → Appearance). It marks links, the selected
+ * things and what needs you; Vermilion is the style's own colour in styles.css.
+ */
+export const COLUMN_ACCENTS: ColumnAccent[] = [
+  { id: 'vermilion', name: 'Vermilion', blurb: 'Strong and warm', light: { accent: '#c8421a', wash: '#f6e2d9', attn: '#a83c12', ink: '#ffffff' }, dark: { accent: '#ff6a3d', wash: '#2b1c15', attn: '#ff8a5e', ink: '#131412' } },
+  { id: 'ink', name: 'Ink blue', blurb: 'Fountain-pen ink', light: { accent: '#3557b7', wash: '#e3e8f5', attn: '#2f4ea6', ink: '#ffffff' }, dark: { accent: '#8ea6f0', wash: '#1c2236', attn: '#9fb3f3', ink: '#131412' } },
+  { id: 'moss', name: 'Moss', blurb: 'Earthy and quiet', light: { accent: '#4d7240', wash: '#e3ebdd', attn: '#456838', ink: '#ffffff' }, dark: { accent: '#9cc38c', wash: '#1c2519', attn: '#a8cd98', ink: '#131412' } },
+  { id: 'plum', name: 'Plum', blurb: 'Soft and distinctive', light: { accent: '#7a4a8a', wash: '#ede2f0', attn: '#6e4280', ink: '#ffffff' }, dark: { accent: '#c39bd3', wash: '#261c2a', attn: '#cba6da', ink: '#131412' } },
+  { id: 'ochre', name: 'Ochre', blurb: 'Warm like the paper', light: { accent: '#9a6a12', wash: '#f3e8d2', attn: '#8a5e0f', ink: '#ffffff' }, dark: { accent: '#e0b45c', wash: '#2a2214', attn: '#e6bd6b', ink: '#131412' } },
+]
+/** The accent a new device starts with: calm, and never mistaken for a warning. */
+export const DEFAULT_ACCENT = 'ink'
+export const columnAccent = (id: string) => COLUMN_ACCENTS.find((a) => a.id === id) ?? COLUMN_ACCENTS.find((a) => a.id === DEFAULT_ACCENT)!
+
+const accentVars = (a: AccentSide) => `--accent:${a.accent};--accent-ink:${a.ink};--accent-wash:${a.wash};--attn:${a.attn};--attn-wash:${a.wash}`
+
 /** The CSS for every theme but the styles' own (Cobalt, Tokyo Night). */
 export function themeCss(): string {
   const out: string[] = []
@@ -289,6 +323,12 @@ export function themeCss(): string {
     out.push(`${on}{${vars(t.light, false)}}`)
     out.push(`@media (prefers-color-scheme: dark){${on}:not([data-scheme='light']){${vars(t.dark, true)};color-scheme:dark}}`)
     out.push(`:root[data-palette='${t.id}'][data-scheme='dark'][data-theme='default']{${vars(t.dark, true)};color-scheme:dark}`)
+  }
+  for (const a of COLUMN_ACCENTS.slice(1)) {
+    const on = `:root[data-theme='column'][data-accent='${a.id}']`
+    out.push(`${on}{${accentVars(a.light)}}`)
+    out.push(`@media (prefers-color-scheme: dark){${on}:not([data-scheme='light']){${accentVars(a.dark)}}}`)
+    out.push(`${on}[data-scheme='dark']{${accentVars(a.dark)}}`)
   }
   for (const t of OMARCHY_THEMES.slice(1)) {
     const c = t.colors

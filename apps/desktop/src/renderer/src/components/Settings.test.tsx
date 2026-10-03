@@ -464,7 +464,7 @@ describe('Settings: tabs', () => {
     act(() => void tab('General').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
     await flush()
     expect(tab('Appearance').getAttribute('aria-selected')).toBe('true')
-    expect(text()).toContain('Cobalt')
+    expect(text()).toContain('Ink blue') // the Column style's accents (the default style)
     act(() => void tab('Appearance').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
     await flush()
     expect(text()).toContain('AI providers')

@@ -18,6 +18,10 @@ describe('themes', () => {
     // Default's palettes apply to the Default style only (Column has its own colours).
     expect(css).toContain(":root[data-palette='linen'][data-theme='default']")
     expect(css).toContain(":root[data-palette='linen'][data-scheme='dark']")
+    // The Column's accents (Vermilion is the style's own, in styles.css).
+    expect(css).toContain(":root[data-theme='column'][data-accent='ink']{--accent:#3557b7")
+    expect(css).toContain(":root[data-theme='column'][data-accent='ochre'][data-scheme='dark']")
+    expect(css).not.toContain("data-accent='vermilion'")
     expect(css).toContain(":root[data-theme='omarchy'][data-omarchy='catppuccin-latte']")
     expect(css).toContain('color-scheme:light')
     // The styles' own colours live in styles.css.

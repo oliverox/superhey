@@ -173,7 +173,7 @@ Press `?` in the app for the full list. The main ones:
   column to read down: the open email unrolls inside the list, the emails around it fade
   back. Mail is set in
   a reading serif (Newsreader), the interface in Geist, times and counts in Geist Mono, with
-  one signal colour for what needs you. The sidebar stays at
+  one accent colour you choose (Ink blue, Vermilion, Moss, Plum or Ochre). The sidebar stays at
   the side, faded until you point at it. Designed (HTML) emails show as designed on their own sheet, or as text
   in the app's type.
 - **Default style:** SuperHey's own look, in **light, dark or system**. Themes:

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { setLook, showsDark, useLook, type Scheme } from '../theme'
-import { DEFAULT_THEMES, OMARCHY_THEMES, type Colors } from '../themes'
+import { COLUMN_ACCENTS, columnAccent, DEFAULT_THEMES, OMARCHY_THEMES, type ColumnAccent, type Colors } from '../themes'
 import { OmarchyLogo } from './OmarchyLogo'
 
 /**
@@ -11,13 +11,17 @@ import { OmarchyLogo } from './OmarchyLogo'
 export function Appearance({ Section }: { Section: (p: { title: string; hint: string; children: ReactNode }) => ReactNode }) {
   const look = useLook()
   const omarchy = look.theme === 'omarchy'
+  const column = look.theme === 'column'
   const dark = showsDark(look.scheme)
 
   return (
     <>
-      <Section title="Style" hint="Default is SuperHey’s own look. Omarchy is squared-off and monospaced, in the colours of Omarchy’s themes.">
-        <div role="radiogroup" aria-label="Style" className="grid grid-cols-2 gap-3">
-          <StyleCard on={!omarchy} onClick={() => setLook({ theme: 'default' })} label="Default">
+      <Section title="Style" hint="Column is SuperHey’s own look: one column to read down, mail in a reading serif. Default is the classic list beside a reader. Omarchy is squared-off and monospaced, in the colours of Omarchy’s themes.">
+        <div role="radiogroup" aria-label="Style" className="grid grid-cols-3 gap-3">
+          <StyleCard on={column} onClick={() => setLook({ theme: 'column' })} label="Column">
+            <AccentSplit accent={columnAccent(look.accent)} />
+          </StyleCard>
+          <StyleCard on={look.theme === 'default'} onClick={() => setLook({ theme: 'default' })} label="Default">
             <Split theme={DEFAULT_THEMES.find((t) => t.id === look.palette) ?? DEFAULT_THEMES[0]!} />
           </StyleCard>
           <StyleCard on={omarchy} onClick={() => setLook({ theme: 'omarchy' })} label="Omarchy" icon={<OmarchyLogo className="size-[13px]" />}>
@@ -27,7 +31,7 @@ export function Appearance({ Section }: { Section: (p: { title: string; hint: st
       </Section>
 
       {!omarchy && (
-        <Section title="Mode" hint="Every Default theme comes in light and dark. System follows your Mac.">
+        <Section title="Mode" hint={column ? 'Warm paper or warm charcoal. System follows your Mac.' : 'Every Default theme comes in light and dark. System follows your Mac.'}>
           <div role="radiogroup" aria-label="Mode" className="inline-flex rounded-ui bg-pane-sunk p-0.5">
             {(['light', 'dark', 'auto'] as Scheme[]).map((s) => (
               <button
@@ -44,6 +48,17 @@ export function Appearance({ Section }: { Section: (p: { title: string; hint: st
         </Section>
       )}
 
+      {column ? (
+        <Section title="Accent" hint={`The colour for links, what’s selected and what needs you. Each shows its light and dark side; the ${dark ? 'dark' : 'light'} one is showing now.`}>
+          <div role="radiogroup" aria-label="Accent" className="grid grid-cols-3 gap-3">
+            {COLUMN_ACCENTS.map((a) => (
+              <ThemeCard key={a.id} on={look.accent === a.id} onClick={() => setLook({ accent: a.id })} name={a.name} note={a.blurb}>
+                <AccentSplit accent={a} showing={dark ? 'dark' : 'light'} />
+              </ThemeCard>
+            ))}
+          </div>
+        </Section>
+      ) : (
       <Section
         title="Theme"
         hint={omarchy ? 'Omarchy’s own themes, as in Omarchy.' : `Each shows its light and dark side; the ${dark ? 'dark' : 'light'} one is showing now.`}
@@ -62,6 +77,7 @@ export function Appearance({ Section }: { Section: (p: { title: string; hint: st
               ))}
         </div>
       </Section>
+      )}
     </>
   )
 }
@@ -152,6 +168,26 @@ function Mini({ c, square, dim }: { c: Colors; square?: boolean; dim?: boolean }
           <span className="ml-auto h-[7px] w-[16px]" style={{ background: c.accent, borderRadius: square ? 0 : 2 }} />
         </div>
       </div>
+    </div>
+  )
+}
+
+/** A Column accent on the style's paper (left) and charcoal (right): a line of text, a link, a tag. */
+function AccentSplit({ accent, showing }: { accent: ColumnAccent; showing?: 'light' | 'dark' }) {
+  const side = (ground: string, ink: string, faint: string, c: ColumnAccent['light'], dim: boolean) => (
+    <div className={`flex flex-1 flex-col justify-center gap-[6px] px-[9px] ${dim ? 'opacity-75' : ''}`} style={{ background: ground }}>
+      <span className="h-[4px] w-[78%] rounded-[2px]" style={{ background: ink }} />
+      <span className="h-[3px] w-[56%] rounded-[2px]" style={{ background: faint }} />
+      <span className="flex items-center gap-[4px]">
+        <span className="h-[7px] w-[18px] rounded-[2px]" style={{ background: c.wash, boxShadow: `inset 0 0 0 1px ${c.attn}33` }} />
+        <span className="h-[3px] w-[34%] rounded-[2px]" style={{ background: c.accent }} />
+      </span>
+    </div>
+  )
+  return (
+    <div aria-hidden className="flex h-[72px] w-full overflow-hidden rounded-[7px] shadow-[inset_0_0_0_1px_var(--rule-strong)]">
+      {side('#f5f3ed', '#1c1d1a', '#b8b3a6', accent.light, showing === 'dark')}
+      {side('#131412', '#ecebe4', '#4a4a44', accent.dark, showing === 'light')}
     </div>
   )
 }

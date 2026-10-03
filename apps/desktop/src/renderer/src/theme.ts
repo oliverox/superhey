@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { defaultTheme, installThemes, omarchyTheme } from './themes'
+import { columnAccent, DEFAULT_ACCENT, defaultTheme, installThemes, omarchyTheme } from './themes'
 
 /**
  * How the app looks, per device: the style (Column, Default or Omarchy), light or dark for Column and Default,
@@ -24,6 +24,8 @@ export interface Look {
   palette: string
   /** The Omarchy style's colour theme. */
   omarchy: string
+  /** The Column style's accent colour. */
+  accent: string
 }
 
 // A per-device preference: storage may be unavailable, so every access is guarded.
@@ -62,6 +64,7 @@ const storedLook = (): Look => ({
   // "graphite" used to be today's Cobalt; the key changed when Graphite became black and grey.
   palette: defaultTheme(read('look:palette') ?? (read('palette') === 'graphite' ? 'cobalt' : (read('palette') ?? ''))).id,
   omarchy: omarchyTheme(read('palette:omarchy') ?? '').id,
+  accent: columnAccent(read('look:accent') ?? DEFAULT_ACCENT).id,
 })
 
 export function applyTheme(theme: Theme) {
@@ -76,6 +79,7 @@ function applyLook(l: Look) {
   applyScheme(l.scheme)
   document.documentElement.dataset.palette = l.palette
   document.documentElement.dataset.omarchy = l.omarchy
+  document.documentElement.dataset.accent = l.accent
 }
 
 const systemIsDark = () => typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches
@@ -98,6 +102,7 @@ export function setLook(change: Partial<Look>) {
   save('scheme', look.scheme)
   save('look:palette', look.palette)
   save('palette:omarchy', look.omarchy)
+  save('look:accent', look.accent)
   listeners.forEach((l) => l())
 }
 
