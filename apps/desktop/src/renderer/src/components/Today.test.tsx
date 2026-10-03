@@ -45,6 +45,7 @@ function data(over: Partial<TodayData> = {}): TodayData {
     replyLater: [thread(3, 'Invitation to the field day', 9)],
     waiting: [{ ...thread(4, 'Quote for the flyers', 5), people: [{ name: 'Printer Ltd', email: 'print@example.com', avatar: { url: null, color: null, initials: 'PL' } }] }],
     comingUp: [],
+    calendar: [],
     events: [],
     newSince: { since: null, boxes: [] },
     toHandle: 4,
