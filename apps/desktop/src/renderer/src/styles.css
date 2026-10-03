@@ -1188,3 +1188,10 @@ mark {
   padding: 14px 0 8px;
   margin: 10px 0 18px;
 }
+
+/* Your own messages in a thread: a tint of the accent and no outline, so what you said is
+   easy to find among the others' (white or ground-coloured, outlined). */
+.msg-mine {
+  background: color-mix(in oklab, var(--accent) 7%, var(--pane));
+  border-color: transparent;
+}
