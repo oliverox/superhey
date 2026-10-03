@@ -105,7 +105,7 @@ export function AddToCalendar({ item, source, compact = false }: { item: MailDat
         }}
         disabled={!range.data}
         title="Add to HEY Calendar"
-        className={`inline-flex ${size} shrink-0 items-center gap-1.5 rounded-ui bg-accent-wash px-2.5 font-medium text-accent transition-colors @max-[28rem]:px-[7px] hover:bg-[color-mix(in_oklab,var(--accent)_18%,var(--pane))] disabled:opacity-50`}
+        className={`inline-flex ${size} shrink-0 items-center gap-1.5 rounded-ui px-2 font-medium text-ink-soft transition-colors @max-[28rem]:px-[7px] hover:bg-pane hover:text-ink disabled:opacity-50`}
       >
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
           <rect x="2" y="3" width="12" height="11" rx="2" />
