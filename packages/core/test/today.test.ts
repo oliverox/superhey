@@ -3,7 +3,7 @@ import { ANALYSIS_VERSION } from '../src/ai/analysis'
 import { openDb } from '../src/cache/db'
 import { Repo } from '../src/cache/repo'
 import * as S from '../src/cli/schemas'
-import { buildToday, clashWith, itemKey, type TodayInput } from '../src/today/today'
+import { buildToday, clashWith, itemKey, mergeSameThings, type ComingUpItem, type TodayInput } from '../src/today/today'
 import { alice, me, posting } from './fixtures'
 import { PostingId, TopicId } from '../src/ids'
 
@@ -392,5 +392,36 @@ describe('Today', () => {
     analyse(repo, 951, daysAgo(4), { expectsReply: true })
     repo.replaceTodos([{ id: 9, title: 'Call Bob', starts_at: '2026-09-24T00:00:00Z' }])
     expect(buildToday(repo, input()).toHandle).toBe(3)
+  })
+})
+
+describe('mergeSameThings', () => {
+  const row = (id: number, over: Partial<ComingUpItem>): ComingUpItem =>
+    ({ key: `date:${id}:0`, posting: { id, topicId: id * 10, senderEmail: 'donotreply@airmauritius.com' } as never, label: '', date: '2026-10-05', time: null, isDeadline: false, ...over }) as ComingUpItem
+
+  it('makes one row of the emails about one flight, and one of two notices saying the same', () => {
+    const merged = mergeSameThings([
+      row(1, { label: 'Flight MK 288 departure to Madagascar', time: '14:20', task: 'Check in online (available 30 hours before', kind: 'task' }),
+      row(2, { label: 'Flight MK 288 to Madagascar', time: '14:20' }),
+      row(3, { label: 'Depart Mauritius to Antananarivo (MK 288)', time: '14:20', task: 'Check in for flight', kind: 'task', posting: { id: 3, topicId: 30, senderEmail: 'callcentre@airmauritius.mu' } as never }),
+      row(4, { label: 'Complete online check-in (available 30 hours before departure)', date: '2026-10-06', isDeadline: true }),
+      row(5, { label: 'Online check-in (available 30 hours before departure)', date: '2026-10-06', isDeadline: true }),
+      row(6, { label: 'HEY subscription renews', date: '2026-10-06' }),
+    ])
+    expect(merged.map((c) => [c.label, c.task ?? null, c.merged?.emails ?? 1])).toEqual([
+      ['Flight MK 288 departure to Madagascar', 'Check in online (available 30 hours before', 3],
+      ['Complete online check-in (available 30 hours before departure)', null, 2],
+      ['HEY subscription renews', null, 1],
+    ])
+    // Done on the flight clears every to-do merged into it.
+    expect(merged[0]!.merged!.items).toEqual([
+      { topicId: 10, text: 'Check in online (available 30 hours before' },
+      { topicId: 30, text: 'Check in for flight' },
+    ])
+  })
+
+  it('keeps different things apart, even on the same day', () => {
+    const merged = mergeSameThings([row(1, { label: 'Dentist appointment', time: '09:00' }), row(2, { label: 'School pickup', time: '15:00' })])
+    expect(merged).toHaveLength(2)
   })
 })

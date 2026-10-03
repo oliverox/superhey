@@ -458,6 +458,7 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
                 )}
                 <span className="block truncate text-[12px] text-ink-faint" title={subject ?? undefined}>
                   {from || subject}
+                  {c.merged && c.merged.emails > 1 && <span className="tabular-nums"> · {c.merged.emails} emails</span>}
                 </span>
               </span>
             </button>
@@ -475,7 +476,13 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
                 </HoverButton>
               )}
               {(c.task || c.isDeadline) && (
-                <HoverButton onClick={() => void api.markItemDone(c.posting.topicId!, c.task ?? c.label)} title="Done: you’ve dealt with it (it leaves the Briefing)">
+                <HoverButton
+                  onClick={() => {
+                    // Merged from several emails: done in all of them, so none comes back.
+                    for (const it of c.merged?.items.length ? c.merged.items : [{ topicId: c.posting.topicId!, text: c.task ?? c.label }]) void api.markItemDone(it.topicId, it.text)
+                  }}
+                  title="Done: you’ve dealt with it (it leaves the Briefing)"
+                >
                   Done
                 </HoverButton>
               )}

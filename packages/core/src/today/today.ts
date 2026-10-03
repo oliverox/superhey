@@ -92,6 +92,11 @@ export interface ComingUpItem {
   endDate?: string | null
   endTime?: string | null
   link?: string | null
+  /**
+   * Set when several emails said this (a booking, then its reminder): how many, and every
+   * to-do merged into this row, so Done clears them all.
+   */
+  merged?: { emails: number; items: Array<{ topicId: number; text: string }> }
 }
 
 export interface TodoItem {
@@ -303,11 +308,12 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
     }
   }
   comingUp.sort((x, y) => x.date.localeCompare(y.date) || (x.time ?? '').localeCompare(y.time ?? ''))
+  const coming = mergeSameThings(comingUp)
 
   // Nudges and clashes: what's within two days, and what the calendar already has then.
   const inTwoDays = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2))
   const calendar = repo.events(startOfToday.toISOString(), new Date(startOfToday.getTime() + (COMING_UP_DAYS + 2) * DAY).toISOString())
-  for (const c of comingUp) {
+  for (const c of coming) {
     c.soon = c.date <= inTwoDays
     c.clash = c.time ? clashWith(c, calendar) : null
   }
@@ -339,7 +345,7 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
     needsReply,
     replyLater,
     waiting,
-    comingUp: comingUp.slice(0, 8),
+    comingUp: coming.slice(0, 8),
     events: repo.events(startOfToday.toISOString(), startOfTomorrow.toISOString()),
     // The first time, "new" is today's: every unread email ever would be noise, not news.
     newSince: {
@@ -354,7 +360,7 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
     needsAnalysis: [
       ...new Set([
         ...needsAnalysis,
-        ...[...alerts, ...actions, ...needsReply, ...waiting, ...comingUp.slice(0, 8)].map((i) => i.posting.topicId!).filter((id) => outdated.has(id)),
+        ...[...alerts, ...actions, ...needsReply, ...waiting, ...coming.slice(0, 8)].map((i) => i.posting.topicId!).filter((id) => outdated.has(id)),
       ]),
     ],
   }
@@ -372,4 +378,54 @@ function dayStart(iso: string): number {
 /** A local date as YYYY-MM-DD. */
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// Words that carry no meaning when comparing two rows' wording.
+const FILLER = new Set(['a', 'an', 'the', 'to', 'for', 'of', 'in', 'on', 'at', 'and', 'or', 'your', 'you', 'with', 'from', 'by', 'is', 'are', 'be', 'it', 'this'])
+const wordsOf = (text: string) => new Set(text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w && !FILLER.has(w)))
+// References that name one thing: a flight or train number ("MK 288", "EK704").
+const codesOf = (text: string) => new Set([...text.matchAll(/\b([A-Z]{2,3})\s?(\d{2,4})\b/g)].map((m) => `${m[1]}${m[2]}`))
+
+/** Whether two rows on the same day are about the same thing. */
+function sameThing(a: ComingUpItem, b: ComingUpItem): boolean {
+  if (a.date !== b.date) return false
+  const textA = `${a.label} ${a.task ?? ''}`
+  const textB = `${b.label} ${b.task ?? ''}`
+  const codesA = codesOf(textA)
+  if ([...codesOf(textB)].some((c) => codesA.has(c))) return true
+  if (a.time && a.time === b.time && a.posting.senderEmail && a.posting.senderEmail === b.posting.senderEmail) return true
+  const wa = wordsOf(textA)
+  const wb = wordsOf(textB)
+  const shared = [...wa].filter((w) => wb.has(w)).length
+  return shared >= 3 && shared / new Set([...wa, ...wb]).size >= 0.6
+}
+
+/**
+ * One row per thing, however many emails mention it: the booking, its reminder and its
+ * check-in notice become one flight. The row with a time (else the first) stands for the
+ * group; it takes a to-do from the others if it has none, and remembers every to-do merged
+ * in, so Done clears them all and none comes back. Rows stay in their order.
+ */
+export function mergeSameThings(items: ComingUpItem[]): ComingUpItem[] {
+  const groups: ComingUpItem[][] = []
+  for (const item of items) {
+    const group = groups.find((g) => g.some((other) => sameThing(item, other)))
+    if (group) group.push(item)
+    else groups.push([item])
+  }
+  return groups.map((group) => {
+    if (group.length === 1) return group[0]!
+    const lead = group.find((c) => c.time && !c.isDeadline) ?? group.find((c) => !c.isDeadline) ?? group[0]!
+    const row: ComingUpItem = { ...lead }
+    // A to-do for the row: the lead's own, else the first other one (a deadline's text is its label).
+    // (A deadline row is a to-do already.)
+    const todo = lead.task || lead.isDeadline ? null : group.find((c) => c !== lead && (c.task || c.isDeadline))
+    if (todo) Object.assign(row, { task: todo.task ?? todo.label, kind: todo.kind, amount: todo.amount, autopay: todo.autopay })
+    const items = group
+      .filter((c) => c.task || c.isDeadline)
+      .map((c) => ({ topicId: c.posting.topicId!, text: c.task ?? c.label }))
+      .filter((it, i, all) => all.findIndex((o) => o.topicId === it.topicId && o.text === it.text) === i)
+    row.merged = { emails: new Set(group.map((c) => c.posting.id)).size, items }
+    return row
+  })
 }
