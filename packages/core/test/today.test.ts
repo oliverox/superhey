@@ -3,9 +3,10 @@ import { ANALYSIS_VERSION } from '../src/ai/analysis'
 import { openDb } from '../src/cache/db'
 import { Repo } from '../src/cache/repo'
 import * as S from '../src/cli/schemas'
-import { buildToday, clashWith, itemKey, mergeSameThings, type ComingUpItem, type TodayInput } from '../src/today/today'
+import { buildToday, calendarAhead, clashWith, itemKey, mergeSameThings, type ComingUpItem, type TodayInput } from '../src/today/today'
 import { alice, me, posting } from './fixtures'
 import { PostingId, TopicId } from '../src/ids'
+import type { EventRow } from '../src/cache/repo'
 
 /** Records what the AI made of a thread, as of its latest activity. */
 function analyse(repo: Repo, topicId: number, activeAt: string, a: Record<string, unknown> = {}, version = ANALYSIS_VERSION) {
@@ -431,5 +432,36 @@ describe('mergeSameThings', () => {
   it('keeps different things apart, even on the same day', () => {
     const merged = mergeSameThings([row(1, { label: 'Dentist appointment', time: '09:00' }), row(2, { label: 'School pickup', time: '15:00' })])
     expect(merged).toHaveLength(2)
+  })
+})
+
+describe('calendarAhead', () => {
+  const ev = (key: string, title: string, startsAt: string, endsAt: string | null, allDay = false) =>
+    ({ key, id: 1, calendarId: 1, title, startsAt, endsAt, allDay, location: null, color: 'green', calendarName: 'Personal', recurring: false, joinUrl: null, appUrl: null }) as EventRow
+  const now = new Date(2026, 9, 3, 10, 0) // Sat 3 Oct, 10:00 local
+  const local = (d: number, h: number) => new Date(2026, 9, d, h, 0).toISOString()
+
+  it('lists the week’s events once each, skipping what’s over and what an email already says', () => {
+    const flight = { key: 'date:1:0', posting: { id: 1 } as never, label: 'Flight MK 288 departure to Madagascar', date: '2026-10-05', time: '14:20', isDeadline: false } as ComingUpItem
+    const items = calendarAhead(
+      [
+        ev('a', 'Breakfast', local(3, 7), local(3, 8)), // over
+        ev('b', 'Reserved', '2026-10-01T00:00:00Z', '2026-10-11T00:00:00Z', true), // under way: not coming up
+        ev('g', 'Lyon', '2026-10-09T00:00:00Z', '2026-10-12T00:00:00Z', true),
+        ev('c', 'Gym', local(6, 8), local(6, 9)),
+        ev('d', 'Gym', local(8, 8), local(8, 9)),
+        ev('e', 'Madagascar', '2026-10-05T00:00:00Z', '2026-10-07T00:00:00Z', true), // the flight's email covers it
+        ev('f', 'Dr Sailesh', local(8, 12), local(8, 13)),
+      ],
+      [flight],
+      now,
+      '2026-10-03',
+      '2026-10-10',
+    )
+    expect(items.map((i) => [i.event.title, i.date, i.time, i.until, i.more])).toEqual([
+      ['Gym', '2026-10-06', '08:00', null, 1],
+      ['Dr Sailesh', '2026-10-08', '12:00', null, 0],
+      ['Lyon', '2026-10-09', null, '2026-10-12', 0],
+    ])
   })
 })

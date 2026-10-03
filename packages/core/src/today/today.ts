@@ -99,6 +99,20 @@ export interface ComingUpItem {
   merged?: { emails: number; items: Array<{ topicId: number; text: string }>; dates: Array<{ topicId: number; text: string }> }
 }
 
+/** A calendar event in Coming up. */
+export interface CalendarItem {
+  key: string
+  event: EventRow
+  /** The day it shows on (YYYY-MM-DD): its first day. */
+  date: string
+  /** HH:MM, local; null for all-day. */
+  time: string | null
+  /** Its last day, when it runs over several. */
+  until: string | null
+  /** How many more times it comes up this week (a repeating event shows once). */
+  more: number
+}
+
 export interface TodoItem {
   key: string
   todo: TodoRow
@@ -118,6 +132,8 @@ export interface TodayView {
   waiting: ThreadItem[]
   /** Dates in mail over the next week: bookings, renewals, deadlines. */
   comingUp: ComingUpItem[]
+  /** Calendar events over the next week that no email above already covers; a repeating one once. */
+  calendar: CalendarItem[]
   /** The day's calendar events. */
   events: EventRow[]
   /** Unread mail per box since you last looked (the first time: since the start of today). */
@@ -349,6 +365,7 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
     waiting,
     comingUp: coming.slice(0, 8),
     events: repo.events(startOfToday.toISOString(), startOfTomorrow.toISOString()),
+    calendar: calendarAhead(repo.events(startOfToday.toISOString(), new Date(startOfToday.getTime() + (COMING_UP_DAYS + 1) * DAY).toISOString()), coming, now, today, inAWeek),
     // The first time, "new" is today's: every unread email ever would be noise, not news.
     newSince: {
       since: input.since,
@@ -432,4 +449,55 @@ export function mergeSameThings(items: ComingUpItem[]): ComingUpItem[] {
     row.merged = { emails: new Set(group.map((c) => c.posting.id)).size, items, dates }
     return row
   })
+}
+
+const hm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+
+/**
+ * The week's calendar, for Coming up: events not over yet that start from today on, each on
+ * its first day (one already under way isn't coming up). Dropped when an email's row covers it (same day, and the same
+ * time or a word of the title in common), so the flight isn't listed twice. A repeating
+ * event (Gym every morning) shows once, with how many more times it comes.
+ */
+export function calendarAhead(events: EventRow[], coming: ComingUpItem[], now: Date, today: string, lastDay: string): CalendarItem[] {
+  const long = (text: string) => new Set([...wordsOf(text)].filter((w) => w.length >= 4))
+  const rows: CalendarItem[] = []
+  for (const e of events) {
+    let first: string
+    let last: string
+    let time: string | null = null
+    if (e.allDay) {
+      first = e.startsAt.slice(0, 10)
+      const end = (e.endsAt ?? e.startsAt).slice(0, 10)
+      last = end < first ? first : end
+    } else {
+      const start = new Date(e.startsAt)
+      const end = new Date(e.endsAt ?? e.startsAt)
+      if (end <= now) continue
+      first = ymd(start)
+      last = ymd(new Date(Math.max(start.getTime(), end.getTime() - 1)))
+      time = first >= today ? hm(start) : null
+    }
+    // Already under way (a stay that began last week): it isn't coming up; the sidebar shows today's.
+    if (first < today || first > lastDay) continue
+    const date = first
+    const words = long(e.title)
+    const covered = coming.some((c) => c.date === date && ((time != null && c.time === time) || [...long(`${c.label} ${c.task ?? ''}`)].some((w) => words.has(w))))
+    if (covered) continue
+    rows.push({ key: `event:${e.key}`, event: e, date, time, until: last > date ? last : null, more: 0 })
+  }
+  rows.sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? ''))
+  // A repeating event once: the next time, and how many more.
+  const firstOf = new Map<string, CalendarItem>()
+  const out: CalendarItem[] = []
+  for (const r of rows) {
+    const id = `${r.event.allDay ? 'day' : 'time'}|${r.event.title.trim().toLowerCase()}`
+    const seen = firstOf.get(id)
+    if (seen) seen.more++
+    else {
+      firstOf.set(id, r)
+      out.push(r)
+    }
+  }
+  return out.slice(0, 8)
 }

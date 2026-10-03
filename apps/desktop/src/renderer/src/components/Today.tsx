@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import type { ActionItem, AlertItem, Autopay, ComingUpItem, Money, PostingRow, TaskKind, ThreadItem, TodayView, TodoItem } from '@shared/api'
+import type { ActionItem, AlertItem, Autopay, CalendarItem, ComingUpItem, Money, PostingRow, TaskKind, ThreadItem, TodayView, TodoItem } from '@shared/api'
 import { replyWith } from '../outbox'
 import { AddToCalendar } from './AddToCalendar'
 import { Tag } from './Tag'
@@ -7,6 +7,7 @@ import { MarkRead } from './MarkRead'
 import { api } from '../api'
 import { clock, clockHm, dayName, shortDate } from '../format'
 import { canReply, quietName, taskUnder } from '../today/comingUp'
+import { calendarColor } from '../calendar/model'
 import { stripSubjectPrefixes } from '../mail/forwarded'
 import { withShortcut } from '../shortcuts'
 import { Avatar } from './Avatar'
@@ -162,7 +163,7 @@ export function TodayList({
           <p className="mt-1 text-[13px] text-ink-faint">Nothing due, nothing waiting on your reply, nobody to chase.</p>
         </div>
       )}
-      {comingUp.length > 0 && <ComingUp items={comingUp} pick={pick} onOpen={openFrom} />}
+      {comingUp.length + (today.calendar?.length ?? 0) > 0 && <ComingUp items={comingUp} events={today.calendar ?? []} pick={pick} onOpen={openFrom} />}
       {fresh.length > 0 && (
         <section aria-label="New">
           <h2 className="eyebrow px-5 pt-5 pb-1">{today.newSince.since ? 'New since you last looked' : 'New today'}</h2>
@@ -408,12 +409,18 @@ const markClass = (m: Mark) =>
       : 'hover:bg-pane-sunk'
 
 /** Dates found in mail over the next week, each a click from its thread. Information, not tasks. */
-function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: string, postingId: number) => Mark; onOpen: (key: string, p: PostingRow) => void }) {
+function ComingUp({ items, events, pick, onOpen }: { items: ComingUpItem[]; events: CalendarItem[]; pick: (key: string, postingId: number) => Mark; onOpen: (key: string, p: PostingRow) => void }) {
+  // Mail's dates and the calendar's events, in one order by day and time.
+  const rows = [...items.map((c) => ({ kind: 'mail' as const, date: c.date, time: c.time, c })), ...events.map((e) => ({ kind: 'event' as const, date: e.date, time: e.time, e }))].sort(
+    (x, y) => x.date.localeCompare(y.date) || (x.time ?? '').localeCompare(y.time ?? ''),
+  )
   return (
     <section aria-label="Coming up" className="@container">
       <h2 className="eyebrow px-5 pt-4 pb-1.5">Coming up</h2>
       <ul>
-        {items.map((c) => {
+        {rows.map((r) => {
+          if (r.kind === 'event') return <CalendarRow key={r.e.key} item={r.e} />
+          const c = r.c
           // Coloured only when it needs you soon, clashes, or costs something.
           const pressing = !c.autopay && ((c.soon && (c.isDeadline || !!c.task)) || !!c.clash || (c.kind === 'bill' && !!c.amount))
           const from = c.posting.senderName ? quietName(c.posting.senderName) : (c.posting.senderEmail ?? '')
@@ -504,6 +511,47 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
         })}
       </ul>
     </section>
+  )
+}
+
+/**
+ * A calendar event in Coming up: its calendar's colour, where, and until when; a repeating one
+ * says how many more times it comes this week. A click opens the calendar on its day.
+ */
+function CalendarRow({ item: c }: { item: CalendarItem }) {
+  const e = c.event
+  const where = [e.calendarName, e.location].filter(Boolean).join(' · ')
+  return (
+    <li className="group/cu relative">
+      <button
+        onClick={() => window.dispatchEvent(new CustomEvent('superhey:open-calendar', { detail: c.date }))}
+        title="Show in the calendar"
+        className="relative mx-2 flex w-[calc(100%-1rem)] items-baseline gap-3 rounded-ui py-2 pr-3 pl-4 text-left group-hover/cu:bg-pane-sunk"
+      >
+        <span className="w-[76px] shrink-0 text-[12px] text-ink-faint tabular-nums">
+          {dayName(c.date)}
+          {c.time && <span className="block">{clockHm(c.time)}</span>}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex min-w-0 items-center gap-2 text-ink">
+            <span aria-hidden className="size-[7px] shrink-0 rounded-full" style={{ background: calendarColor(e.color) }} />
+            <span className="truncate">{e.title || '(No title)'}</span>
+          </span>
+          <span className="block truncate pl-[15px] text-[12px] text-ink-faint">
+            {where || 'Calendar'}
+            {c.until && ` · until ${dayName(c.until)}`}
+            {c.more > 0 && ` · and ${c.more} more this week`}
+          </span>
+        </span>
+      </button>
+      {e.joinUrl && (
+        <span className="row-actions absolute inset-y-0 right-2 flex items-center rounded-r-ui pr-3 pl-8 opacity-0 transition-opacity duration-(--dur-1) group-hover/cu:opacity-100 focus-within:opacity-100">
+          <a href={e.joinUrl} target="_blank" rel="noreferrer" className="flex h-6 items-center rounded-ui px-2 text-[12px] font-medium text-ink-soft hover:bg-pane hover:text-ink">
+            Join
+          </a>
+        </span>
+      )}
+    </li>
   )
 }
 

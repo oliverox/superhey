@@ -156,6 +156,20 @@ describe('forms, bills, RSVPs and clashes', () => {
   })
 })
 
+describe('Coming up: the calendar', () => {
+  it('puts the week’s events among the mail’s dates, in order, a repeating one once', () => {
+    const ev = { key: 'g', id: 1, calendarId: 1, title: 'Gym', startsAt: '2099-01-02T08:00:00Z', endsAt: null, allDay: false, location: 'Club', color: 'green', calendarName: 'Personal', recurring: true, joinUrl: null, appUrl: null }
+    const t = data({
+      comingUp: [{ key: 'date:8:0', posting: posting(8, 'Trip'), label: 'Trip to Lyon', date: '2099-01-03', time: null, isDeadline: false }],
+      calendar: [{ key: 'event:g', event: ev, date: '2099-01-02', time: '08:00', until: null, more: 2 }],
+    })
+    act(() => root.render(createElement(Today.TodayList, { today: t, selectedId: null, onOpen: vi.fn(), onGoToBox: vi.fn() })))
+    const coming = host.querySelector('section[aria-label="Coming up"]')!.textContent!
+    expect(coming.indexOf('Gym')).toBeLessThan(coming.indexOf('Trip to Lyon'))
+    expect(coming).toContain('Personal · Club · and 2 more this week')
+  })
+})
+
 describe('from Paper Trail', () => {
   it('asks about a security alert first, and “It was me” takes it off', async () => {
     const onOpen = vi.fn()

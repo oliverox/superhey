@@ -31,11 +31,12 @@ import type {
   ComingUpItem,
   AlertItem,
   Autopay,
+  CalendarItem,
   ReplyDraftRow,
   StoredVoice,
 } from '@superhey/core'
 
-export type { Clash, Money, TaskKind, CalendarRow, NewEvent, OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, HeySearchPage, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId, TodayView, ThreadItem, TodoItem, ActionItem, ComingUpItem, AlertItem, Autopay, ReplyDraftRow, StoredVoice }
+export type { Clash, Money, TaskKind, CalendarRow, NewEvent, OutgoingKind, OutgoingMessage, OutgoingRecord, Action, ActionRecord, AttachmentRow, BoxRow, CacheChange, EntryRow, EventRow, PostingRow, SearchHit, HeySearchPage, SyncStatus, ThreadView, AiSettings, AiTask, ProviderId, TodayView, ThreadItem, TodoItem, ActionItem, ComingUpItem, AlertItem, Autopay, CalendarItem, ReplyDraftRow, StoredVoice }
 
 /** Everything Settings shows about AI. API keys themselves never leave the main process. */
 export interface AiStatus {
