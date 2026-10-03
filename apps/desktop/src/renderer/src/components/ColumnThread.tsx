@@ -33,7 +33,6 @@ export function ColumnThread({ list, posting, where, onOpen, onClose, children }
               <span>{where}</span>
               {i >= 0 && <span>· {i + 1} of {list.length}</span>}
             </button>
-            <span>esc closes</span>
           </div>
           {children}
         </section>
