@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ActionItem, AlertItem, Autopay, CalendarItem, ComingUpItem, Money, PostingRow, TaskKind, ThreadItem, TodayView, TodoItem } from '@shared/api'
 import { replyWith } from '../outbox'
 import { AddToCalendar } from './AddToCalendar'
@@ -26,6 +26,14 @@ export const why = {
   needsReply: (i: ThreadItem) => (i.reason ? capitalise(i.reason) : 'Waiting on your reply'),
   replyLater: (i: ThreadItem) => (i.days === 0 ? 'Waiting on your reply' : `Waiting on your reply · ${plural(i.days, 'day')}`),
   waiting: (i: ThreadItem) => `No reply for ${plural(i.days, 'day')}`,
+}
+
+/** The boxes you don't read closely, by id (see TodayView.tucked): rows from them say where they are. */
+const Tucked = createContext<Record<number, string>>({})
+/** " · Set Aside" for an item from a box you don't read closely; nothing for the Imbox. */
+function useWhere(p: PostingRow, show = true): string {
+  const name = useContext(Tucked)[p.boxId]
+  return show && name ? ` · ${name}` : ''
 }
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
@@ -124,8 +132,9 @@ export function TodayList({
     const run = doneFor(today, p.id)
     return run ? () => void run() : undefined
   }
-  const row = (i: ThreadItem, reason: string) => <ThreadRow key={i.key} item={i} reason={reason} mark={pick(i.key, i.posting.id)} onOpen={() => openFrom(i.key, i.posting)} onDone={done(i.posting)} />
+  const row = (i: ThreadItem, reason: string, showBox = true) => <ThreadRow key={i.key} item={i} reason={reason} showBox={showBox} mark={pick(i.key, i.posting.id)} onOpen={() => openFrom(i.key, i.posting)} onDone={done(i.posting)} />
   return (
+    <Tucked.Provider value={today.tucked ?? {}}>
     <div ref={listRef} className="scroll min-h-0 flex-1 pb-6">
       {/* Full width when nothing's open: kept to a readable measure. */}
       <div className="mx-auto w-full max-w-[760px]">
@@ -154,7 +163,7 @@ export function TodayList({
         </Section>
       )}
       {needsReply.length > 0 && <Section title="Needs your reply" count={needsReply.length}>{(limit) => needsReply.slice(0, limit).map((i) => row(i, why.needsReply(i)))}</Section>}
-      {replyLater.length > 0 && <Section title="Reply Later" count={replyLater.length}>{(limit) => replyLater.slice(0, limit).map((i) => row(i, why.replyLater(i)))}</Section>}
+      {replyLater.length > 0 && <Section title="Reply Later" count={replyLater.length}>{(limit) => replyLater.slice(0, limit).map((i) => row(i, why.replyLater(i), false))}</Section>}
       {waiting.length > 0 && <Section title="Waiting on others" count={waiting.length}>{(limit) => waiting.slice(0, limit).map((i) => row(i, why.waiting(i)))}</Section>}
       {/* The state first, then what's ahead. */}
       {today.toHandle === 0 && (
@@ -188,6 +197,7 @@ export function TodayList({
       )}
       </div>
     </div>
+    </Tucked.Provider>
   )
 }
 
@@ -209,13 +219,14 @@ function Section({ title, count, children }: { title: string; count: number; chi
   )
 }
 
-function ThreadRow({ item, reason, mark, onOpen, onDone }: { item: ThreadItem; reason: string; mark: Mark; onOpen: () => void; onDone?: () => void }) {
+function ThreadRow({ item, reason, showBox = true, mark, onOpen, onDone }: { item: ThreadItem; reason: string; showBox?: boolean; mark: Mark; onOpen: () => void; onDone?: () => void }) {
   const selected = mark === 'on'
   const p = item.posting
   // Waiting on others: the thread is about who you wrote to, not you (you sent the last message).
   const other = item.people?.[0]
   const avatar = other?.avatar ?? p.avatar
   const who = other ? `${other.name ?? other.email}${item.people!.length > 1 ? ` +${item.people!.length - 1}` : ''}` : (p.senderName ?? p.senderEmail)
+  const where = useWhere(p, showBox)
   return (
     <li
       role="option"
@@ -230,6 +241,7 @@ function ThreadRow({ item, reason, mark, onOpen, onDone }: { item: ThreadItem; r
         <div className="truncate font-medium text-ink">{p.subject ? stripSubjectPrefixes(p.subject) : '(no subject)'}</div>
         <div className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-ink-faint">
           <span className="text-ink-soft">{who}</span> · {reason}
+          {where}
         </div>
       </div>
       <RowActions
@@ -317,6 +329,7 @@ function AutopayNote({ autopay }: { autopay?: Autopay }) {
 function ActionRow({ item, mark, onOpen, onDone }: { item: ActionItem; mark: Mark; onOpen: () => void; onDone: () => void }) {
   const selected = mark === 'on'
   const p = item.posting
+  const where = useWhere(p)
   return (
     <li
       role="option"
@@ -334,6 +347,7 @@ function ActionRow({ item, mark, onOpen, onDone }: { item: ActionItem; mark: Mar
         </div>
         <div className="mt-0.5 truncate text-[13px] text-ink-faint">
           <span className={item.daysLate > 0 ? 'text-danger' : 'text-ink-soft'}>{why.action(item)}</span> · {p.subject ? stripSubjectPrefixes(p.subject) : p.senderName}
+          {where}
         </div>
       </div>
       <RowActions onDone={onDone} />
@@ -410,6 +424,7 @@ const markClass = (m: Mark) =>
 
 /** Dates found in mail over the next week, each a click from its thread. Information, not tasks. */
 function ComingUp({ items, events, pick, onOpen }: { items: ComingUpItem[]; events: CalendarItem[]; pick: (key: string, postingId: number) => Mark; onOpen: (key: string, p: PostingRow) => void }) {
+  const tucked = useContext(Tucked)
   // Mail's dates and the calendar's events, in one order by day and time.
   const rows = [...items.map((c) => ({ kind: 'mail' as const, date: c.date, time: c.time, c })), ...events.map((e) => ({ kind: 'event' as const, date: e.date, time: e.time, e }))].sort(
     (x, y) => x.date.localeCompare(y.date) || (x.time ?? '').localeCompare(y.time ?? ''),
@@ -469,6 +484,7 @@ function ComingUp({ items, events, pick, onOpen }: { items: ComingUpItem[]; even
                 <span className="block truncate text-[12px] text-ink-faint" title={subject ?? undefined}>
                   {from || subject}
                   {c.merged && c.merged.emails > 1 && <span className="tabular-nums"> · {c.merged.emails} emails</span>}
+                  {tucked[c.posting.boxId] && ` · ${tucked[c.posting.boxId]}`}
                 </span>
               </span>
             </button>

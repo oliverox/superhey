@@ -60,6 +60,8 @@ export interface SecretStore {
 }
 
 const BACKFILL_DELAY_MS = 1_000
+/** How far back Reply Later, Set Aside and Bubble Up are read for the Briefing. */
+const TUCKED_DAYS = 60
 /** How far back Paper Trail is read for Today (a statement's bill can be due weeks later). */
 const PAPER_TRAIL_DAYS = 45
 
@@ -385,6 +387,13 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
     const view = buildToday(core.repo, { now: new Date(), myEmails, since, hidden: this.hiddenOnToday(), done: new Set(Object.keys(this.doneItems())) })
     // What Today couldn't judge yet (have you been waiting on them?) gets read in the background.
     for (const topicId of view.needsAnalysis) this.analyzer?.enqueue(topicId)
+    // Mail tucked away (Reply Later, Set Aside, a scheduled Bubble Up) is read once too, so a
+    // deadline, a date or a question in it reaches the Briefing. Those boxes are small.
+    if (this.analyzer) {
+      const since = new Date(Date.now() - TUCKED_DAYS * 86_400_000).toISOString()
+      for (const kind of ['laterbox', 'asidebox', 'bubblebox'])
+        for (const t of core.repo.unanalysedInBox(kind, since, 20, ANALYSIS_VERSION)) this.analyzer.enqueue(t.topicId)
+    }
     return { ...view, screener: core.engine.screenerEntries().length }
   }
 

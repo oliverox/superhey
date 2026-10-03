@@ -150,6 +150,13 @@ describe('Today', () => {
     expect(by).toEqual({ 'Pay the Chase statement': 'likely', 'Pay the water bill': 'yes', 'Pay the phone bill': null })
   })
 
+  it('names the boxes you don’t read closely, not the Imbox', () => {
+    const { repo } = setup()
+    const t = buildToday(repo, input())
+    expect(t.tucked[BOX.asidebox]).toBe('asidebox')
+    expect(t.tucked[BOX.imbox]).toBeUndefined()
+  })
+
   it('drops a date you dismissed', () => {
     const { repo, put } = setup()
     put('imbox', { id: 81, topic_id: 981, active_at: daysAgo(1) })

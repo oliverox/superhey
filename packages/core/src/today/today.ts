@@ -134,6 +134,11 @@ export interface TodayView {
   comingUp: ComingUpItem[]
   /** Calendar events over the next week that no email above already covers; a repeating one once. */
   calendar: CalendarItem[]
+  /**
+   * The boxes you don't read closely (Paper Trail, The Feed, Reply Later, Set Aside, Bubble Up)
+   * by id, with their names: an item from one says where it was, as you'd have missed it.
+   */
+  tucked: Record<number, string>
   /** The day's calendar events. */
   events: EventRow[]
   /** Unread mail per box since you last looked (the first time: since the start of today). */
@@ -365,6 +370,7 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
     waiting,
     comingUp: coming.slice(0, 8),
     events: repo.events(startOfToday.toISOString(), startOfTomorrow.toISOString()),
+    tucked: Object.fromEntries(boxList.filter((b) => b.kind !== 'imbox').map((b) => [b.id, b.name])),
     calendar: calendarAhead(repo.events(startOfToday.toISOString(), new Date(startOfToday.getTime() + (COMING_UP_DAYS + 1) * DAY).toISOString()), coming, now, today, inAWeek),
     // The first time, "new" is today's: every unread email ever would be noise, not news.
     newSince: {

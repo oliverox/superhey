@@ -46,6 +46,7 @@ function data(over: Partial<TodayData> = {}): TodayData {
     waiting: [{ ...thread(4, 'Quote for the flyers', 5), people: [{ name: 'Printer Ltd', email: 'print@example.com', avatar: { url: null, color: null, initials: 'PL' } }] }],
     comingUp: [],
     calendar: [],
+    tucked: { 3: 'Paper Trail', 5: 'Set Aside' },
     events: [],
     newSince: { since: null, boxes: [] },
     toHandle: 4,
@@ -154,6 +155,20 @@ describe('forms, bills, RSVPs and clashes', () => {
     await click([...coming.querySelectorAll('button')].find((b) => b.textContent === 'Done')!)
     expect(calls).toContainEqual(['markItemDone', [80, 'Pay the school trip']])
     expect([...coming.querySelectorAll('button')].some((b) => b.textContent === 'Ask to move')).toBe(true)
+  })
+})
+
+describe('from boxes you don’t read closely', () => {
+  it('says where an item was, except in its own section', () => {
+    const tucked = { ...posting(9, 'Visa renewal'), boxId: 5 }
+    const t = data({
+      comingUp: [{ key: 'date:9:0', posting: tucked, label: 'Visa renewal deadline', date: '2099-01-03', time: null, isDeadline: false }],
+      replyLater: [{ ...thread(3, 'Parked', 9), posting: { ...posting(3, 'Parked'), boxId: 4 } }],
+      tucked: { 4: 'Reply Later', 5: 'Set Aside' },
+    })
+    act(() => root.render(createElement(Today.TodayList, { today: t, selectedId: null, onOpen: vi.fn(), onGoToBox: vi.fn() })))
+    expect(host.querySelector('section[aria-label="Coming up"]')!.textContent).toContain('Dana Novak · Set Aside')
+    expect(host.querySelector('section[aria-label="Reply Later"]')!.textContent).not.toContain('· Reply Later')
   })
 })
 
