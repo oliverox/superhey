@@ -23,6 +23,8 @@ interface ListProps {
   heldNew?: number | null
   /** The Feed: rows read as headlines, without the bold of unread. */
   feed?: boolean
+  /** The Column style: rows written like the Briefing's (the subject, then who and what it's about). */
+  clean?: boolean
 }
 
 /**
@@ -81,7 +83,7 @@ export function useCollapsedGroups(boxId: number | null | undefined) {
   return { collapsed, toggle }
 }
 
-export function PostingList({ postings, loading, selectedId, onOpen, search, collapsed, onToggleGroup, heldNew = null, feed = false }: ListProps) {
+export function PostingList({ postings, loading, selectedId, onOpen, search, collapsed, onToggleGroup, heldNew = null, feed = false, clean = false }: ListProps) {
   const listRef = useRef<HTMLUListElement>(null)
   // Rows that just left the box stay a moment, folding shut, so the list closes the gap.
   const { rows: shown, leaving } = useLeavingRows(postings, !search)
@@ -145,7 +147,46 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
               style={{ animationDelay: `${Math.min(i, 12) * 18}ms`, '--row-bg': selected ? 'var(--selection)' : 'var(--pane-sunk)' } as React.CSSProperties}
             >
               {!gone && !search && <MarkRead posting={p} />}
-              {feed ? (
+              {clean && !feed ? (
+                // Like the Briefing's rows: the subject leads (heavier while unread), and one
+                // faint line under it says who and what it's about.
+                <>
+                  <span className="self-start pt-[2px]">
+                    <Avatar avatar={p.avatar} size={32} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                      {!p.isBundle && <SubjectTags subject={p.subject} sender={senderLabel(p)} labels={p.labels} />}
+                      {p.labels.filter((label) => tagKind(label, senderLabel(p)) !== 'sender').map((label) => (
+                        <Tag key={label} kind="label">
+                          {label}
+                        </Tag>
+                      ))}
+                      <span className={`min-w-0 flex-1 truncate text-[15px] ${p.seen ? 'text-ink-soft' : 'font-medium text-ink'}`}>
+                        {p.subject ? mark(stripSubjectPrefixes(p.isBundle ? p.subject.split(' • ')[0]! : p.subject)) : '(no subject)'}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2 pl-2 text-ink-faint">
+                        {p.ai?.needsReply && (
+                          <span title={p.ai.replyReason ? `Needs your reply: ${p.ai.replyReason}` : 'Needs your reply'} aria-label="Needs your reply" className="text-accent">
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                              <path d="M6.5 3.5 2.5 7.5l4 4" />
+                              <path d="M2.5 7.5h7a4 4 0 0 1 4 4V13" />
+                            </svg>
+                          </span>
+                        )}
+                        {p.hasAttachments && <Paperclip />}
+                        <span className="text-[12px] tabular-nums">{search ? shortDate(p.activeAt) : rowTime(p.activeAt, p.seen)}</span>
+                      </span>
+                    </div>
+                    <div className="mt-0.5 truncate text-[13px] text-ink-faint">
+                      {search?.boxNames[p.boxId] && <span>{search.boxNames[p.boxId]} · </span>}
+                      <span className={p.seen ? '' : 'text-ink-soft'}>{mark(senderLabel(p))}</span>
+                      {(p.isBundle ? bundleSize(p) : (p.entryCount ?? 0)) > 1 && <span className="tabular-nums"> · {p.isBundle ? bundleSize(p) : p.entryCount}</span>}
+                      {!p.isBundle && feedPreview(p) && <span> · {mark(feedPreview(p)!)}</span>}
+                    </div>
+                  </div>
+                </>
+              ) : feed ? (
                 // The Feed reads like a newspaper's index: the headline first, the byline and
                 // what it's about under it, no bold (in the Feed, unread is the usual state).
                 <>

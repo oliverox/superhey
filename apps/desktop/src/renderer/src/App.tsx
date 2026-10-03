@@ -415,7 +415,7 @@ function Workspace({ status }: { status: AppStatus }) {
                 searchRef.current?.focus()
               }}
             />
-            <SearchResults text={query} selectedId={target?.postingId ?? null} onOpen={open} onRows={setSearchRows} boxNames={boxNames} />
+            <SearchResults text={query} selectedId={target?.postingId ?? null} onOpen={open} onRows={setSearchRows} boxNames={boxNames} clean={column} />
           </>
         ) : onToday ? (
           <>
@@ -435,6 +435,7 @@ function Workspace({ status }: { status: AppStatus }) {
             collapsed={groups.collapsed}
             onToggleGroup={groups.toggle}
             feed={activeBox?.kind === 'feedbox'}
+            clean={column}
           />
           </>
         )}

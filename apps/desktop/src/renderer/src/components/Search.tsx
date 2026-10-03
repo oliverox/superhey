@@ -377,7 +377,10 @@ export function SearchResults({
   onOpen,
   onRows,
   boxNames,
+  clean = false,
 }: {
+  /** The Column style's rows (see PostingList). */
+  clean?: boolean
   text: string
   selectedId: number | null
   onOpen: (p: PostingRow) => void
@@ -449,6 +452,7 @@ export function SearchResults({
       <PostingList
         postings={rows}
         loading={false}
+        clean={clean}
         selectedId={selectedId}
         onOpen={onOpen}
         search={{
