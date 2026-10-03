@@ -106,12 +106,12 @@ export function ScreenerList({
                 <Avatar avatar={{ url: null, color: null, initials: initials(item.name ?? item.email) }} seed={item.email} />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline gap-1.5">
-                    <span className="truncate font-semibold text-ink">{item.name ?? item.email}</span>
+                    <span className="truncate text-[15px] font-medium text-ink">{item.name ?? item.email}</span>
                     {item.name && <span className="truncate text-[12px] text-ink-faint">{item.email}</span>}
                   </span>
-                  <span className="mt-0.5 block truncate text-[13px] text-ink-soft">
-                    {item.subject ?? '(no subject)'}
-                    {item.summary && <span className="text-ink-faint"> – {item.summary}</span>}
+                  <span className="mt-0.5 block truncate text-[13px] text-ink-faint">
+                    <span className="text-ink-soft">{item.subject ?? '(no subject)'}</span>
+                    {item.summary && <span> · {item.summary}</span>}
                   </span>
                 </span>
               </button>

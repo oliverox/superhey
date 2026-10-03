@@ -23,7 +23,7 @@ interface ListProps {
   heldNew?: number | null
   /** The Feed: rows read as headlines, without the bold of unread. */
   feed?: boolean
-  /** The Column style: rows written like the Briefing's (the subject, then who and what it's about). */
+  /** The Column style: rows written like the Briefing's (the subject, then who and what it's about), The Feed's too. */
   clean?: boolean
 }
 
@@ -147,7 +147,7 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
               style={{ animationDelay: `${Math.min(i, 12) * 18}ms`, '--row-bg': selected ? 'var(--selection)' : 'var(--pane-sunk)' } as React.CSSProperties}
             >
               {!gone && !search && <MarkRead posting={p} />}
-              {clean && !feed ? (
+              {clean ? (
                 // Like the Briefing's rows: the subject leads (heavier while unread), and one
                 // faint line under it says who and what it's about.
                 <>
@@ -163,7 +163,7 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
                         </Tag>
                       ))}
                       <span className={`min-w-0 flex-1 truncate text-[15px] ${p.seen ? 'text-ink-soft' : 'font-medium text-ink'}`}>
-                        {p.subject ? mark(stripSubjectPrefixes(p.isBundle ? p.subject.split(' • ')[0]! : p.subject)) : '(no subject)'}
+                        {p.subject ? mark(quietName(stripSubjectPrefixes(p.isBundle ? p.subject.split(' • ')[0]! : p.subject))) : '(no subject)'}
                       </span>
                       <span className="flex shrink-0 items-center gap-2 pl-2 text-ink-faint">
                         {p.ai?.needsReply && (
