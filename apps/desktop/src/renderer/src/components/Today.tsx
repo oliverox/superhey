@@ -418,24 +418,27 @@ function ComingUp({ items, events, pick, onOpen }: { items: ComingUpItem[]; even
     <section aria-label="Coming up" className="@container">
       <h2 className="eyebrow px-5 pt-4 pb-1.5">Coming up</h2>
       <ul>
-        {rows.map((r) => {
-          if (r.kind === 'event') return <CalendarRow key={r.e.key} item={r.e} />
+        {rows.map((r, i) => {
+          // A heading where the day changes: Today, Tomorrow, then the date.
+          const heading = i === 0 || rows[i - 1]!.date !== r.date ? <DayHeading key={`day:${r.date}`} date={r.date} /> : null
+          if (r.kind === 'event') return [heading, <CalendarRow key={r.e.key} item={r.e} />]
           const c = r.c
           // Coloured only when it needs you soon, clashes, or costs something.
           const pressing = !c.autopay && ((c.soon && (c.isDeadline || !!c.task)) || !!c.clash || (c.kind === 'bill' && !!c.amount))
           const from = c.posting.senderName ? quietName(c.posting.senderName) : (c.posting.senderEmail ?? '')
           const subject = c.posting.subject ? stripSubjectPrefixes(c.posting.subject) : null
           const reply = c.clash ? canReply(c.posting, 'move') : (c.kind === 'rsvp' || c.kind === 'appointment') && canReply(c.posting, 'confirm')
-          return (
+          return [
+            heading,
           <li key={c.key} className="group/cu relative" style={{ '--row-bg': pick(c.key, c.posting.id) === 'on' ? 'var(--selection)' : 'var(--pane-sunk)' } as React.CSSProperties}>
             <button
               onClick={() => onOpen(c.key, c.posting)}
               aria-current={pick(c.key, c.posting.id) === 'on' || undefined}
               className={`relative mx-2 flex w-[calc(100%-1rem)] items-baseline gap-3 rounded-ui py-2 pl-4 text-left pr-3 ${markClass(pick(c.key, c.posting.id)).replaceAll('hover:bg-pane-sunk', 'group-hover/cu:bg-pane-sunk')}`}
             >
-              <span className={`w-[76px] shrink-0 text-[12px] tabular-nums ${c.soon && (c.isDeadline || c.task) && !c.autopay ? 'font-medium text-attn' : 'text-ink-faint'}`}>
-                {dayName(c.date)}
-                {c.time && <span className="block">{clockHm(c.time)}</span>}
+              {/* The day is the heading above; the row says when in it. */}
+              <span className={`w-[64px] shrink-0 text-[12px] tabular-nums ${c.soon && (c.isDeadline || c.task) && !c.autopay ? 'font-medium text-attn' : 'text-ink-faint'}`}>
+                {c.time ? clockHm(c.time) : c.isDeadline ? 'By then' : ''}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex min-w-0 items-center gap-1.5 text-ink">
@@ -506,12 +509,19 @@ function ComingUp({ items, events, pick, onOpen }: { items: ComingUpItem[]; even
               )}
               {!c.isDeadline && <AddToCalendar item={c} source={subject ?? undefined} compact />}
             </span>
-          </li>
-          )
+          </li>,
+          ]
         })}
       </ul>
     </section>
   )
+}
+
+/** Where a new day starts in Coming up: Today and Tomorrow stand out, later days are quieter. */
+function DayHeading({ date }: { date: string }) {
+  const name = dayName(date)
+  const near = name === 'Today' || name === 'Tomorrow'
+  return <li className={`px-6 pt-3 pb-0.5 text-[12px] font-semibold ${near ? 'text-ink' : 'text-ink-faint'}`}>{name}</li>
 }
 
 /**
@@ -528,10 +538,7 @@ function CalendarRow({ item: c }: { item: CalendarItem }) {
         title="Show in the calendar"
         className="relative mx-2 flex w-[calc(100%-1rem)] items-baseline gap-3 rounded-ui py-2 pr-3 pl-4 text-left group-hover/cu:bg-pane-sunk"
       >
-        <span className="w-[76px] shrink-0 text-[12px] text-ink-faint tabular-nums">
-          {dayName(c.date)}
-          {c.time && <span className="block">{clockHm(c.time)}</span>}
-        </span>
+        <span className="w-[64px] shrink-0 text-[12px] text-ink-faint tabular-nums">{c.time ? clockHm(c.time) : 'All day'}</span>
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-2 text-ink">
             <span aria-hidden className="size-[7px] shrink-0 rounded-full" style={{ background: calendarColor(e.color) }} />
