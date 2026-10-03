@@ -14,7 +14,7 @@ export function AiSpend({ onOpen }: { onOpen: () => void }) {
   const { spentUsd, budgetUsd, calls } = status.month
   const share = budgetUsd ? Math.min(1, spentUsd / budgetUsd) : null
   // Red only once 80% of the budget is spent; quiet ink until then.
-  const tone = share != null && share >= 0.8 ? 'var(--danger)' : 'var(--ink-faint)'
+  const tone = share != null && share >= 0.8 ? 'var(--danger)' : 'var(--ink-soft)'
   const title = `AI this month: ${usd(spentUsd)}${budgetUsd ? ` of your ${usd(budgetUsd)} budget` : ''} · ${calls.toLocaleString()} ${calls === 1 ? 'request' : 'requests'}. Open usage`
   const r = 5.5
   const c = 2 * Math.PI * r
