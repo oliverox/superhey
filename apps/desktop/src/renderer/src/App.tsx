@@ -381,7 +381,7 @@ function Workspace({ status }: { status: AppStatus }) {
           {!searchExpanded && listAlone && <AiSpend onOpen={() => setSettingsTab('usage')} />}
         </header>
         {columnOpen && (
-          <ColumnThread list={list} posting={list.find((p) => p.id === target?.postingId) ?? null} where={query ? 'Search' : onToday ? 'Briefing' : (activeBox?.name ?? '')} onOpen={open} onClose={closeReader}>
+          <ColumnThread list={list} posting={list.find((p) => p.id === target?.postingId) ?? null} onOpen={open}>
             <Reader target={target} active={activePane === 'reader'} onOpenThread={open} onClose={closeReader} onLeaveBox={leaveBox} variant="column" />
           </ColumnThread>
         )}

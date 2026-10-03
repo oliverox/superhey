@@ -5,10 +5,10 @@ import { stripSubjectPrefixes } from '../mail/forwarded'
 
 /**
  * The Column style's open email: unrolled inside the list's column, between the emails
- * around it, which fade back (a click opens one; Esc or the sender line closes it). One
+ * around it, which fade back (a click opens one; Esc or the title's ← closes it). One
  * column to read down, instead of a list beside a reader.
  */
-export function ColumnThread({ list, posting, where, onOpen, onClose, children }: { list: PostingRow[]; posting: PostingRow | null; where: string; onOpen: (p: PostingRow) => void; onClose: () => void; children: ReactNode }) {
+export function ColumnThread({ list, posting, onOpen, children }: { list: PostingRow[]; posting: PostingRow | null; onOpen: (p: PostingRow) => void; children: ReactNode }) {
   const i = posting ? list.findIndex((p) => p.id === posting.id) : -1
   const before = i < 0 ? [] : list.slice(Math.max(0, i - 2), i)
   const after = i < 0 ? [] : list.slice(i + 1, i + 4)
@@ -26,15 +26,6 @@ export function ColumnThread({ list, posting, where, onOpen, onClose, children }
           <Neighbour key={p.id} posting={p} onOpen={onOpen} />
         ))}
         <section className="column-open relative">
-          {/* Where you are, and the way back (the message's own header says who and when). */}
-          {/* Like the actions' buttons: a quiet word until pointed at. */}
-          <div className="flex items-baseline font-meta text-[12px] text-ink-faint">
-            <button type="button" onClick={onClose} title="Back to the list (Esc)" className="-ml-2 flex items-baseline gap-2 rounded-ui px-2 py-1 text-left transition-colors hover:bg-pane-sunk hover:text-ink">
-              <span aria-hidden>←</span>
-              <span>{where}</span>
-              {i >= 0 && <span>· {i + 1} of {list.length}</span>}
-            </button>
-          </div>
           {children}
         </section>
         {after.map((p) => (
