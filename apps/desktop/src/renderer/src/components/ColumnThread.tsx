@@ -27,8 +27,9 @@ export function ColumnThread({ list, posting, where, onOpen, onClose, children }
         ))}
         <section className="column-open relative">
           {/* Where you are, and the way back (the message's own header says who and when). */}
-          <div className="flex items-baseline gap-4 font-meta text-[12px] text-ink-faint">
-            <button type="button" onClick={onClose} title="Back to the list (Esc)" className="flex flex-1 items-baseline gap-2 text-left hover:text-ink-soft">
+          {/* Like the actions' buttons: a quiet word until pointed at. */}
+          <div className="flex items-baseline font-meta text-[12px] text-ink-faint">
+            <button type="button" onClick={onClose} title="Back to the list (Esc)" className="-ml-2 flex items-baseline gap-2 rounded-ui px-2 py-1 text-left transition-colors hover:bg-pane-sunk hover:text-ink">
               <span aria-hidden>←</span>
               <span>{where}</span>
               {i >= 0 && <span>· {i + 1} of {list.length}</span>}

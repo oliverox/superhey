@@ -351,7 +351,7 @@ function Workspace({ status }: { status: AppStatus }) {
               </span>
             ) : columnOpen ? (
               // An email unrolled in the column: the title is the way back to its list (as Esc is).
-              <button onClick={closeReader} title={`Back to ${query ? 'the search' : onToday ? 'the Briefing' : (activeBox?.name ?? 'the list')} (Esc)`} className="no-drag group flex items-baseline gap-2 hover:text-ink-soft">
+              <button onClick={closeReader} title={`Back to ${query ? 'the search' : onToday ? 'the Briefing' : (activeBox?.name ?? 'the list')} (Esc)`} className="no-drag group -ml-2 flex items-baseline gap-2 rounded-ui px-2 py-0.5 transition-colors hover:bg-pane-sunk">
                 <span aria-hidden className="text-ink-faint transition-transform duration-(--dur-1) group-hover:-translate-x-0.5">←</span>
                 {query ? 'Search' : onToday ? 'Briefing' : (activeBox?.name ?? '')}
               </button>
