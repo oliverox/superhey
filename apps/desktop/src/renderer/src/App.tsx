@@ -241,6 +241,9 @@ function Workspace({ status }: { status: AppStatus }) {
     setScreening(false)
     setQuery('')
     setBoxId(id)
+    // In the Column style a box is a list to read down: going to one (even the one you're in)
+    // folds the open email away. (Opening an email in a box comes after this, and wins.)
+    if (column) setTarget(null)
   }
   /** Opens a thread from outside its list (the command bar, a forward's original): into its box when it's one of the six, so the list shows it selected. */
   const openInBox = (p: PostingRow) => {
@@ -346,6 +349,12 @@ function Workspace({ status }: { status: AppStatus }) {
                 </button>
                 The Screener
               </span>
+            ) : columnOpen ? (
+              // An email unrolled in the column: the title is the way back to its list (as Esc is).
+              <button onClick={closeReader} title={`Back to ${query ? 'the search' : onToday ? 'the Briefing' : (activeBox?.name ?? 'the list')} (Esc)`} className="no-drag group flex items-baseline gap-2 hover:text-ink-soft">
+                <span aria-hidden className="text-ink-faint transition-transform duration-(--dur-1) group-hover:-translate-x-0.5">←</span>
+                {query ? 'Search' : onToday ? 'Briefing' : (activeBox?.name ?? '')}
+              </button>
             ) : query ? (
               'Search'
             ) : onToday ? (
