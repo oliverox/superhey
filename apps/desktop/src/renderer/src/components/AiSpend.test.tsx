@@ -39,11 +39,17 @@ describe('AI spend in the header', () => {
     expect(onOpen).toHaveBeenCalled()
   })
 
-  it('turns amber near the budget and red once it’s reached; hidden without AI', async () => {
-    status = month(4.5, 5)
+  it('stays quiet under 80% of the budget, red from there; hidden without AI', async () => {
+    status = month(3.5, 5)
     act(() => root.render(createElement(Spend.AiSpend, { onOpen: vi.fn() })))
     await flush()
-    expect(host.querySelector('button')!.className).toContain('text-attn')
+    expect(host.querySelector('button')!.className).not.toContain('text-danger')
+    status = month(4.5, 5)
+    act(() => root.unmount())
+    root = createRoot(host)
+    act(() => root.render(createElement(Spend.AiSpend, { onOpen: vi.fn() })))
+    await flush()
+    expect(host.querySelector('button')!.className).toContain('text-danger')
     status = { mode: { cloud: null, local: false }, month: { since: '', spentUsd: 0, budgetUsd: null, calls: 0, byTask: [] } }
     act(() => root.unmount())
     root = createRoot(host)

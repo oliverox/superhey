@@ -13,7 +13,8 @@ export function AiSpend({ onOpen }: { onOpen: () => void }) {
   if (!status || (!status.mode.cloud && !status.mode.local && status.month.spentUsd === 0)) return null
   const { spentUsd, budgetUsd, calls } = status.month
   const share = budgetUsd ? Math.min(1, spentUsd / budgetUsd) : null
-  const tone = share == null ? 'var(--ink-faint)' : share >= 1 ? 'var(--danger)' : share >= 0.8 ? 'var(--attn)' : 'var(--accent)'
+  // Red only once 80% of the budget is spent; quiet ink until then.
+  const tone = share != null && share >= 0.8 ? 'var(--danger)' : 'var(--ink-faint)'
   const title = `AI this month: ${usd(spentUsd)}${budgetUsd ? ` of your ${usd(budgetUsd)} budget` : ''} · ${calls.toLocaleString()} ${calls === 1 ? 'request' : 'requests'}. Open usage`
   const r = 5.5
   const c = 2 * Math.PI * r
@@ -22,7 +23,7 @@ export function AiSpend({ onOpen }: { onOpen: () => void }) {
       onClick={onOpen}
       title={title}
       aria-label={title}
-      className={`no-drag ml-2 flex h-7 shrink-0 items-center gap-1.5 rounded-ui px-2 text-[12px] font-medium tabular-nums hover:bg-pane-sunk ${share != null && share >= 1 ? 'text-danger' : share != null && share >= 0.8 ? 'text-attn' : 'text-ink-soft hover:text-ink'}`}
+      className={`no-drag ml-2 flex h-7 shrink-0 items-center gap-1.5 rounded-ui px-2 text-[12px] font-medium tabular-nums hover:bg-pane-sunk ${share != null && share >= 0.8 ? 'text-danger' : 'text-ink-soft hover:text-ink'}`}
     >
       {share == null ? (
         <AiSparkle size={12} />

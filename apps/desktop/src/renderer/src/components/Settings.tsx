@@ -830,7 +830,7 @@ function Budget({ status, save }: { status: AiStatus; save: (change: (s: AiSetti
         </div>
         {budget != null && (
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-pane-sunk" role="meter" aria-valuemin={0} aria-valuemax={budget} aria-valuenow={month.spentUsd} aria-label="Spent this month">
-            <div className={`h-full rounded-full ${share >= 1 ? 'bg-danger' : share >= 0.8 ? 'bg-new' : 'bg-accent'}`} style={{ width: `${Math.max(share * 100, month.spentUsd > 0 ? 1.5 : 0)}%` }} />
+            <div className={`h-full rounded-full ${share >= 0.8 ? 'bg-danger' : 'bg-ink-soft'}`} style={{ width: `${Math.max(share * 100, month.spentUsd > 0 ? 1.5 : 0)}%` }} />
           </div>
         )}
         {share >= 1 && <p className="mt-2 text-[13px] text-danger">The budget is used up: cloud calls are stopped until next month, or until you raise it.</p>}
