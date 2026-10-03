@@ -96,7 +96,7 @@ export interface ComingUpItem {
    * Set when several emails said this (a booking, then its reminder): how many, and every
    * to-do merged into this row, so Done clears them all.
    */
-  merged?: { emails: number; items: Array<{ topicId: number; text: string }> }
+  merged?: { emails: number; items: Array<{ topicId: number; text: string }>; dates: Array<{ topicId: number; text: string }> }
 }
 
 export interface TodoItem {
@@ -291,6 +291,8 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
     const found = new Set<string>()
     const add = (label: string, date: string, time: string | null, isDeadline: boolean, more: Pick<ComingUpItem, 'endDate' | 'endTime' | 'link'> = {}) => {
       if (date < today || date > inAWeek || (date === today && time != null && time < nowHm) || found.has(`${date}|${label.toLowerCase()}`)) return
+      // Dismissed: you took this date off the Briefing.
+      if (input.done?.has(itemKey(posting.topicId!, label))) return
       found.add(`${date}|${label.toLowerCase()}`)
       comingUp.push({ key: `date:${posting.id}:${comingUp.length}`, posting, label, date, time, isDeadline, ...more })
     }
@@ -425,7 +427,9 @@ export function mergeSameThings(items: ComingUpItem[]): ComingUpItem[] {
       .filter((c) => c.task || c.isDeadline)
       .map((c) => ({ topicId: c.posting.topicId!, text: c.task ?? c.label }))
       .filter((it, i, all) => all.findIndex((o) => o.topicId === it.topicId && o.text === it.text) === i)
-    row.merged = { emails: new Set(group.map((c) => c.posting.id)).size, items }
+    // Every row's own label, so dismissing the date dismisses it in each email.
+    const dates = group.map((c) => ({ topicId: c.posting.topicId!, text: c.label }))
+    row.merged = { emails: new Set(group.map((c) => c.posting.id)).size, items, dates }
     return row
   })
 }

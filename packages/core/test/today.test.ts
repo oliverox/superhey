@@ -149,6 +149,14 @@ describe('Today', () => {
     expect(by).toEqual({ 'Pay the Chase statement': 'likely', 'Pay the water bill': 'yes', 'Pay the phone bill': null })
   })
 
+  it('drops a date you dismissed', () => {
+    const { repo, put } = setup()
+    put('imbox', { id: 81, topic_id: 981, active_at: daysAgo(1) })
+    analyse(repo, 981, daysAgo(1), { category: 'notification', dates: [{ label: 'Airbnb payout arrives', date: '2026-09-28', time: null }] })
+    expect(buildToday(repo, input()).comingUp.map((c) => c.label)).toEqual(['Airbnb payout arrives'])
+    expect(buildToday(repo, input({ done: new Set([itemKey(981, 'Airbnb payout arrives')]) })).comingUp).toEqual([])
+  })
+
   it('keeps the date when its to-do is done', () => {
     const { repo, put } = setup()
     put('imbox', { id: 80, topic_id: 980, active_at: daysAgo(1) })

@@ -486,6 +486,17 @@ function ComingUp({ items, pick, onOpen }: { items: ComingUpItem[]; pick: (key: 
                   Done
                 </HoverButton>
               )}
+              {/* A plain date has nothing to do: Dismiss takes it off the Briefing (in every email that gave it). */}
+              {!c.task && !c.isDeadline && (
+                <HoverButton
+                  onClick={() => {
+                    for (const it of c.merged?.dates.length ? c.merged.dates : [{ topicId: c.posting.topicId!, text: c.label }]) void api.markItemDone(it.topicId, it.text)
+                  }}
+                  title="Dismiss: take it off the Briefing"
+                >
+                  Dismiss
+                </HoverButton>
+              )}
               {!c.isDeadline && <AddToCalendar item={c} source={subject ?? undefined} compact />}
             </span>
           </li>
