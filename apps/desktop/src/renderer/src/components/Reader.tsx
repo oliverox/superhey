@@ -414,7 +414,8 @@ function Message({
     const context = `to ${whose} message of ${dayAndTime(entry.createdAt).day}`
     setReply({ kind, message: { to, cc, body: '', threadId: topicId as OutgoingMessage['threadId'] & number }, replyTo: entry.id, context })
   }
-  // Your own messages sit on a tint of the accent, so what you said stands out in the thread.
+  // Your own messages: a quiet fill without an outline (styles.css), so what you said is easy
+  // to find without a colour that reads as a warning.
   const surface = entry.from?.isMe ? 'msg-mine' : 'bg-pane'
   const time = <Time iso={entry.createdAt} />
 
@@ -425,7 +426,7 @@ function Message({
       <li className={`rise overflow-hidden rounded-ui-lg border border-rule ${surface}`} style={{ animationDelay: `${Math.min(index, 6) * 30}ms` }}>
         <button onClick={onExpand} className="block w-full px-6 py-3 text-left hover:bg-pane-sunk/50">
           <span className="flex items-center gap-3">
-            <span className={`min-w-0 flex-1 truncate font-semibold ${entry.from?.isMe ? 'text-accent' : ''}`}>
+            <span className="min-w-0 flex-1 truncate font-semibold">
               {entry.from?.isMe ? 'You' : entry.from ? displayName(entry.from) : 'Unknown'}
             </span>
             {entry.attachments.length > 0 && <span className="shrink-0 text-[12px] text-ink-faint">📎 {entry.attachments.length}</span>}
@@ -452,7 +453,7 @@ function Message({
       >
         <div className="flex items-baseline gap-2">
           <div className="flex min-w-0 flex-1 items-baseline gap-2">
-            {entry.from ? <PersonChip person={entry.from} className={`font-semibold ${entry.from.isMe ? 'text-accent' : ''}`} /> : <span className="font-semibold">Unknown</span>}
+            {entry.from ? <PersonChip person={entry.from} className="font-semibold" /> : <span className="font-semibold">Unknown</span>}
             <RecipientsButton to={entry.to} cc={entry.cc} className="text-[13px]" />
           </div>
           {/* A designed email: as its sender built it, or as text in the app's own type. */}

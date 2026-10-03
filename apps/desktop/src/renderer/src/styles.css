@@ -1189,9 +1189,9 @@ mark {
   margin: 10px 0 18px;
 }
 
-/* Your own messages in a thread: a tint of the accent and no outline, so what you said is
-   easy to find among the others' (white or ground-coloured, outlined). */
+/* Your own messages in a thread: a quiet fill of the page and no outline (the others' are
+   outlined cards). No colour: in the Column style colour means "needs you". */
 .msg-mine {
-  background: color-mix(in oklab, var(--accent) 7%, var(--pane));
+  background: var(--pane-sunk);
   border-color: transparent;
 }
