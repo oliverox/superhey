@@ -49,8 +49,8 @@ export const showInCalendar = (day: string) => window.dispatchEvent(new CustomEv
  * "Add" for a date in an email: opens the event form filled in from it. Once HEY has the
  * event, it says so (and opens the calendar on that day); just after adding, Undo.
  */
-export function AddToCalendar({ item, source, compact = false }: { item: MailDate; source?: string; compact?: boolean }) {
-  const size = compact ? 'h-6 text-[12px]' : 'h-7 text-[13px]'
+export function AddToCalendar({ item, source, compact = false, iconOnly = false }: { item: MailDate; source?: string; compact?: boolean; /** Just the icon (its tooltip names it), as on the Briefing's rows. */ iconOnly?: boolean }) {
+  const size = iconOnly ? 'size-7 justify-center !px-0 text-[12px]' : compact ? 'h-6 text-[12px]' : 'h-7 text-[13px]'
   const range = useLive(() => api.calendarRange(item.date, item.endDate ?? item.date), [item.date, item.endDate], (e) => e.type === 'change' && e.change.kind === 'calendar')
   const [form, setForm] = useState(false)
   const [added, setAdded] = useState<number | null>(null)
@@ -92,7 +92,7 @@ export function AddToCalendar({ item, source, compact = false }: { item: MailDat
         className={`inline-flex ${size} shrink-0 items-center gap-1.5 rounded-ui px-2 font-medium text-ok hover:bg-pane-sunk`}
       >
         <CheckIcon />
-        <span className="@max-[28rem]:sr-only">In calendar</span>
+        <span className={iconOnly ? 'sr-only' : '@max-[28rem]:sr-only'}>In calendar</span>
       </button>
     )
   }
@@ -111,7 +111,7 @@ export function AddToCalendar({ item, source, compact = false }: { item: MailDat
           <rect x="2" y="3" width="12" height="11" rx="2" />
           <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3M8 8.5v3.5M6.25 10.25h3.5" />
         </svg>
-        <span className="@max-[28rem]:sr-only">Add</span>
+        <span className={iconOnly ? 'sr-only' : '@max-[28rem]:sr-only'}>Add</span>
       </button>
       {form && range.data && (
         <EventForm

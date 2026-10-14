@@ -374,23 +374,26 @@ function ActionRow({ item, mark, onOpen, onDone }: { item: ActionItem; mark: Mar
 
 /** Done and Not now, shown on hover (or keyboard focus), without opening the row. */
 function RowActions({ onDone, onNotNow, onIgnore, doneLabel = 'Done' }: { onDone?: () => void; onNotNow?: () => void; onIgnore?: () => void; doneLabel?: string }) {
-  const button = (label: string, title: string, run: () => void, strong = false) => (
+  const button = (label: string, title: string, run: () => void, glyph: React.ReactNode) => (
     <button
       onClick={(e) => {
         e.stopPropagation()
         run()
       }}
       title={title}
-      className={`shrink-0 rounded-ui px-2 py-1 text-[12px] font-medium hover:bg-pane ${strong ? 'text-ink-soft hover:text-ok' : 'text-ink-faint hover:text-ink'}`}
+      aria-label={label}
+      className="flex size-7 shrink-0 items-center justify-center rounded-ui text-ink-soft hover:bg-pane hover:text-ink"
     >
-      {label}
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        {glyph}
+      </svg>
     </button>
   )
   return (
     <span className="row-actions pointer-events-none absolute inset-y-0 right-0 flex items-center rounded-r-ui pr-2 pl-8 opacity-0 transition-opacity duration-(--dur-1) group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
-      {onDone && button(doneLabel, withShortcut(doneLabel === 'Done' ? 'Done: you’ve dealt with it' : `${doneLabel}: take it off the Briefing`, 'done'), onDone, true)}
-      {onNotNow && button('Not now', 'Not now: off the Briefing until tomorrow, or until something new arrives', onNotNow)}
-      {onIgnore && button('Ignore', 'Ignore: not for you; it leaves the Briefing', onIgnore)}
+      {onDone && button(doneLabel, withShortcut(doneLabel === 'Done' ? 'Done: you’ve dealt with it' : `${doneLabel}: take it off the Briefing`, 'done'), onDone, DoneGlyph)}
+      {onNotNow && button('Not now', 'Not now: off the Briefing until tomorrow, or until something new arrives', onNotNow, NotNowGlyph)}
+      {onIgnore && button('Ignore', 'Ignore: not for you; it leaves the Briefing', onIgnore, IgnoreGlyph)}
     </span>
   )
 }
@@ -416,6 +419,7 @@ function KindTag({ kind, amount, due, pressing = true }: { kind: TaskKind; amoun
   )
 }
 
+/** A row's action as an icon; its tooltip (and name for screen readers) says what it does. */
 function HoverButton({ onClick, title, children }: { onClick: () => void; title: string; children: React.ReactNode }) {
   return (
     <button
@@ -424,12 +428,36 @@ function HoverButton({ onClick, title, children }: { onClick: () => void; title:
         onClick()
       }}
       title={title}
-      className="h-6 shrink-0 rounded-ui px-2 text-[12px] font-medium text-ink-soft hover:bg-pane hover:text-ink"
+      aria-label={title.split(':')[0]}
+      className="flex size-7 shrink-0 items-center justify-center rounded-ui text-ink-soft hover:bg-pane hover:text-ink"
     >
-      {children}
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        {children}
+      </svg>
     </button>
   )
 }
+
+// The row actions' icons.
+const ReplyGlyph = (
+  <>
+    <path d="M6.5 3.5 2.5 7.5l4 4" />
+    <path d="M2.5 7.5h7a4 4 0 0 1 4 4V13" />
+  </>
+)
+const DoneGlyph = <path d="m3 8.5 3.25 3.25L13 5" />
+const IgnoreGlyph = (
+  <>
+    <circle cx="8" cy="8" r="5.75" />
+    <path d="m4 12 8-8" />
+  </>
+)
+const NotNowGlyph = (
+  <>
+    <circle cx="8" cy="8" r="5.75" />
+    <path d="M8 5v3.25l2 1.25" />
+  </>
+)
 
 type Mark = 'on' | 'echo' | null
 /** The open email's row is highlighted; its other rows on Today get a thin bar at the edge. */
@@ -514,9 +542,9 @@ function ComingUp({ items, events, pick, onOpen }: { items: ComingUpItem[]; even
                     replyWith(c.posting.topicId!, c.clash ? `Ask to move it: it clashes with ${c.clash.title} at ${clock(c.clash.startsAt)}` : c.kind === 'rsvp' ? 'Yes, I’ll be there' : 'Confirm the appointment')
                     onOpen(c.key, c.posting)
                   }}
-                  title={c.clash ? 'Reply asking to move it (drafted in your voice with ⌘J)' : 'Reply (drafted in your voice with ⌘J)'}
+                  title={c.clash ? 'Ask to move: reply asking to move it (drafted in your voice with ⌘J)' : 'Reply: drafted in your voice with ⌘J'}
                 >
-                  {c.clash ? 'Ask to move' : 'Reply'}
+                  {ReplyGlyph}
                 </HoverButton>
               )}
               {(c.task || c.isDeadline) && (
@@ -527,7 +555,7 @@ function ComingUp({ items, events, pick, onOpen }: { items: ComingUpItem[]; even
                   }}
                   title="Done: you’ve dealt with it (it leaves the Briefing)"
                 >
-                  Done
+                  {DoneGlyph}
                 </HoverButton>
               )}
               {/* Not for you: the date and any to-do go, in every email that gave them. */}
@@ -538,9 +566,9 @@ function ComingUp({ items, events, pick, onOpen }: { items: ComingUpItem[]; even
                 }}
                 title="Ignore: not for you; it leaves the Briefing"
               >
-                Ignore
+                {IgnoreGlyph}
               </HoverButton>
-              {!c.isDeadline && <AddToCalendar item={c} source={subject ?? undefined} compact />}
+              {!c.isDeadline && <AddToCalendar item={c} source={subject ?? undefined} compact iconOnly />}
             </span>
           </li>,
           ]

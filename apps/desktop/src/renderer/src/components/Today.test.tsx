@@ -58,6 +58,8 @@ function data(over: Partial<TodayData> = {}): TodayData {
 }
 
 const text = () => host.textContent ?? ''
+/** A button's name as a person hears it: its label (icon buttons), else its text. */
+const name = (b: Element) => b.getAttribute('aria-label') ?? b.textContent
 const click = (el: Element) =>
   act(async () => {
     el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -85,7 +87,7 @@ describe('TodayList', () => {
     await click(host.querySelector('[aria-label="Complete “File the declaration”"]')!)
     expect(calls).toContainEqual(['runAction', [{ type: 'todo', todoId: 1, done: true }]])
 
-    const notNow = [...row.querySelectorAll('button')].find((b) => b.textContent === 'Not now')!
+    const notNow = [...row.querySelectorAll('button')].find((b) => name(b) === 'Not now')!
     await click(notNow)
     expect(calls).toContainEqual(['hideFromToday', ['thread:3', '2026-09-20T10:00:00Z']])
     expect(onOpen).toHaveBeenCalledTimes(1) // Not now doesn't open the thread
@@ -152,9 +154,9 @@ describe('forms, bills, RSVPs and clashes', () => {
     expect(coming.textContent).toContain('RSVPSay if you’re coming')
     expect(coming.textContent).toContain('Clashes with Gym')
     expect(coming.querySelector('.text-attn')).not.toBeNull() // nudged: due soon
-    await click([...coming.querySelectorAll('button')].find((b) => b.textContent === 'Done')!)
+    await click([...coming.querySelectorAll('button')].find((b) => name(b) === 'Done')!)
     expect(calls).toContainEqual(['markItemDone', [80, 'Pay the school trip']])
-    expect([...coming.querySelectorAll('button')].some((b) => b.textContent === 'Ask to move')).toBe(true)
+    expect([...coming.querySelectorAll('button')].some((b) => name(b) === 'Ask to move')).toBe(true)
   })
 })
 
@@ -172,7 +174,7 @@ describe('one row per thing', () => {
     act(() => root.render(createElement(Today.TodayList, { today: t, selectedId: null, onOpen: vi.fn(), onGoToBox: vi.fn() })))
     const due = host.querySelector('section[aria-label="Due"]')!
     expect(due.textContent).toContain('3 emails')
-    await click([...due.querySelectorAll('button')].find((b) => b.textContent === 'Done')!)
+    await click([...due.querySelectorAll('button')].find((b) => name(b) === 'Done')!)
     expect(calls.filter(([m]) => m === 'markItemDone').map(([, a]) => a[0])).toEqual([50, 60, 70])
   })
 })
@@ -213,7 +215,7 @@ describe('from Paper Trail', () => {
     const first = host.querySelector('section')!
     expect(first.getAttribute('aria-label')).toBe('Was this you?')
     expect(first.textContent).toContain('New device signed in to ChaseChase · today · Paper Trail')
-    await click([...first.querySelectorAll('button')].find((b) => b.textContent === 'It was me')!)
+    await click([...first.querySelectorAll('button')].find((b) => name(b) === 'It was me')!)
     expect(calls).toContainEqual(['markItemDone', [70, 'New device signed in to Chase']])
     expect(onOpen).not.toHaveBeenCalled()
   })
@@ -260,7 +262,7 @@ describe('Done', () => {
     const onOpen = vi.fn()
     act(() => root.render(createElement(Today.TodayList, { today: withEverything(), selectedId: null, onOpen, onGoToBox: vi.fn() })))
     const rowOf = (s: string) => [...host.querySelectorAll('[role=option]')].find((r) => r.textContent?.includes(s))!
-    const buttons = (r: Element) => [...r.querySelectorAll('button')].map((b) => b.textContent)
+    const buttons = (r: Element) => [...r.querySelectorAll('button')].map(name)
     expect(buttons(rowOf('Early check-in?'))).toEqual(['Done', 'Not now'])
     expect(buttons(rowOf('Send the form'))).toEqual(['Done', 'Ignore'])
     calls.length = 0
