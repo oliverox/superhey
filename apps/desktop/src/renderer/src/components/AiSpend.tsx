@@ -2,10 +2,12 @@ import { api, useLive } from '../api'
 import { AiSparkle } from './DraftReply'
 
 const usd = (n: number) => (n < 10 ? `$${n.toFixed(2)}` : `$${Math.round(n)}`)
+// A budget is usually a round sum: "$5", not "$5.00".
+const budget = (n: number) => (Number.isInteger(n) ? `$${n}` : usd(n))
 
 /**
- * What the AI has cost this month, next to the search box: a sparkle and the sum, with a
- * ring that fills towards the budget (amber near it, red once it's reached). Opens
+ * What the AI has cost this month, next to the search box: a sparkle and the sum (and the
+ * budget, fainter, when there is one), with a ring that fills towards the budget (amber near it, red once it's reached). Opens
  * Settings → Usage. Hidden until AI is set up.
  */
 export function AiSpend({ onOpen }: { onOpen: () => void }) {
@@ -34,6 +36,7 @@ export function AiSpend({ onOpen }: { onOpen: () => void }) {
         </svg>
       )}
       {usd(spentUsd)}
+      {budgetUsd ? <span className="-ml-0.5 font-normal opacity-60">/ {budget(budgetUsd)}</span> : null}
     </button>
   )
 }

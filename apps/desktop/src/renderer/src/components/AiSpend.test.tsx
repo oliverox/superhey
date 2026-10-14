@@ -33,7 +33,7 @@ describe('AI spend in the header', () => {
     act(() => root.render(createElement(Spend.AiSpend, { onOpen })))
     await flush()
     const b = host.querySelector('button')!
-    expect(b.textContent).toBe('$0.42')
+    expect(b.textContent).toBe('$0.42/ $5')
     expect(b.title).toContain('$0.42 of your $5.00 budget · 42 requests')
     act(() => b.click())
     expect(onOpen).toHaveBeenCalled()
