@@ -49,8 +49,14 @@ export function doneFor(t: TodayData | null, postingId: number): (() => Promise<
   const on = (items: Array<{ posting: PostingRow }>) => items.find((i) => i.posting.id === postingId)?.posting
   const alert = t.alerts.find((a) => a.posting.id === postingId)
   if (alert?.posting.topicId != null) return () => api.markItemDone(alert.posting.topicId!, alert.text)
-  const handled = on(t.due.actions) ?? on(t.needsReply) ?? on(t.waiting)
-  if (handled?.topicId != null) return () => api.markHandled(handled.topicId!)
+  // A reply row may stand for several threads (a follow-up sent as a new email): handled, all of them.
+  const replyRow = [...t.needsReply, ...t.waiting].find((i) => i.posting.id === postingId)
+  if (replyRow?.posting.topicId != null) return () => Promise.all([replyRow.posting, ...(replyRow.also ?? [])].map((q) => api.markHandled(q.topicId!)))
+  const action = t.due.actions.find((a) => a.posting.id === postingId)
+  if (action?.posting.topicId != null) {
+    const topics = new Set((action.merged?.items ?? [{ topicId: action.posting.topicId }]).map((i) => i.topicId))
+    return () => Promise.all([...topics].map((id) => api.markHandled(id)))
+  }
   if (on(t.due.bubbled)) return () => api.runAction({ type: 'unbubble', postingId })
   if (on(t.replyLater)) return () => api.runAction({ type: 'move', postingId, to: 'imbox' })
   return null
@@ -155,7 +161,16 @@ export function TodayList({
                 <TodoRow key={t.key} item={t} />
               ))}
               {due.actions.slice(0, Math.max(0, limit - due.todos.length)).map((a) => (
-                <ActionRow key={a.key} item={a} mark={pick(a.key, a.posting.id)} onOpen={() => openFrom(a.key, a.posting)} onDone={() => void api.markItemDone(a.posting.topicId!, a.text)} />
+                <ActionRow
+                  key={a.key}
+                  item={a}
+                  mark={pick(a.key, a.posting.id)}
+                  onOpen={() => openFrom(a.key, a.posting)}
+                  onDone={() => {
+                    // Folded from several emails (an invite and its acceptances): done in all of them.
+                    for (const it of a.merged?.items ?? [{ topicId: a.posting.topicId!, text: a.text }]) void api.markItemDone(it.topicId, it.text)
+                  }}
+                />
               ))}
               {due.bubbled.slice(0, Math.max(0, limit - due.todos.length - due.actions.length)).map((i) => row(i, why.bubbled()))}
             </>
@@ -241,6 +256,7 @@ function ThreadRow({ item, reason, showBox = true, mark, onOpen, onDone }: { ite
         <div className="truncate font-medium text-ink">{p.subject ? stripSubjectPrefixes(p.subject) : '(no subject)'}</div>
         <div className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-ink-faint">
           <span className="text-ink-soft">{who}</span> · {reason}
+          {item.also?.length ? ` · ${item.also.length + 1} emails` : ''}
           {where}
         </div>
       </div>
@@ -346,7 +362,7 @@ function ActionRow({ item, mark, onOpen, onDone }: { item: ActionItem; mark: Mar
           <AutopayNote autopay={item.autopay} />
         </div>
         <div className="mt-0.5 truncate text-[13px] text-ink-faint">
-          <span className={item.daysLate > 0 ? 'text-danger' : 'text-ink-soft'}>{why.action(item)}</span> · {p.subject ? stripSubjectPrefixes(p.subject) : p.senderName}
+          <span className={item.daysLate > 0 ? 'text-danger' : 'text-ink-soft'}>{why.action(item)}</span> · {item.merged ? `${item.merged.emails} emails` : p.subject ? stripSubjectPrefixes(p.subject) : p.senderName}
           {where}
         </div>
       </div>

@@ -3,7 +3,7 @@ import { ANALYSIS_VERSION } from '../src/ai/analysis'
 import { openDb } from '../src/cache/db'
 import { Repo } from '../src/cache/repo'
 import * as S from '../src/cli/schemas'
-import { buildToday, calendarAhead, clashWith, itemKey, mergeSameThings, type ComingUpItem, type TodayInput } from '../src/today/today'
+import { buildToday, calendarAhead, clashWith, itemKey, mergeActions, mergeSameThings, mergeThreads, type ActionItem, type ComingUpItem, type ThreadItem, type TodayInput } from '../src/today/today'
 import { alice, me, posting } from './fixtures'
 import { PostingId, TopicId } from '../src/ids'
 import type { EventRow } from '../src/cache/repo'
@@ -469,6 +469,38 @@ describe('calendarAhead', () => {
       ['Gym', '2026-10-06', '08:00', null, 1],
       ['Dr Sailesh', '2026-10-08', '12:00', null, 0],
       ['Lyon', '2026-10-09', null, '2026-10-12', 0],
+    ])
+  })
+})
+
+describe('one row per thing in Due and Needs your reply', () => {
+  const p = (id: number, subject: string, senderEmail = 'a@example.com') => ({ id, topicId: id * 10, subject, senderEmail }) as never
+  it('folds a meeting’s invite, your copy and the acceptances into one to-do', () => {
+    const act = (id: number, subject: string): ActionItem => ({ key: `action:${id}:0`, posting: p(id, subject), text: 'Attend Cockpit x Mautourco meeting', due: '2026-10-14', daysLate: 0, kind: 'task', amount: null })
+    const merged = mergeActions([
+      act(1, 'Accepted: Cockpit x Mautourco @ Wed 14 Oct 2026 11:30am'),
+      act(2, 'Accepted: Cockpit x Mautourco @ mer. 14 oct. 2026 09:30'),
+      act(3, 'Oliver Oxenham invited you to "Cockpit x Mautourco"'),
+      act(4, 'Oliver Oxenham invited you to "Cockpit x Mautourco"'),
+      { ...act(5, 'Visa'), text: 'Renew the visa' },
+    ])
+    expect(merged.map((a) => [a.text, a.merged?.emails ?? 1])).toEqual([
+      ['Attend Cockpit x Mautourco meeting', 4],
+      ['Renew the visa', 1],
+    ])
+    expect(merged[0]!.merged!.items.map((i) => i.topicId)).toEqual([10, 20, 30, 40])
+  })
+
+  it('folds a follow-up sent as a new email into the conversation it follows', () => {
+    const row = (id: number, subject: string, from?: string): ThreadItem => ({ key: `thread:${id}`, posting: p(id, subject, from), days: 1 })
+    const merged = mergeThreads([
+      row(1, 'bahai.mu: the new website and its editor, for your review'),
+      row(2, 'Re: bahai.mu: the new website and its editor, for your review'),
+      row(3, 'bahai.mu: the new website and its editor, for your review', 'someone@else.com'),
+    ])
+    expect(merged.map((m) => [m.posting.id, (m.also ?? []).map((a) => (a as { id: number }).id)])).toEqual([
+      [1, [2]],
+      [3, []],
     ])
   })
 })

@@ -24,6 +24,8 @@ export interface ThreadItem {
   people?: Contact[]
   /** Needs your reply: what they want, in a few words (from the analysis). */
   reason?: string | null
+  /** Other threads about the same thing (the same subject from the same person), folded into this row. */
+  also?: PostingRow[]
 }
 
 /** Something the mail says you must do, with a deadline that has come. */
@@ -39,6 +41,8 @@ export interface ActionItem {
   amount: Money | null
   /** A bill: paid automatically ('yes': this email says so; 'likely': the sender sent an autopay notice lately). */
   autopay?: Autopay
+  /** Set when several emails ask the same (an invite, your copy, the acceptances): how many, and each one's to-do, so Done clears them all. */
+  merged?: { emails: number; items: Array<{ topicId: number; text: string }> }
 }
 
 /** Whether a bill will be paid without you: 'yes' from its own email, 'likely' from the sender's recent autopay notice. */
@@ -347,6 +351,8 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
     daysLate: t.dueAt ? Math.max(0, Math.round((startOfToday.getTime() - dayStart(t.dueAt)) / DAY)) : 0,
   }))
 
+  const dueActions = mergeActions(actions)
+
   // Security alerts from boxes you don't read closely: the Imbox puts them in front of you
   // already. Until you say it was you (Done), or two weeks pass.
   const boxList = repo.boxes()
@@ -364,11 +370,12 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
   return {
     generatedAt: now.toISOString(),
     alerts,
-    due: { todos, actions, bubbled },
-    needsReply,
+    due: { todos, actions: dueActions, bubbled },
+    needsReply: mergeThreads(needsReply),
     replyLater,
     waiting,
-    comingUp: coming.slice(0, 8),
+    // What's due already isn't also coming up.
+    comingUp: coming.filter((c) => !dueActions.some((a) => a.due === c.date && sameWords(a.text, c.task ?? c.label))).slice(0, 8),
     events: repo.events(startOfToday.toISOString(), startOfTomorrow.toISOString()),
     tucked: Object.fromEntries(boxList.filter((b) => b.kind !== 'imbox').map((b) => [b.id, b.name])),
     calendar: calendarAhead(repo.events(startOfToday.toISOString(), new Date(startOfToday.getTime() + (COMING_UP_DAYS + 1) * DAY).toISOString()), coming, now, today, inAWeek),
@@ -506,4 +513,54 @@ export function calendarAhead(events: EventRow[], coming: ComingUpItem[], now: D
     }
   }
   return out.slice(0, 8)
+}
+
+/** Whether two lines of text say the same thing: the same reference (MK 288), or mostly the same words. */
+function sameWords(a: string, b: string): boolean {
+  if (a.trim().toLowerCase() === b.trim().toLowerCase()) return true
+  const codesA = codesOf(a)
+  if ([...codesOf(b)].some((c) => codesA.has(c))) return true
+  const wa = wordsOf(a)
+  const wb = wordsOf(b)
+  const shared = [...wa].filter((w) => wb.has(w)).length
+  return shared >= 3 && shared / new Set([...wa, ...wb]).size >= 0.6
+}
+
+/**
+ * One Due row per thing: a meeting's invite, your copy of it and each acceptance all ask you
+ * to attend. The first stands for them; Done clears the to-do in every email.
+ */
+export function mergeActions(actions: ActionItem[]): ActionItem[] {
+  const groups: ActionItem[][] = []
+  for (const a of actions) {
+    const group = groups.find((g) => g[0]!.due === a.due && sameWords(g[0]!.text, a.text))
+    if (group) group.push(a)
+    else groups.push([a])
+  }
+  return groups.map((g) =>
+    g.length === 1
+      ? g[0]!
+      : { ...g[0]!, merged: { emails: new Set(g.map((a) => a.posting.id)).size, items: g.map((a) => ({ topicId: a.posting.topicId!, text: a.text })) } },
+  )
+}
+
+// What mail clients put before a subject when it's the same conversation or event.
+const SUBJECT_PREFIX = /^\s*((re|fwd?|fw|aw|wg|tr|sv|vs|accepted|declined|tentative|invitation|updated invitation|reminder)\s*(\[\d+\])?\s*:\s*)+/i
+const sameSubject = (s: string) => s.replace(SUBJECT_PREFIX, '').replace(/\s+/g, ' ').trim().toLowerCase()
+
+/**
+ * One reply row per conversation: threads from the same person with the same subject (a
+ * follow-up sent as a new email) fold into the first, which lists the others in `also`.
+ */
+export function mergeThreads(items: ThreadItem[]): ThreadItem[] {
+  const out: ThreadItem[] = []
+  for (const item of items) {
+    const subject = sameSubject(item.posting.subject)
+    const lead = subject
+      ? out.find((o) => o.posting.senderEmail === item.posting.senderEmail && sameSubject(o.posting.subject) === subject)
+      : undefined
+    if (lead) lead.also = [...(lead.also ?? []), item.posting]
+    else out.push({ ...item })
+  }
+  return out
 }

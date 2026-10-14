@@ -158,6 +158,25 @@ describe('forms, bills, RSVPs and clashes', () => {
   })
 })
 
+describe('one row per thing', () => {
+  it('shows a to-do several emails asked once, and Done clears it in each', async () => {
+    const t = data({
+      due: {
+        todos: [],
+        bubbled: [],
+        actions: [{ key: 'action:5:0', posting: posting(5, 'Accepted: Cockpit'), text: 'Attend Cockpit meeting', due: '2026-09-25', daysLate: 0, kind: 'task', amount: null, merged: { emails: 3, items: [{ topicId: 50, text: 'Attend Cockpit meeting' }, { topicId: 60, text: 'Attend Cockpit meeting' }, { topicId: 70, text: 'Attend Cockpit meeting' }] } }],
+      },
+      replyLater: [],
+      waiting: [],
+    })
+    act(() => root.render(createElement(Today.TodayList, { today: t, selectedId: null, onOpen: vi.fn(), onGoToBox: vi.fn() })))
+    const due = host.querySelector('section[aria-label="Due"]')!
+    expect(due.textContent).toContain('3 emails')
+    await click([...due.querySelectorAll('button')].find((b) => b.textContent === 'Done')!)
+    expect(calls.filter(([m]) => m === 'markItemDone').map(([, a]) => a[0])).toEqual([50, 60, 70])
+  })
+})
+
 describe('from boxes you don’t read closely', () => {
   it('says where an item was, except in its own section', () => {
     const tucked = { ...posting(9, 'Visa renewal'), boxId: 5 }
