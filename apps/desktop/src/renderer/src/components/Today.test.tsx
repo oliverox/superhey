@@ -262,7 +262,7 @@ describe('Done', () => {
     const rowOf = (s: string) => [...host.querySelectorAll('[role=option]')].find((r) => r.textContent?.includes(s))!
     const buttons = (r: Element) => [...r.querySelectorAll('button')].map((b) => b.textContent)
     expect(buttons(rowOf('Early check-in?'))).toEqual(['Done', 'Not now'])
-    expect(buttons(rowOf('Send the form'))).toEqual(['Done'])
+    expect(buttons(rowOf('Send the form'))).toEqual(['Done', 'Ignore'])
     calls.length = 0
     await click([...rowOf('Early check-in?').querySelectorAll('button')][0]!)
     expect(calls).toEqual([['markHandled', [60]]])

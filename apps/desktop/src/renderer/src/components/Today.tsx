@@ -366,13 +366,14 @@ function ActionRow({ item, mark, onOpen, onDone }: { item: ActionItem; mark: Mar
           {where}
         </div>
       </div>
-      <RowActions onDone={onDone} />
+      {/* Ignoring a to-do clears it as Done does; the word says it wasn't yours to do. */}
+      <RowActions onDone={onDone} onIgnore={onDone} />
     </li>
   )
 }
 
 /** Done and Not now, shown on hover (or keyboard focus), without opening the row. */
-function RowActions({ onDone, onNotNow, doneLabel = 'Done' }: { onDone?: () => void; onNotNow?: () => void; doneLabel?: string }) {
+function RowActions({ onDone, onNotNow, onIgnore, doneLabel = 'Done' }: { onDone?: () => void; onNotNow?: () => void; onIgnore?: () => void; doneLabel?: string }) {
   const button = (label: string, title: string, run: () => void, strong = false) => (
     <button
       onClick={(e) => {
@@ -389,6 +390,7 @@ function RowActions({ onDone, onNotNow, doneLabel = 'Done' }: { onDone?: () => v
     <span className="row-actions pointer-events-none absolute inset-y-0 right-0 flex items-center rounded-r-ui pr-2 pl-8 opacity-0 transition-opacity duration-(--dur-1) group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
       {onDone && button(doneLabel, withShortcut(doneLabel === 'Done' ? 'Done: you’ve dealt with it' : `${doneLabel}: take it off the Briefing`, 'done'), onDone, true)}
       {onNotNow && button('Not now', 'Not now: off the Briefing until tomorrow, or until something new arrives', onNotNow)}
+      {onIgnore && button('Ignore', 'Ignore: not for you; it leaves the Briefing', onIgnore)}
     </span>
   )
 }
@@ -528,17 +530,16 @@ function ComingUp({ items, events, pick, onOpen }: { items: ComingUpItem[]; even
                   Done
                 </HoverButton>
               )}
-              {/* A plain date has nothing to do: Dismiss takes it off the Briefing (in every email that gave it). */}
-              {!c.task && !c.isDeadline && (
-                <HoverButton
-                  onClick={() => {
-                    for (const it of c.merged?.dates.length ? c.merged.dates : [{ topicId: c.posting.topicId!, text: c.label }]) void api.markItemDone(it.topicId, it.text)
-                  }}
-                  title="Dismiss: take it off the Briefing"
-                >
-                  Dismiss
-                </HoverButton>
-              )}
+              {/* Not for you: the date and any to-do go, in every email that gave them. */}
+              <HoverButton
+                onClick={() => {
+                  const own = [{ topicId: c.posting.topicId!, text: c.label }, ...(c.task ? [{ topicId: c.posting.topicId!, text: c.task }] : [])]
+                  for (const it of c.merged ? [...c.merged.dates, ...c.merged.items] : own) void api.markItemDone(it.topicId, it.text)
+                }}
+                title="Ignore: not for you; it leaves the Briefing"
+              >
+                Ignore
+              </HoverButton>
               {!c.isDeadline && <AddToCalendar item={c} source={subject ?? undefined} compact />}
             </span>
           </li>,
