@@ -40,7 +40,7 @@ export const ThreadAnalysis = z.object({
         done: z.boolean().describe('True only when a later message in the thread shows it is already handled (the form was received, the bill paid, the RSVP given).'),
       }),
     )
-    .describe('At most 5. Only what the user must do, not what others will do.'),
+    .describe('At most 5. Only what the user must do, not what others will do. Each a separate thing: never the same one twice in other words ("Check in" and "Prepare for check-in" are one).'),
   dates: z
     .array(
       z.object({

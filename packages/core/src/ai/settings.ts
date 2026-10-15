@@ -12,6 +12,8 @@ export const AI_TASKS = {
   // One call per thread: its summary, whether it needs you, action items, dates and amounts.
   summary: { label: 'Understanding threads', tier: 'cheap' },
   classify: { label: 'Sorting suggestions', tier: 'cheap' },
+  // One call when the Briefing's rows change: which say the same thing.
+  briefing: { label: 'Folding repeats on the Briefing', tier: 'cheap' },
   draft: { label: 'Reply drafts in your voice', tier: 'quality' },
   agent: { label: 'Requests in the command bar', tier: 'quality' },
   insights: { label: 'Insights and weekly review', tier: 'quality' },

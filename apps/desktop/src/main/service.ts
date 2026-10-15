@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events'
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join } from 'node:path'
 import {
+  BriefingDeduper,
   buildToday,
   itemKey,
   AI_TASK_IDS,
@@ -96,6 +97,7 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
   private aiSettings: AiSettings
   private ai: AiClient | null = null
   private analyzer: ThreadAnalyzer | null = null
+  private deduper: BriefingDeduper | null = null
   private drafter: Drafter | null = null
   private buildingVoice: Promise<StoredVoice> | null = null
   /** The thread last opened: the one a draft is worth writing for. */
@@ -394,7 +396,8 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
       for (const kind of ['laterbox', 'asidebox', 'bubblebox'])
         for (const t of core.repo.unanalysedInBox(kind, since, 20, ANALYSIS_VERSION)) this.analyzer.enqueue(t.topicId)
     }
-    return { ...view, screener: core.engine.screenerEntries().length }
+    // Rows that say the same thing in other words, folded (the model's answer, once per set of rows).
+    return { ...(this.deduper?.apply(view) ?? view), screener: core.engine.screenerEntries().length }
   }
 
   // Voice and reply drafts
@@ -658,6 +661,10 @@ export class AppService extends EventEmitter<{ event: [ApiEvent] }> implements A
       if (topicId === this.openTopic && (core.repo.analysis(topicId) as { needsReply?: boolean } | null)?.needsReply) drafter.enqueue(topicId)
     })
     analyzer.on('error', (err) => console.error('[analysis]', err.message))
+    const deduper = new BriefingDeduper({ repo: core.repo, ai })
+    this.deduper = deduper
+    deduper.on('folded', () => this.emit('event', { type: 'today' }))
+    deduper.on('error', (err) => console.error('[briefing]', err.message))
     // Paper Trail: only what looks like a security alert, a bill or a deadline (shown on Today).
     const readPaperTrail = () => {
       const since = new Date(Date.now() - PAPER_TRAIL_DAYS * 86_400_000).toISOString()
