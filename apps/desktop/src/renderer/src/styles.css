@@ -150,9 +150,10 @@
   --pane: #f5f3ed;
   --pane-alt: #f5f3ed;
   --pane-sunk: #ebe8df;
-  /* Messages in a thread: white paper on the warm ground; yours tinted with the accent. */
+  /* Messages in a thread: white paper on the warm ground; yours on warm sand, of the same
+     family (a cool tint clashes with the paper). */
   --msg: #ffffff;
-  --msg-mine: color-mix(in oklab, var(--accent) 8%, #ffffff);
+  --msg-mine: #ece5d5;
   --ink: #1c1d1a;
   --ink-soft: #4a4a44;
   --ink-faint: #6c6a61;
@@ -204,7 +205,7 @@
     --pane-alt: #131412;
     --pane-sunk: #1c1d1a;
     --msg: #1a1b18;
-    --msg-mine: color-mix(in oklab, var(--accent) 16%, #1a1b18);
+    --msg-mine: #25221b;
     --ink: #ecebe4;
     --ink-soft: #bdbab0;
     --ink-faint: #8d8b81;
@@ -240,7 +241,7 @@
   --pane-alt: #131412;
   --pane-sunk: #1c1d1a;
   --msg: #1a1b18;
-  --msg-mine: color-mix(in oklab, var(--accent) 16%, #1a1b18);
+  --msg-mine: #25221b;
   --ink: #ecebe4;
   --ink-soft: #bdbab0;
   --ink-faint: #8d8b81;
@@ -1197,7 +1198,7 @@ mark {
 }
 
 /* Messages in a thread: their own paper (white in the Column style's light scheme). Yours
-   are tinted with the accent and have no outline, so what you said is easy to find. */
+   are on a warm sand, without an outline, so what you said is easy to find. */
 .msg-card {
   background: var(--msg, var(--pane));
 }
