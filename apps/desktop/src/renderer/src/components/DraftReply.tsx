@@ -74,7 +74,6 @@ export function DraftCard({
   sendTo,
   onSend,
   onUse,
-  onRedraft,
   onDiscard,
 }: {
   draft: ReplyDraftRow
@@ -82,9 +81,9 @@ export function DraftCard({
   sendTo?: string
   onSend?: (body: string) => Promise<void>
   onUse: (body: string) => void
-  onRedraft: () => void
   onDiscard: () => void
 }) {
+  const [steering, setSteering] = useState(false)
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [all, setAll] = useState(false)
@@ -121,6 +120,7 @@ export function DraftCard({
         </p>
       )}
       {sendError && <p className="mt-2 text-[12px] text-danger">{sendError}</p>}
+      {steering && <Steer topicId={draft.topicId} onDone={() => setSteering(false)} />}
       <div className="mt-3 flex items-center gap-2">
         {onSend && (
           <button
@@ -145,7 +145,13 @@ export function DraftCard({
         <button type="button" onClick={() => onUse(body)} className={onSend ? 'rounded-ui px-2.5 py-1.5 text-[13px] font-medium text-ink-soft hover:bg-pane-sunk hover:text-ink' : 'btn-primary'}>
           {onSend ? 'Edit' : 'Use draft'}
         </button>
-        <button type="button" onClick={onRedraft} title="Write it again with AI, optionally saying what to change" className="inline-flex items-center gap-1.5 rounded-ui px-2.5 py-1.5 text-[13px] text-ink-soft hover:bg-pane-sunk hover:text-ink">
+        <button
+          type="button"
+          onClick={() => setSteering(!steering)}
+          aria-expanded={steering}
+          title="Write it again, saying what kind of reply you want"
+          className={`inline-flex items-center gap-1.5 rounded-ui px-2.5 py-1.5 text-[13px] hover:bg-pane-sunk hover:text-ink ${steering ? 'bg-pane-sunk text-ink' : 'text-ink-soft'}`}
+        >
           <AiSparkle />
           Redraft…
         </button>
@@ -154,6 +160,83 @@ export function DraftCard({
         </button>
       </div>
     </section>
+  )
+}
+
+// Kinds of reply that fit most mail, after the ones the AI suggests for this thread.
+const KINDS = ['Say yes', 'Decline politely', 'Ask for more time', 'Ask a question', 'Just say thanks']
+
+/**
+ * What kind of reply to write instead: in your own words, or one of a few kinds (this
+ * thread's suggestions first). The draft is written again with it, and says what it followed.
+ */
+function Steer({ topicId, onDone }: { topicId: number; onDone: () => void }) {
+  const analysis = useLive(() => api.analysis(topicId), [topicId], (e) => e.type === 'analysis' && e.topicId === topicId).data
+  const [text, setText] = useState('')
+  const [writing, setWriting] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const input = useRef<HTMLInputElement>(null)
+  useEffect(() => input.current?.focus(), [])
+  const suggested = analysis?.replyOptions ?? []
+  const kinds = [...suggested, ...KINDS.filter((k) => !suggested.some((o) => o.toLowerCase() === k.toLowerCase()))].slice(0, 6)
+  const write = async (instruction: string) => {
+    if (!instruction.trim() || writing) return
+    setWriting(instruction)
+    setError(null)
+    try {
+      await api.draftReply(topicId, instruction.trim())
+      onDone()
+    } catch (e) {
+      setError(e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e))
+      setWriting(null)
+    }
+  }
+  return (
+    <div className="mt-3 border-t border-rule pt-3">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          void write(text)
+        }}
+        className="flex items-center gap-2"
+      >
+        <input
+          ref={input}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              e.stopPropagation()
+              onDone()
+            }
+          }}
+          disabled={writing != null}
+          maxLength={500}
+          placeholder="What kind of reply? “Decline, but suggest next month”"
+          aria-label="What kind of reply to write"
+          className="min-w-0 flex-1 rounded-ui border border-rule bg-pane px-3 py-1.5 text-[14px] text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none disabled:opacity-60"
+        />
+        <button type="submit" disabled={!text.trim() || writing != null} className="btn-primary disabled:opacity-50">
+          {writing != null ? <Spinner /> : 'Write'}
+        </button>
+      </form>
+      <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Kinds of reply">
+        {kinds.map((k) => (
+          <button
+            key={k}
+            type="button"
+            disabled={writing != null}
+            onClick={() => void write(k)}
+            className={`rounded-full border px-2.5 py-0.5 text-[13px] transition-colors hover:border-accent hover:bg-accent-wash hover:text-accent disabled:opacity-50 ${writing === k ? 'border-accent text-accent' : 'border-rule text-ink-soft'}`}
+          >
+            {k}
+          </button>
+        ))}
+      </div>
+      {writing != null && <p className="mt-2 text-[12px] text-ink-faint">Writing it again: “{writing}”…</p>}
+      {error && <p className="mt-2 text-[12px] text-danger">{error}</p>}
+    </div>
   )
 }
 

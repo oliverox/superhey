@@ -56,22 +56,46 @@ async function flush() {
 describe('a draft reply', () => {
   it('shows the draft with its placeholders marked, and offers use, redraft and discard', () => {
     const onUse = vi.fn()
-    const onRedraft = vi.fn()
     const onDiscard = vi.fn()
-    act(() => root.render(createElement(Draft.DraftCard, { draft: draft(), onUse, onRedraft, onDiscard })))
+    act(() => root.render(createElement(Draft.DraftCard, { draft: draft(), onUse, onDiscard })))
     expect(host.textContent).toContain('Draft reply')
     expect(host.textContent).toContain('in your voice')
     expect(host.querySelector('mark')!.textContent).toBe('[place]')
     expect(host.textContent).toContain('Fill in before sending: [place]')
     act(() => button('Use draft')!.click())
-    act(() => button('Redraft…')!.click())
     act(() => button('Discard')!.click())
-    expect([onUse, onRedraft, onDiscard].map((f) => f.mock.calls.length)).toEqual([1, 1, 1])
+    expect([onUse, onDiscard].map((f) => f.mock.calls.length)).toEqual([1, 1])
+  })
+
+  it('redrafts as the kind of reply you ask for: in your words, or a kind picked', async () => {
+    answers.analysis = () => ({ replyOptions: ['Confirm our preference'], dates: [] })
+    answers.draftReply = () => draft({ instruction: 'Ask for more time' })
+    act(() => root.render(createElement(Draft.DraftCard, { draft: draft(), onUse: vi.fn(), onDiscard: vi.fn() })))
+    act(() => button('Redraft…')!.click())
+    await flush()
+    const kinds = [...host.querySelectorAll('[aria-label="Kinds of reply"] button')].map((b) => b.textContent)
+    expect(kinds.slice(0, 3)).toEqual(['Confirm our preference', 'Say yes', 'Decline politely'])
+    await act(async () => button('Ask for more time')!.click())
+    await flush()
+    expect(calls).toContainEqual(['draftReply', [900, 'Ask for more time']])
+    expect(host.querySelector('[aria-label="Kinds of reply"]')).toBeNull()
+
+    act(() => button('Redraft…')!.click())
+    const field = host.querySelector('input[aria-label="What kind of reply to write"]') as HTMLInputElement
+    expect(document.activeElement).toBe(field)
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    act(() => {
+      set.call(field, 'Decline, but suggest next month')
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => field.form!.requestSubmit())
+    await flush()
+    expect(calls).toContainEqual(['draftReply', [900, 'Decline, but suggest next month']])
   })
 
   it('types itself out the first time it’s shown, and a click shows it all', () => {
     localStorage.clear()
-    act(() => root.render(createElement(Draft.DraftCard, { draft: draft({ createdAt: '2026-09-26T09:00:00Z' }), onUse: vi.fn(), onRedraft: vi.fn(), onDiscard: vi.fn() })))
+    act(() => root.render(createElement(Draft.DraftCard, { draft: draft({ createdAt: '2026-09-26T09:00:00Z' }), onUse: vi.fn(), onDiscard: vi.fn() })))
     expect(host.querySelector('.type-caret')).toBeTruthy()
     act(() => (host.querySelector('[title="Show it all"]') as HTMLElement).click())
     expect(host.querySelector('.type-caret')).toBeNull()
@@ -80,9 +104,9 @@ describe('a draft reply', () => {
   })
 
   it('says when it was written before the latest message, or what it was asked to say', () => {
-    act(() => root.render(createElement(Draft.DraftCard, { draft: draft({ stale: true }), onUse: vi.fn(), onRedraft: vi.fn(), onDiscard: vi.fn() })))
+    act(() => root.render(createElement(Draft.DraftCard, { draft: draft({ stale: true }), onUse: vi.fn(), onDiscard: vi.fn() })))
     expect(host.textContent).toContain('written before the latest message')
-    act(() => root.render(createElement(Draft.DraftCard, { draft: draft({ instruction: 'say yes' }), onUse: vi.fn(), onRedraft: vi.fn(), onDiscard: vi.fn() })))
+    act(() => root.render(createElement(Draft.DraftCard, { draft: draft({ instruction: 'say yes' }), onUse: vi.fn(), onDiscard: vi.fn() })))
     expect(host.textContent).toContain('“say yes”')
   })
 

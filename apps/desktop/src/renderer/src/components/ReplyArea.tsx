@@ -84,7 +84,7 @@ export function ReplyArea({
   }
   return (
     <>
-    {shownDraft && <DraftCard draft={shownDraft} sendTo={sendTo} onSend={sendDraft} onUse={useDraftText} onRedraft={() => open('reply')} onDiscard={() => void api.discardDraft(thread.topicId)} />}
+    {shownDraft && <DraftCard draft={shownDraft} sendTo={sendTo} onSend={sendDraft} onUse={useDraftText} onDiscard={() => void api.discardDraft(thread.topicId)} />}
     <div className="mt-5 flex gap-2">
       <ReplyButton onClick={() => open('reply')} title={withShortcut('Reply', 'reply')}>
         Reply
