@@ -8,8 +8,9 @@ import type { PostingRow } from '@shared/api'
 Element.prototype.scrollIntoView = () => {}
 
 let Lists: typeof import('./Lists')
+const calls: Array<[string, unknown[]]> = []
 beforeAll(async () => {
-  window.bridge = { call: async () => null, onEvent: () => () => {} }
+  window.bridge = { call: async (m, a) => (calls.push([m, a]), null), onEvent: () => () => {} }
   Lists = await import('./Lists')
 })
 
@@ -78,5 +79,44 @@ describe('an email opened while new', () => {
     ])
     expect(Lists.inGroupOrder(list, null)).toBe(list)
     expect(Lists.groupOf(list[1]!)).toBe('Previously seen')
+  })
+})
+
+describe('picking several emails', () => {
+  beforeEach(() => {
+    calls.length = 0
+  })
+  const many = [row(1, 'Lunch Friday?', false), row(2, 'Invoice', false), row(3, 'Receipt', false), row(4, 'Old news', true)]
+  const option = (subject: string) => [...host.querySelectorAll('[role=option]')].find((o) => o.textContent?.includes(subject)) as HTMLElement
+  const pick = (subject: string) => option(subject).querySelector('[role=checkbox]') as HTMLButtonElement
+  const bar = () => host.querySelector('[role=toolbar][aria-label="Selected emails"]')
+  const barButton = (name: string) => [...(bar()?.querySelectorAll('button') ?? [])].find((b) => b.textContent === name) as HTMLButtonElement
+
+  it('starts from an avatar; then a click picks instead of opening, ⇧ picks a run, and they’re marked read together', async () => {
+    const onOpen = vi.fn()
+    act(() => root.render(createElement(Lists.PostingList, { postings: many, loading: false, selectedId: null, onOpen })))
+    expect(bar()).toBeNull()
+    act(() => pick('Lunch Friday?').click())
+    expect(bar()!.textContent).toContain('1 selected')
+    act(() => option('Receipt').dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })))
+    expect(bar()!.textContent).toContain('3 selected')
+    expect(onOpen).not.toHaveBeenCalled()
+    expect(barButton('Mark unread').disabled).toBe(true)
+    await act(async () => barButton('Mark read').click())
+    expect(calls).toContainEqual(['runActions', [[1, 2, 3].map((postingId) => ({ type: 'seen', postingId, seen: true }))]])
+    expect(bar()).toBeNull()
+  })
+
+  it('⌘A picks them all, Esc lets go, and opening works again', () => {
+    const onOpen = vi.fn()
+    act(() => root.render(createElement(Lists.PostingList, { postings: many, loading: false, selectedId: null, onOpen })))
+    act(() => option('Invoice').dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: true })))
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', metaKey: true })))
+    expect(bar()!.textContent).toContain('4 selected')
+    expect(barButton('Mark unread').disabled).toBe(false)
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
+    expect(bar()).toBeNull()
+    act(() => option('Invoice').click())
+    expect(onOpen).toHaveBeenCalledTimes(1)
   })
 })

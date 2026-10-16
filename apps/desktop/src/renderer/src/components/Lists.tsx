@@ -8,6 +8,7 @@ import { listTags, stripSubjectPrefixes, tagKind, tagMatchesLabel } from '../mai
 import { splitMatches } from '../mail/search'
 import { Avatar } from './Avatar'
 import { quietName } from '../today/comingUp'
+import { api } from '../api'
 
 interface ListProps {
   postings: PostingRow[]
@@ -87,6 +88,7 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
   const listRef = useRef<HTMLUListElement>(null)
   // Rows that just left the box stay a moment, folding shut, so the list closes the gap.
   const { rows: shown, leaving } = useLeavingRows(postings, !search)
+  const picking = usePicked(postings)
 
   useEffect(() => {
     listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
@@ -140,19 +142,19 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
               role={gone ? undefined : 'option'}
               aria-hidden={gone || undefined}
               aria-selected={gone ? undefined : selected}
-              onClick={gone ? undefined : () => onOpen(p)}
+              onClick={gone ? undefined : (e) => (picking.active || e.metaKey || e.ctrlKey || e.shiftKey ? picking.click(p, e.shiftKey, rows) : onOpen(p))}
               className={`group/row relative mx-2 flex cursor-default items-center gap-3 rounded-ui py-2 pr-3 pl-3 transition-colors duration-(--dur-1) ${
                 gone ? 'row-leave pointer-events-none' : 'rise'
-              } ${selected && !gone ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
-              style={{ animationDelay: `${Math.min(i, 12) * 18}ms`, '--row-bg': selected ? 'var(--selection)' : 'var(--pane-sunk)' } as React.CSSProperties}
+              } ${(selected || picking.has(p.id)) && !gone ? 'bg-selection' : 'hover:bg-pane-sunk'}`}
+              style={{ animationDelay: `${Math.min(i, 12) * 18}ms`, '--row-bg': selected || picking.has(p.id) ? 'var(--selection)' : 'var(--pane-sunk)' } as React.CSSProperties}
             >
-              {!gone && !search && <MarkRead posting={p} />}
+              {!gone && !search && !picking.active && <MarkRead posting={p} />}
               {clean ? (
                 // Like the Briefing's rows: the subject leads (heavier while unread), and one
                 // faint line under it says who and what it's about.
                 <>
                   <span className="self-start pt-[2px]">
-                    <Avatar avatar={p.avatar} size={32} />
+                    <PickAvatar posting={p} size={32} picking={picking} rows={rows} />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-2">
@@ -191,7 +193,7 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
                 // what it's about under it, no bold (in the Feed, unread is the usual state).
                 <>
                   <span className="self-start pt-[3px]">
-                    <Avatar avatar={p.avatar} size={24} />
+                    <PickAvatar posting={p} size={24} picking={picking} rows={rows} />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-3">
@@ -210,7 +212,7 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
               ) : (
                 <>
                 <span>
-                  <Avatar avatar={p.avatar} size={32} />
+                  <PickAvatar posting={p} size={32} picking={picking} rows={rows} />
                 </span>
                 <div className="min-w-0 flex-1">
                   {/* Who, then when (and whether it wants a reply). */}
@@ -259,7 +261,147 @@ export function PostingList({ postings, loading, selectedId, onOpen, search, col
         )
       })}
       {search?.footer && <li>{search.footer}</li>}
+      {picking.active && <PickedBar picking={picking} postings={postings} />}
     </ul>
+  )
+}
+
+type Picking = ReturnType<typeof usePicked>
+
+/**
+ * Rows picked for acting on together. Picking starts from a row's avatar (or ⌘/⇧-click);
+ * while it's on, a click picks a row instead of opening it, ⇧ picks the run from the last
+ * one, ⌘A picks them all, and Esc lets go. Rows that leave the box leave the pick.
+ */
+function usePicked(postings: PostingRow[]) {
+  const [picked, setPicked] = useState<ReadonlySet<number>>(() => new Set())
+  const anchor = useRef<number | null>(null)
+  const present = new Set<number>(postings.map((p) => p.id))
+  const live = [...picked].filter((id) => present.has(id))
+  if (live.length !== picked.size) setPicked(new Set(live))
+  const active = live.length > 0
+
+  const clear = useCallback(() => {
+    setPicked(new Set())
+    anchor.current = null
+  }, [])
+  const all = useCallback(() => setPicked(new Set(postings.filter((p) => p.id > 0).map((p) => p.id))), [postings])
+
+  useEffect(() => {
+    if (!active) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof Element && e.target.closest('input, textarea, [contenteditable="true"]')) return
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        clear()
+      } else if (e.key === 'a' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        all()
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [active, clear, all])
+
+  return {
+    active,
+    count: live.length,
+    ids: live,
+    has: (id: number) => picked.has(id),
+    clear,
+    all,
+    /** Picks or lets go of a row; with `range`, every row from the last one picked to it. */
+    click(p: PostingRow, range: boolean, rows: PostingRow[]) {
+      if (p.id <= 0) return
+      const from = anchor.current != null ? rows.findIndex((r) => r.id === anchor.current) : -1
+      const to = rows.findIndex((r) => r.id === p.id)
+      setPicked((s) => {
+        const next = new Set(s)
+        if (range && from >= 0 && to >= 0) {
+          for (const r of rows.slice(Math.min(from, to), Math.max(from, to) + 1)) if (r.id > 0) next.add(r.id)
+        } else if (next.has(p.id)) next.delete(p.id)
+        else next.add(p.id)
+        return next
+      })
+      anchor.current = p.id
+    },
+  }
+}
+
+/**
+ * A row's avatar, which is also its checkbox: on hover a ring shows it can be picked, and a
+ * picked row's avatar turns into a check.
+ */
+function PickAvatar({ posting: p, size, picking, rows }: { posting: PostingRow; size: number; picking: Picking; rows: PostingRow[] }) {
+  const on = picking.has(p.id)
+  if (p.id <= 0) return <Avatar avatar={p.avatar} size={size} />
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={on}
+      aria-label={on ? 'Unselect' : 'Select'}
+      title={on ? 'Unselect' : 'Select (⇧-click for a range)'}
+      onClick={(e) => {
+        e.stopPropagation()
+        picking.click(p, e.shiftKey, rows)
+      }}
+      className="group/pick relative block rounded-full"
+      style={{ width: size, height: size }}
+    >
+      <span className={`block transition-opacity duration-(--dur-1) ${on ? 'opacity-0' : picking.active ? 'opacity-35' : 'group-hover/row:opacity-35'}`}>
+        <Avatar avatar={p.avatar} size={size} />
+      </span>
+      <span
+        aria-hidden
+        className={`absolute inset-0 flex items-center justify-center rounded-full transition-opacity duration-(--dur-1) ${
+          on ? 'bg-ink text-pane opacity-100' : `border-[1.5px] border-ink-soft bg-pane/60 text-transparent ${picking.active ? 'opacity-100' : 'opacity-0 group-hover/row:opacity-100'} group-hover/pick:text-ink-faint`
+        }`}
+      >
+        <svg width={size * 0.45} height={size * 0.45} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m3 8.5 3.25 3.25L13 5" />
+        </svg>
+      </span>
+    </button>
+  )
+}
+
+/** What to do with the picked rows: mark them read or unread (one undo for all), or let go. */
+function PickedBar({ picking, postings }: { picking: Picking; postings: PostingRow[] }) {
+  const picked = postings.filter((p) => picking.has(p.id))
+  // A bundle is many emails behind one row; it's read by opening it.
+  const emails = picked.filter((p) => !p.isBundle)
+  const mark = (seen: boolean) => {
+    const rows = emails.filter((p) => p.seen !== seen)
+    if (rows.length) void api.runActions(rows.map((p) => ({ type: 'seen', postingId: p.id, seen })))
+    picking.clear()
+  }
+  const unread = emails.some((p) => !p.seen)
+  const read = emails.some((p) => p.seen)
+  const button = 'rounded-ui px-2.5 py-1 text-[13px] font-medium hover:bg-pane-sunk disabled:opacity-40 disabled:hover:bg-transparent'
+  return (
+    <li className="pointer-events-none sticky bottom-3 z-20 flex justify-center px-4 pt-3">
+      <div role="toolbar" aria-label="Selected emails" className="rise pointer-events-auto flex items-center gap-1 rounded-ui-lg border border-rule-strong bg-pane py-1 pr-1 pl-3 shadow-[0_12px_32px_-12px_rgba(0,0,0,0.3)]">
+        <span className="pr-2 text-[13px] text-ink-soft tabular-nums">{picking.count} selected</span>
+        <button type="button" disabled={!unread} onClick={() => mark(true)} className={`${button} text-ink`} title="Mark them read (one undo for all)">
+          Mark read
+        </button>
+        <button type="button" disabled={!read} onClick={() => mark(false)} className={`${button} text-ink-soft`} title="Mark them unread">
+          Mark unread
+        </button>
+        {picking.count < postings.filter((p) => p.id > 0).length && (
+          <button type="button" onClick={picking.all} className={`${button} text-ink-soft`} title="Select every email here (⌘A)">
+            Select all
+          </button>
+        )}
+        <button type="button" onClick={picking.clear} aria-label="Clear selection" title="Clear selection (Esc)" className="flex size-7 items-center justify-center rounded-ui text-ink-faint hover:bg-pane-sunk hover:text-ink">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+            <path d="m4 4 8 8M12 4l-8 8" />
+          </svg>
+        </button>
+      </div>
+    </li>
   )
 }
 
