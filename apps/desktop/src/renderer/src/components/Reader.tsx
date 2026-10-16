@@ -414,9 +414,8 @@ function Message({
     const context = `to ${whose} message of ${dayAndTime(entry.createdAt).day}`
     setReply({ kind, message: { to, cc, body: '', threadId: topicId as OutgoingMessage['threadId'] & number }, replyTo: entry.id, context })
   }
-  // Your own messages: a quiet fill without an outline (styles.css), so what you said is easy
-  // to find without a colour that reads as a warning.
-  const surface = entry.from?.isMe ? 'msg-mine' : 'bg-pane'
+  // Others' messages on white paper; yours tinted with the accent, without an outline (styles.css).
+  const surface = entry.from?.isMe ? 'msg-mine' : 'msg-card'
   const time = <Time iso={entry.createdAt} />
 
   if (!expanded) {
@@ -635,7 +634,7 @@ export function MessageCard({
   index,
   entryHtml,
   showOriginal,
-  surface = 'bg-pane',
+  surface = 'msg-card',
   signatureAt,
   corner,
 }: {

@@ -150,6 +150,9 @@
   --pane: #f5f3ed;
   --pane-alt: #f5f3ed;
   --pane-sunk: #ebe8df;
+  /* Messages in a thread: white paper on the warm ground; yours tinted with the accent. */
+  --msg: #ffffff;
+  --msg-mine: color-mix(in oklab, var(--accent) 8%, #ffffff);
   --ink: #1c1d1a;
   --ink-soft: #4a4a44;
   --ink-faint: #6c6a61;
@@ -200,6 +203,8 @@
     --pane: #131412;
     --pane-alt: #131412;
     --pane-sunk: #1c1d1a;
+    --msg: #1a1b18;
+    --msg-mine: color-mix(in oklab, var(--accent) 16%, #1a1b18);
     --ink: #ecebe4;
     --ink-soft: #bdbab0;
     --ink-faint: #8d8b81;
@@ -234,6 +239,8 @@
   --pane: #131412;
   --pane-alt: #131412;
   --pane-sunk: #1c1d1a;
+  --msg: #1a1b18;
+  --msg-mine: color-mix(in oklab, var(--accent) 16%, #1a1b18);
   --ink: #ecebe4;
   --ink-soft: #bdbab0;
   --ink-faint: #8d8b81;
@@ -1189,9 +1196,12 @@ mark {
   margin: 10px 0 18px;
 }
 
-/* Your own messages in a thread: a quiet fill of the page and no outline (the others' are
-   outlined cards). No colour: in the Column style colour means "needs you". */
+/* Messages in a thread: their own paper (white in the Column style's light scheme). Yours
+   are tinted with the accent and have no outline, so what you said is easy to find. */
+.msg-card {
+  background: var(--msg, var(--pane));
+}
 .msg-mine {
-  background: var(--pane-sunk);
+  background: var(--msg-mine, var(--pane-sunk));
   border-color: transparent;
 }
