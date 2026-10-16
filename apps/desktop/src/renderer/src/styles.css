@@ -155,7 +155,7 @@
   --msg-edge: #e4dfd3;
   --msg-lift: 0 1px 0 rgb(60 50 30 / 0.04), 0 1px 3px -1px rgb(60 50 30 / 0.06);
   --msg-mine: #ffffff;
-  --msg-mine-edge: #a29c8e;
+  --msg-mine-edge: #3d3a33;
   --ink: #1c1d1a;
   --ink-soft: #4a4a44;
   --ink-faint: #6c6a61;
@@ -210,7 +210,7 @@
     --msg-edge: #262723;
     --msg-lift: none;
     --msg-mine: #1a1b18;
-    --msg-mine-edge: #55554d;
+    --msg-mine-edge: #bdbab0;
     --ink: #ecebe4;
     --ink-soft: #bdbab0;
     --ink-faint: #8d8b81;
@@ -249,7 +249,7 @@
   --msg-edge: #262723;
   --msg-lift: none;
   --msg-mine: #1a1b18;
-  --msg-mine-edge: #55554d;
+  --msg-mine-edge: #bdbab0;
   --ink: #ecebe4;
   --ink-soft: #bdbab0;
   --ink-faint: #8d8b81;
@@ -1217,4 +1217,7 @@ mark {
   background: var(--msg-mine, var(--pane-sunk));
   border-color: var(--msg-mine-edge, transparent);
   box-shadow: var(--msg-lift, none);
+}
+:root[data-theme='column'] .msg-mine {
+  border-width: 1.5px;
 }
