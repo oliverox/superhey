@@ -28,9 +28,13 @@ export interface EmailDocument {
  */
 export function isDesigned(entryHtml: string): boolean {
   if (!/(&quot;|")contentType\1:\1text\/html\1/.test(entryHtml)) return false
-  // Judged on what the message adds: a reply quoting a newsletter is still a reply.
+  // Judged on what the message adds: a reply quoting a newsletter is still a reply. (HEY
+  // keeps a quoted email as an attachment inside the quote, so the quote goes first; then
+  // what the sender's client quoted inside the HTML it sent.)
+  const outer = new DOMParser().parseFromString(`<!doctype html><body>${entryHtml}</body>`, 'text/html')
+  foldQuoted(outer, true)
   // (HEY wraps it in <shadow-content><template>, whose content isn't searchable as it is.)
-  const unwrapped = storedHtml(entryHtml).replace(/<\/?(shadow-content|template)\b[^>]*>/gi, '')
+  const unwrapped = storedHtml(outer.body.innerHTML).replace(/<\/?(shadow-content|template)\b[^>]*>/gi, '')
   const stored = new DOMParser().parseFromString(`<!doctype html><body>${unwrapped}</body>`, 'text/html')
   foldQuoted(stored, true)
   const html = stored.body.innerHTML
@@ -139,6 +143,7 @@ const QUOTE_STARTS = [
 ]
 // Outlook's "From: … Sent: …" block (in a reply; in a first message it's usually a forward).
 const OUTLOOK_STARTS = ['#divRplyFwdMsg', '#x_divRplyFwdMsg', 'div[style*="border-top:solid #E1E1E1"]', 'div[style*="border-top: solid #E1E1E1"]']
+const WROTE_LINE = /(?:wrote|a écrit|schrieb|escribió|ha scritto|escreveu|schreef|skrev|napsal)\s?:\s*$/i
 const FORWARD_INTRO = /^\s*(-{2,}\s*Forwarded message|Begin forwarded message|-{2,}\s*Original Message)/i
 
 /**
@@ -149,6 +154,12 @@ const FORWARD_INTRO = /^\s*(-{2,}\s*Forwarded message|Begin forwarded message|-{
 export function foldQuoted(doc: Document, laterInThread: boolean): boolean {
   const selectors = [...QUOTE_STARTS, ...(laterInThread ? OUTLOOK_STARTS : [])]
   const starts = selectors.flatMap((sel) => [...doc.body.querySelectorAll(sel)])
+  // HEY and others with no marker: an "On … wrote:" line, then the quote in a blockquote.
+  for (const quote of doc.body.querySelectorAll('blockquote')) {
+    let intro = quote.previousElementSibling
+    while (intro && !intro.textContent?.trim()) intro = intro.previousElementSibling
+    if (intro && WROTE_LINE.test(intro.textContent ?? '')) starts.push(intro)
+  }
   if (!starts.length) return false
   // The first in the document, and from its outermost wrapper that holds nothing else.
   let start = starts.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))[0]!

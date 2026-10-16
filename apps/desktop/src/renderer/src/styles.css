@@ -150,10 +150,13 @@
   --pane: #f5f3ed;
   --pane-alt: #f5f3ed;
   --pane-sunk: #ebe8df;
-  /* Messages in a thread: white paper on the warm ground; yours on warm sand, of the same
-     family (a cool tint clashes with the paper). */
+  /* Messages in a thread: theirs are white sheets laid on the warm desk; yours are written on
+     the desk itself, with a firmer outline (no fill, no colour). */
   --msg: #ffffff;
-  --msg-mine: #ece5d5;
+  --msg-edge: #e4dfd3;
+  --msg-lift: 0 1px 0 rgb(60 50 30 / 0.04), 0 1px 3px -1px rgb(60 50 30 / 0.06);
+  --msg-mine: transparent;
+  --msg-mine-edge: #cfc8b8;
   --ink: #1c1d1a;
   --ink-soft: #4a4a44;
   --ink-faint: #6c6a61;
@@ -205,7 +208,10 @@
     --pane-alt: #131412;
     --pane-sunk: #1c1d1a;
     --msg: #1a1b18;
-    --msg-mine: #25221b;
+    --msg-edge: #262723;
+    --msg-lift: none;
+    --msg-mine: transparent;
+    --msg-mine-edge: #34352f;
     --ink: #ecebe4;
     --ink-soft: #bdbab0;
     --ink-faint: #8d8b81;
@@ -241,7 +247,10 @@
   --pane-alt: #131412;
   --pane-sunk: #1c1d1a;
   --msg: #1a1b18;
-  --msg-mine: #25221b;
+  --msg-edge: #262723;
+  --msg-lift: none;
+  --msg-mine: transparent;
+  --msg-mine-edge: #34352f;
   --ink: #ecebe4;
   --ink-soft: #bdbab0;
   --ink-faint: #8d8b81;
@@ -1197,12 +1206,15 @@ mark {
   margin: 10px 0 18px;
 }
 
-/* Messages in a thread: their own paper (white in the Column style's light scheme). Yours
-   are on a warm sand, without an outline, so what you said is easy to find. */
+/* Messages in a thread: their own paper (in the Column style, white sheets on the warm desk).
+   Yours have no sheet: the desk and a firmer outline, so what you said is plain to find
+   without a fill or a colour. */
 .msg-card {
   background: var(--msg, var(--pane));
+  border-color: var(--msg-edge, var(--rule));
+  box-shadow: var(--msg-lift, none);
 }
 .msg-mine {
   background: var(--msg-mine, var(--pane-sunk));
-  border-color: transparent;
+  border-color: var(--msg-mine-edge, transparent);
 }

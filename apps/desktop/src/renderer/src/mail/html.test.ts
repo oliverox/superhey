@@ -116,6 +116,10 @@ describe('quoted history in HTML replies', () => {
     expect(outlook.html).toContain('Thanks, noted.')
     expect(outlook.html).not.toContain('earlier message')
     expect(outlook.html).not.toContain('<hr>')
+    const hey = fold('<div>Thank you for following up.</div><br><div>On October 15, 2026, Haneen &lt;h@x.ae&gt; wrote:</div><blockquote>Dear Oliver</blockquote>')
+    expect(hey.html).toContain('following up')
+    expect(hey.html).not.toContain('Dear Oliver')
+    expect(hey.html).not.toContain('wrote:')
   })
 
   it('keeps forwards, inline replies, a first message’s From/Sent block, and everything when not asked', () => {
@@ -126,6 +130,8 @@ describe('quoted history in HTML replies', () => {
   })
 
   it('judges a reply by what it adds: one quoting a newsletter isn’t designed', () => {
+    const quotedAttachment = `<div>Thanks, we'll pass.</div><div>On Oct 15, Haneen wrote:</div><blockquote>${designed(table('a') + table('b') + table('c'))}</blockquote>`
+    expect(isDesigned(quotedAttachment)).toBe(false)
     expect(isDesigned(designed(`<div>Worth a read?</div><div class="gmail_quote">${table('a') + table('b') + table('c')}</div>`))).toBe(false)
   })
 })
