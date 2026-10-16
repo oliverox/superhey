@@ -339,8 +339,8 @@ function usePicked(postings: PostingRow[]) {
 }
 
 /**
- * A row's avatar, which is also its checkbox: on hover a ring shows it can be picked, and a
- * picked row's avatar turns into a check.
+ * A row's avatar, which is also its checkbox: on hover a ring round it shows it can be
+ * picked (the avatar itself unchanged), and a picked row's avatar turns into a check.
  */
 function PickAvatar({ posting: p, size, picking, rows }: { posting: PostingRow; size: number; picking: Picking; rows: PostingRow[] }) {
   const on = picking.has(p.id)
@@ -359,13 +359,14 @@ function PickAvatar({ posting: p, size, picking, rows }: { posting: PostingRow; 
       className="group/pick relative block rounded-full"
       style={{ width: size, height: size }}
     >
-      <span className={`block transition-opacity duration-(--dur-1) ${on ? 'opacity-0' : picking.active ? 'opacity-35' : 'group-hover/row:opacity-35'}`}>
+      <span className={`block transition-opacity duration-(--dur-1) ${on ? 'opacity-0' : ''}`}>
         <Avatar avatar={p.avatar} size={size} />
       </span>
       <span
         aria-hidden
         className={`absolute inset-0 flex items-center justify-center rounded-full transition-opacity duration-(--dur-1) ${
-          on ? 'bg-ink text-pane opacity-100' : `border-[1.5px] border-ink-soft bg-pane/60 text-transparent ${picking.active ? 'opacity-100' : 'opacity-0 group-hover/row:opacity-100'} group-hover/pick:text-ink-faint`
+          // Unpicked: only a ring around the avatar (which stays as it is); over the avatar itself, a check shows what a click does.
+          on ? 'bg-ink text-pane opacity-100' : `border-[1.5px] border-ink-soft text-transparent group-hover/pick:bg-ink/45 group-hover/pick:text-white ${picking.active ? 'opacity-100' : 'opacity-0 group-hover/row:opacity-100'}`
         }`}
       >
         <svg width={size * 0.45} height={size * 0.45} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
