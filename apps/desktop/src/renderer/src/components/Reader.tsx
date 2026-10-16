@@ -414,7 +414,7 @@ function Message({
     const context = `to ${whose} message of ${dayAndTime(entry.createdAt).day}`
     setReply({ kind, message: { to, cc, body: '', threadId: topicId as OutgoingMessage['threadId'] & number }, replyTo: entry.id, context })
   }
-  // Others' messages on white paper; yours tinted with the accent, without an outline (styles.css).
+  // Others' messages on white paper; yours on warm sand, without an outline (styles.css).
   const surface = entry.from?.isMe ? 'msg-mine' : 'msg-card'
   const time = <Time iso={entry.createdAt} />
 
