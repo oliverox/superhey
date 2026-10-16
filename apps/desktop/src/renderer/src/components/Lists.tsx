@@ -271,7 +271,7 @@ type Picking = ReturnType<typeof usePicked>
 /**
  * Rows picked for acting on together. Picking starts from a row's avatar (or ⌘/⇧-click);
  * while it's on, a click picks a row instead of opening it, ⇧ picks the run from the last
- * one, ⌘A picks them all, and Esc lets go. Rows that leave the box leave the pick.
+ * one, ⌘A picks them all, and Esc or a click elsewhere lets go. Rows that leave the box leave the pick.
  */
 function usePicked(postings: PostingRow[]) {
   const [picked, setPicked] = useState<ReadonlySet<number>>(() => new Set())
@@ -300,8 +300,17 @@ function usePicked(postings: PostingRow[]) {
         all()
       }
     }
+    // A click anywhere but a row or the bar lets go.
+    const onDown = (e: PointerEvent) => {
+      if (e.target instanceof Element && e.target.closest('[role="option"], [aria-label="Selected emails"]')) return
+      clear()
+    }
     window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
+    window.addEventListener('pointerdown', onDown, true)
+    return () => {
+      window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('pointerdown', onDown, true)
+    }
   }, [active, clear, all])
 
   return {

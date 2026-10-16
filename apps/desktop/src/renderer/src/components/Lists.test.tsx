@@ -116,6 +116,11 @@ describe('picking several emails', () => {
     expect(barButton('Mark unread').disabled).toBe(false)
     act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
     expect(bar()).toBeNull()
+    act(() => pick('Receipt').click())
+    act(() => option('Invoice').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })))
+    expect(bar()).not.toBeNull() // a row keeps the pick going
+    act(() => document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })))
+    expect(bar()).toBeNull()
     act(() => option('Invoice').click())
     expect(onOpen).toHaveBeenCalledTimes(1)
   })
