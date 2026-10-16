@@ -7,8 +7,11 @@ import { frameDocument, toEmailDocument } from '../mail/html'
  * `allow-same-origin` lets the app measure the content to size the frame; without
  * `allow-scripts` the email can't use that access. Links open in the browser.
  */
-export function HtmlBody({ entryHtml }: { entryHtml: string }) {
-  const { html, blockedImages } = useMemo(() => toEmailDocument(entryHtml), [entryHtml])
+export function HtmlBody({ entryHtml, laterInThread }: { entryHtml: string; laterInThread?: boolean }) {
+  // A reply's quoted history is folded away, as in the clean view; the dots bring it back.
+  const [showQuoted, setShowQuoted] = useState(false)
+  const { html, quoted, blockedImages } = useMemo(() => toEmailDocument(entryHtml, { foldQuote: !showQuoted, laterInThread }), [entryHtml, showQuoted, laterInThread])
+  const hasQuote = quoted || showQuoted
   const srcDoc = useMemo(() => frameDocument(html), [html])
   const ref = useRef<HTMLIFrameElement>(null)
   const [height, setHeight] = useState(240)
@@ -82,11 +85,36 @@ export function HtmlBody({ entryHtml }: { entryHtml: string }) {
         style={{ height }}
         className={`block w-full border-0 bg-white transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}`}
       />
+      {hasQuote && (
+        <QuoteDots open={showQuoted} onToggle={() => setShowQuoted(!showQuoted)} />
+      )}
       {blockedImages > 0 && (
         <p className="mt-2 text-[12px] text-ink-faint">
           {blockedImages} remote {blockedImages === 1 ? 'image was' : 'images were'} blocked because {blockedImages === 1 ? 'it' : 'they'} didn't come through HEY's privacy proxy.
         </p>
       )}
     </>
+  )
+}
+
+/** The quoted-history toggle, as in the clean view: three dots in a pill. */
+export function QuoteDots({ open, onToggle, name }: { open: boolean; onToggle: () => void; name?: string | null }) {
+  const label = `${open ? 'Hide' : 'Show'} quoted text${name ? ` from ${name}` : ''}`
+  return (
+    <button
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-label={label}
+      title={label}
+      className={`mt-1 mb-1 inline-flex h-[18px] w-8 items-center justify-center rounded-full transition-colors ${
+        open ? 'bg-rule-strong text-ink' : 'bg-pane-sunk text-ink-soft hover:bg-rule-strong hover:text-ink'
+      }`}
+    >
+      <svg width="16" height="4" viewBox="0 0 16 4" aria-hidden fill="currentColor">
+        <circle cx="2" cy="2" r="1.6" />
+        <circle cx="8" cy="2" r="1.6" />
+        <circle cx="14" cy="2" r="1.6" />
+      </svg>
+    </button>
   )
 }

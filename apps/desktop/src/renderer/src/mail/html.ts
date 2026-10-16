@@ -10,6 +10,8 @@ export const IMAGE_PROXY = 'https://gopher.hey.com/'
 export interface EmailDocument {
   /** Sanitized body HTML. */
   html: string
+  /** Whether quoted history was folded away (asked for with `foldQuote`). */
+  quoted: boolean
   /** Remote images that didn't go through HEY's proxy and were left out. */
   blockedImages: number
 }
@@ -26,7 +28,12 @@ export interface EmailDocument {
  */
 export function isDesigned(entryHtml: string): boolean {
   if (!/(&quot;|")contentType\1:\1text\/html\1/.test(entryHtml)) return false
-  const html = storedHtml(entryHtml)
+  // Judged on what the message adds: a reply quoting a newsletter is still a reply.
+  // (HEY wraps it in <shadow-content><template>, whose content isn't searchable as it is.)
+  const unwrapped = storedHtml(entryHtml).replace(/<\/?(shadow-content|template)\b[^>]*>/gi, '')
+  const stored = new DOMParser().parseFromString(`<!doctype html><body>${unwrapped}</body>`, 'text/html')
+  foldQuoted(stored, true)
+  const html = stored.body.innerHTML
   const count = (re: RegExp) => html.match(re)?.length ?? 0
   const tables = count(/<table|&lt;table/gi)
   const images = count(/content-type=(\\?"|&quot;|\\&quot;)image|<img|&lt;img/gi)
@@ -55,7 +62,12 @@ function storedHtml(entryHtml: string): string {
 
 const MAX_UNWRAP_ROUNDS = 6
 
-export function toEmailDocument(entryHtml: string): EmailDocument {
+/**
+ * `foldQuote`: leave out the history a reply quotes below what it adds (as HEY does), for
+ * the reader to show on request. `laterInThread`: Outlook's From/Sent block counts as a
+ * quote only after a thread's first message (in the first, it's usually a forward).
+ */
+export function toEmailDocument(entryHtml: string, opts: { foldQuote?: boolean; laterInThread?: boolean } = {}): EmailDocument {
   const doc = new DOMParser().parseFromString(`<!doctype html><body>${entryHtml}</body>`, 'text/html')
   // HEY's From/To rows; the app shows its own header.
   doc.querySelector('body > header')?.remove()
@@ -68,6 +80,8 @@ export function toEmailDocument(entryHtml: string): EmailDocument {
     for (const fig of figures) unwrapFigure(doc, fig)
     for (const att of attachments) unwrapAttachment(doc, att)
   }
+
+  const quoted = opts.foldQuote ? foldQuoted(doc, opts.laterInThread ?? false) : false
 
   let blockedImages = 0
   const purify = DOMPurify(window)
@@ -110,7 +124,47 @@ export function toEmailDocument(entryHtml: string): EmailDocument {
   }
   const html = purify.sanitize(doc.body, config) as unknown as string
   purify.removeAllHooks()
-  return { html: typeof html === 'string' ? html : String(html), blockedImages }
+  return { html: typeof html === 'string' ? html : String(html), quoted, blockedImages }
+}
+
+// Where mail clients start the history a reply quotes.
+const QUOTE_STARTS = [
+  '.gmail_quote_container', // Gmail
+  '.gmail_quote',
+  '.yahoo_quoted', // Yahoo
+  '.protonmail_quote', // Proton
+  '.moz-cite-prefix', // Thunderbird: its "On … wrote:" line, then the blockquote
+  'blockquote[type="cite"]', // Apple Mail, Thunderbird
+  '#appendonsend', // Outlook: an empty marker right before the history
+]
+// Outlook's "From: … Sent: …" block (in a reply; in a first message it's usually a forward).
+const OUTLOOK_STARTS = ['#divRplyFwdMsg', '#x_divRplyFwdMsg', 'div[style*="border-top:solid #E1E1E1"]', 'div[style*="border-top: solid #E1E1E1"]']
+const FORWARD_INTRO = /^\s*(-{2,}\s*Forwarded message|Begin forwarded message|-{2,}\s*Original Message)/i
+
+/**
+ * Removes a reply's quoted history: everything from where it starts to the end of the
+ * message. Not when nothing would be left above it (an inline reply), and not a forward.
+ * Says whether anything was removed.
+ */
+export function foldQuoted(doc: Document, laterInThread: boolean): boolean {
+  const selectors = [...QUOTE_STARTS, ...(laterInThread ? OUTLOOK_STARTS : [])]
+  const starts = selectors.flatMap((sel) => [...doc.body.querySelectorAll(sel)])
+  if (!starts.length) return false
+  // The first in the document, and from its outermost wrapper that holds nothing else.
+  let start = starts.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))[0]!
+  if (FORWARD_INTRO.test(start.textContent ?? '')) return false
+  // Outlook puts a rule just above its From/Sent block: it goes too.
+  const ruleAbove = start.previousElementSibling
+  if (ruleAbove?.tagName === 'HR' || (ruleAbove?.tagName === 'DIV' && /^\s*$/.test(ruleAbove.textContent ?? '') && ruleAbove.querySelector('hr'))) start = ruleAbove
+  const range = doc.createRange()
+  range.setStartBefore(start)
+  range.setEndAfter(doc.body.lastChild!)
+  const before = doc.createRange()
+  before.setStart(doc.body, 0)
+  before.setEndBefore(start)
+  if (!before.toString().replace(/[\s\u00a0\u200b]+/g, '')) return false
+  range.deleteContents()
+  return true
 }
 
 /** A Trix attachment figure: an HTML attachment becomes its content; anything else (files) goes. */

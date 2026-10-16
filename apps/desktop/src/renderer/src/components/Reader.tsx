@@ -15,7 +15,7 @@ import { ContextPanel } from './ContextPanel'
 import { usePresence } from '../motion'
 import { dropOutgoing, useOutgoingReplies } from '../outbox'
 import { useShortcut, withShortcut } from '../shortcuts'
-import { HtmlBody } from './HtmlBody'
+import { HtmlBody, QuoteDots } from './HtmlBody'
 import { Tag } from './Tag'
 import { Spinner } from './Spinner'
 import { AiSpend } from './AiSpend'
@@ -660,7 +660,7 @@ export function MessageCard({
       // ~600–700px, so its card may grow past the text measure (centred, within the pane).
       <div className={`group/card email-wide relative overflow-hidden rounded-ui-lg border border-rule ${surface}`}>
         <div className="bg-white p-3">
-          <HtmlBody entryHtml={entryHtml!} />
+          <HtmlBody entryHtml={entryHtml!} laterInThread={index > 0} />
         </div>
         {visibleAttachments(entry.attachments).length > 0 && (
           <div className="px-6 pb-4">
@@ -783,24 +783,9 @@ function SignatureFold({ text }: { text: string }) {
 
 function QuotedHistory({ quote }: { quote: QuotedSplit }) {
   const [open, setOpen] = useState(false)
-  const label = `${open ? 'Hide' : 'Show'} quoted text${quote.quotedName ? ` from ${quote.quotedName}` : ''}`
   return (
     <div className="mb-1">
-      <button
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        aria-label={label}
-        title={label}
-        className={`inline-flex h-[18px] w-8 items-center justify-center rounded-full transition-colors ${
-          open ? 'bg-rule-strong text-ink' : 'bg-pane-sunk text-ink-soft hover:bg-rule-strong hover:text-ink'
-        }`}
-      >
-        <svg width="16" height="4" viewBox="0 0 16 4" aria-hidden fill="currentColor">
-          <circle cx="2" cy="2" r="1.6" />
-          <circle cx="8" cy="2" r="1.6" />
-          <circle cx="14" cy="2" r="1.6" />
-        </svg>
-      </button>
+      <QuoteDots open={open} onToggle={() => setOpen(!open)} name={quote.quotedName} />
       {open && (
         <div className="fade-in mt-3 border-l-2 border-rule-strong pl-4 text-ink-soft">
           <Markdown components={mdComponents}>{quote.quoted}</Markdown>

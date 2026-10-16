@@ -102,6 +102,34 @@ describe('toEmailDocument', () => {
   })
 })
 
+describe('quoted history in HTML replies', () => {
+  const table = (cells: string) => `<table width="600" style="background-color:#fff"><tr><td style="padding:8px">${cells}</td></tr></table>`
+  const fold = (inner: string, laterInThread = true) => toEmailDocument(designed(inner), { foldQuote: true, laterInThread })
+
+  it('leaves out what Gmail, Apple Mail and Outlook quote below a reply', () => {
+    const gmail = fold('<div dir="ltr">Sounds good, Friday then.</div><br><div class="gmail_quote"><div class="gmail_attr">On Tue, Haneen wrote:</div><blockquote>Does Friday work?</blockquote></div>')
+    expect(gmail.quoted).toBe(true)
+    expect(gmail.html).toContain('Sounds good')
+    expect(gmail.html).not.toContain('Does Friday work')
+    expect(fold('<div>Yes.</div><blockquote type="cite">Earlier</blockquote>').html).not.toContain('Earlier')
+    const outlook = fold('<div><p>Thanks, noted.</p><div><hr></div><div id="divRplyFwdMsg"><b>From:</b> Haneen<br><b>Sent:</b> Monday</div><div>The earlier message</div></div>')
+    expect(outlook.html).toContain('Thanks, noted.')
+    expect(outlook.html).not.toContain('earlier message')
+    expect(outlook.html).not.toContain('<hr>')
+  })
+
+  it('keeps forwards, inline replies, a first message’s From/Sent block, and everything when not asked', () => {
+    expect(fold('<div>FYI</div><div class="gmail_quote">---------- Forwarded message ---------<br>From: X</div>').quoted).toBe(false)
+    expect(fold('<div class="gmail_quote">On Tue, A wrote:<blockquote>Q?</blockquote></div>').quoted).toBe(false)
+    expect(fold('<p>See below</p><div id="divRplyFwdMsg">From: X Sent: Y</div><div>Old</div>', false).html).toContain('Old')
+    expect(toEmailDocument(designed('<div>Yes.</div><blockquote type="cite">Earlier</blockquote>')).html).toContain('Earlier')
+  })
+
+  it('judges a reply by what it adds: one quoting a newsletter isn’t designed', () => {
+    expect(isDesigned(designed(`<div>Worth a read?</div><div class="gmail_quote">${table('a') + table('b') + table('c')}</div>`))).toBe(false)
+  })
+})
+
 describe('frameDocument', () => {
   it("allows images only from HEY's proxy and no scripts", () => {
     const doc = frameDocument('<p>x</p>')
