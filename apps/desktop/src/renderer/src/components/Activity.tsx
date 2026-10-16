@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ActionRecord, OutgoingRecord } from '@shared/api'
 import { api, onApiEvent, useLive } from '../api'
 import { dayAndTime } from '../format'
@@ -6,13 +6,49 @@ import { dayAndTime } from '../format'
 const TOAST_MS = 6000
 const FAILED_TOAST_MS = 9000
 
+/** A note's height in the stack, and the gap between notes when it's fanned out. */
+const NOTE_H = 44
+const NOTE_GAP = 8
+/** Notes kept at once; the stack shows the newest and two peeking behind it. */
+const KEPT = 5
+const PEEKING = 2
+const LEAVE_MS = 200
+
 /**
  * Bottom-centre notes for actions you take: what happened, with Undo; or why it didn't.
- * Automatic actions (seen-on-open) stay silent.
+ * Automatic actions (seen-on-open) stay silent. Several stack into one: the newest in front,
+ * two older ones peeking behind it, and hovering fans them all out (and holds them there).
  */
 export function Toasts() {
   const [toasts, setToasts] = useState<ActionRecord[]>([])
   const [outgoing, setOutgoing] = useState<OutgoingRecord[]>([])
+  const [leaving, setLeaving] = useState<ReadonlySet<string>>(() => new Set())
+  const [open, setOpen] = useState(false)
+  const hovered = useRef(false)
+  const order = useRef(new Map<string, number>())
+  const seq = useRef(0)
+  const arrive = (key: string) => {
+    if (!order.current.has(key)) order.current.set(key, ++seq.current)
+  }
+
+  // Fades a note out, then drops it.
+  const dismiss = useCallback((key: string) => {
+    setLeaving((l) => new Set([...l, key]))
+    setTimeout(() => {
+      if (key.startsWith('out-')) setOutgoing((list) => list.filter((o) => `out-${o.id}` !== key))
+      else setToasts((list) => list.filter((t) => `act-${t.id}` !== key))
+      setLeaving((l) => new Set([...l].filter((k) => k !== key)))
+      order.current.delete(key)
+    }, LEAVE_MS)
+  }, [])
+  // Its time is up, unless you're reading the stack: then a little later.
+  const expire = useCallback(
+    (key: string, ms: number) => {
+      const tick = () => (hovered.current ? setTimeout(tick, 1500) : dismiss(key))
+      setTimeout(tick, ms)
+    },
+    [dismiss],
+  )
 
   // Messages in their undo window, then "Sent" or the reason they failed.
   useEffect(
@@ -20,10 +56,11 @@ export function Toasts() {
       onApiEvent((e) => {
         if (e.type !== 'outgoing') return
         const r = e.record
-        setOutgoing((list) => [...list.filter((o) => o.id !== r.id), r].filter((o) => o.status !== 'cancelled').slice(-3))
-        if (r.status === 'sent') setTimeout(() => setOutgoing((list) => list.filter((o) => o.id !== r.id)), 4000)
+        arrive(`out-${r.id}`)
+        setOutgoing((list) => [...list.filter((o) => o.id !== r.id), r].filter((o) => o.status !== 'cancelled').slice(-KEPT))
+        if (r.status === 'sent') expire(`out-${r.id}`, 4000)
       }),
-    [],
+    [expire],
   )
 
   useEffect(
@@ -34,24 +71,69 @@ export function Toasts() {
         if (a.source === 'auto' || a.status === 'running') return
         // An undo's own steps are summarised by the "undone" update of the original.
         if (a.source === 'undo') return
-        setToasts((list) => [...list.filter((t) => t.id !== a.id), a].slice(-3))
-        setTimeout(() => setToasts((list) => list.filter((t) => t.id !== a.id)), a.status === 'failed' ? FAILED_TOAST_MS : TOAST_MS)
+        arrive(`act-${a.id}`)
+        setToasts((list) => [...list.filter((t) => t.id !== a.id), a].slice(-KEPT))
+        expire(`act-${a.id}`, a.status === 'failed' ? FAILED_TOAST_MS : TOAST_MS)
       }),
-    [],
+    [expire],
   )
 
-  if (!toasts.length && !outgoing.length) return null
+  const notes = [
+    ...outgoing.map((o) => ({ key: `out-${o.id}`, node: <OutgoingToast record={o} onClose={() => dismiss(`out-${o.id}`)} /> })),
+    ...toasts.map((t) => ({ key: `act-${t.id}`, node: <Toast record={t} onClose={() => dismiss(`act-${t.id}`)} /> })),
+  ]
+    // Newest first: it's the one in front.
+    .sort((a, b) => (order.current.get(b.key) ?? 0) - (order.current.get(a.key) ?? 0))
+  if (!notes.length) return null
+  const fanned = open && notes.length > 1
+  const height = fanned ? notes.length * NOTE_H + (notes.length - 1) * NOTE_GAP : NOTE_H + Math.min(notes.length - 1, PEEKING) * NOTE_GAP
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-5 z-[60] flex flex-col items-center gap-2" aria-live="polite">
-      {outgoing.map((o) => (
-        <OutgoingToast key={`out-${o.id}`} record={o} onClose={() => setOutgoing((list) => list.filter((x) => x.id !== o.id))} />
-      ))}
-      {toasts.map((t) => (
-        <Toast key={t.id} record={t} onClose={() => setToasts((list) => list.filter((x) => x.id !== t.id))} />
-      ))}
-    </div>
+    <section
+      aria-live="polite"
+      aria-label="Notifications"
+      onMouseEnter={() => ((hovered.current = true), setOpen(true))}
+      onMouseLeave={() => ((hovered.current = false), setOpen(false))}
+      className="fixed bottom-5 left-1/2 z-[60] w-[min(480px,calc(100vw-32px))] -translate-x-1/2 transition-[height] duration-(--dur-2) ease-out"
+      style={{ height }}
+    >
+      {notes.map((n, i) => {
+        const gone = leaving.has(n.key)
+        const hidden = !fanned && i > PEEKING
+        const y = fanned ? -i * (NOTE_H + NOTE_GAP) : -i * NOTE_GAP
+        const scale = fanned ? 1 : 1 - i * 0.04
+        return (
+          <div
+            key={n.key}
+            className="absolute inset-x-0 bottom-0 transition-[transform,opacity] duration-(--dur-2) ease-out"
+            style={{
+              height: NOTE_H,
+              zIndex: notes.length - i,
+              transform: `translateY(${gone ? y + 10 : y}px) scale(${scale})`,
+              transformOrigin: 'bottom center',
+              opacity: gone || hidden ? 0 : 1,
+              pointerEvents: gone || hidden ? 'none' : undefined,
+            }}
+          >
+            {/* Behind the front note, only its edge shows: no text to read through. */}
+            <div className={`toast-in h-full transition-opacity duration-(--dur-1) ${!fanned && i > 0 ? '[&>*>*]:opacity-0' : ''}`}>{n.node}</div>
+          </div>
+        )
+      })}
+    </section>
   )
 }
+
+/** A note's paper: white like the messages, with ink text; a failure says so in red. */
+const noteCard = (failed: boolean) =>
+  `flex h-full items-center gap-3 rounded-ui-lg border border-rule-strong pr-2 pl-4 text-[13px] shadow-[0_2px_6px_-2px_rgba(0,0,0,0.12),0_14px_32px_-14px_rgba(0,0,0,0.35)] ${failed ? 'text-danger' : 'text-ink'}`
+const noteStyle = { background: 'var(--msg, var(--pane))' }
+const noteButton = 'shrink-0 rounded-ui px-2 py-1 text-[13px] font-semibold text-ink hover:bg-pane-sunk disabled:opacity-60'
+const closeButton = 'flex size-7 shrink-0 items-center justify-center rounded-ui text-ink-faint hover:bg-pane-sunk hover:text-ink'
+const Cross = () => (
+  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+    <path d="m4 4 8 8M12 4l-8 8" />
+  </svg>
+)
 
 function Toast({ record: r, onClose }: { record: ActionRecord; onClose: () => void }) {
   const [undoing, setUndoing] = useState(false)
@@ -60,15 +142,10 @@ function Toast({ record: r, onClose }: { record: ActionRecord; onClose: () => vo
   const text = failed ? `Couldn't do that: ${r.error ?? 'unknown error'}` : r.status === 'undone' ? `Undone: ${r.summary}` : r.summary
 
   return (
-    <div
-      role="status"
-      className={`toast-in pointer-events-auto flex max-w-[560px] items-center gap-3 rounded-ui-lg px-4 py-2.5 text-[13px] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.4)] ${
-        failed ? 'bg-danger text-white' : 'bg-ink text-pane'
-      }`}
-    >
-      <span className="min-w-0 flex-1 truncate">{undoError ?? text}</span>
+    <div role="status" className={noteCard(failed || undoError != null)} style={noteStyle}>
+      <span className="min-w-0 flex-1 truncate" title={undoError ?? text}>{undoError ?? text}</span>
       {r.verified === null && r.status === 'done' && (
-        <span className="shrink-0 text-[12px] opacity-70" title="HEY accepted it, but the app couldn't confirm it in the box yet">
+        <span className="shrink-0 text-[12px] text-ink-faint" title="HEY accepted it, but the app couldn't confirm it in the box yet">
           unconfirmed
         </span>
       )}
@@ -85,13 +162,13 @@ function Toast({ record: r, onClose }: { record: ActionRecord; onClose: () => vo
               setUndoing(false)
             }
           }}
-          className="shrink-0 rounded-ui px-2 py-0.5 font-semibold underline-offset-2 hover:underline disabled:opacity-60"
+          className={noteButton}
         >
           {undoing ? 'Undoing…' : 'Undo'}
         </button>
       )}
-      <button onClick={onClose} aria-label="Dismiss" className="shrink-0 opacity-60 hover:opacity-100">
-        ✕
+      <button onClick={onClose} aria-label="Dismiss" className={closeButton}>
+        <Cross />
       </button>
     </div>
   )
@@ -186,11 +263,8 @@ function OutgoingToast({ record: r, onClose }: { record: OutgoingRecord; onClose
     r.status === 'pending' ? `Sending your ${what} in ${seconds}s` : r.status === 'sending' ? `Sending your ${what}…` : r.status === 'sent' ? `Your ${what} was sent` : `Couldn't send your ${what}: ${r.error ?? 'unknown error'}`
 
   return (
-    <div
-      role="status"
-      className={`rise pointer-events-auto flex max-w-[560px] items-center gap-3 rounded-ui-lg px-4 py-2.5 text-[13px] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.4)] ${failed ? 'bg-danger text-white' : 'bg-ink text-pane'}`}
-    >
-      <span className="min-w-0 flex-1 truncate">{text}</span>
+    <div role="status" className={noteCard(failed)} style={noteStyle}>
+      <span className="min-w-0 flex-1 truncate" title={text}>{text}</span>
       {r.status === 'pending' && (
         <button
           onClick={async () => {
@@ -202,19 +276,19 @@ function OutgoingToast({ record: r, onClose }: { record: OutgoingRecord; onClose
               // too late: it's already on its way
             }
           }}
-          className="shrink-0 rounded-ui px-2 py-0.5 font-semibold underline-offset-2 hover:underline"
+          className={noteButton}
         >
           Undo
         </button>
       )}
       {failed && (
-        <button onClick={() => (reopen(), onClose())} className="shrink-0 rounded-ui px-2 py-0.5 font-semibold underline-offset-2 hover:underline">
+        <button onClick={() => (reopen(), onClose())} className={noteButton}>
           Edit
         </button>
       )}
       {r.status !== 'pending' && r.status !== 'sending' && (
-        <button onClick={onClose} aria-label="Dismiss" className="shrink-0 opacity-60 hover:opacity-100">
-          ✕
+        <button onClick={onClose} aria-label="Dismiss" className={closeButton}>
+          <Cross />
         </button>
       )}
     </div>
