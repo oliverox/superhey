@@ -390,9 +390,10 @@ function PickedBar({ picking, postings }: { picking: Picking; postings: PostingR
   const unread = emails.some((p) => !p.seen)
   const read = emails.some((p) => p.seen)
   const button = 'rounded-ui px-2.5 py-1 text-[13px] font-medium hover:bg-pane-sunk disabled:opacity-40 disabled:hover:bg-transparent'
+  // (The bar is white paper, like a message, so it stands off the list under it.)
   return (
     <li className="pointer-events-none sticky bottom-3 z-20 flex justify-center px-4 pt-3">
-      <div role="toolbar" aria-label="Selected emails" className="rise pointer-events-auto flex items-center gap-1 rounded-ui-lg border border-rule-strong bg-pane py-1 pr-1 pl-3 shadow-[0_12px_32px_-12px_rgba(0,0,0,0.3)]">
+      <div role="toolbar" aria-label="Selected emails" className="rise pointer-events-auto flex items-center gap-1 rounded-ui-lg border border-rule-strong py-1 pr-1 pl-3 shadow-[0_2px_6px_-2px_rgba(0,0,0,0.12),0_16px_36px_-12px_rgba(0,0,0,0.35)]" style={{ background: 'var(--msg, var(--pane))' }}>
         <span className="pr-2 text-[13px] text-ink-soft tabular-nums">{picking.count} selected</span>
         <button type="button" disabled={!unread} onClick={() => mark(true)} className={`${button} text-ink`} title="Mark them read (one undo for all)">
           Mark read
