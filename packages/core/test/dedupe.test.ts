@@ -47,12 +47,24 @@ describe('folding the Briefing', () => {
     expect(out.comingUp.map((c) => c.label)).toEqual(['Surf lesson'])
   })
 
-  it('a date that stood for a calendar event, folded into Due, takes the event with it', () => {
+  it('a date that stood for a calendar event, folded into Due, gives the event back to Coming up, and the Due row names it', () => {
     const reminder = post(3, 'Call tonight')
-    const call = { ...date(reminder, 'Prep call', '2026-10-15'), time: '18:00', calendar: { title: 'OPD prep call' } as never }
-    const v = view([checkIn], [call])
+    const event = { key: 'event:o', event: { title: 'OPD prep call' }, date: '2026-10-15', time: '18:00', until: null, more: 0 } as never
+    const call = { ...date(reminder, 'Prep call', '2026-10-15'), time: '18:00', calendar: event }
+    const v = { ...view([checkIn], [call]), calendar: [] }
     const keys = briefingThings(v).map((t) => t.key)
-    expect(foldDuplicates(v, [[keys[0]!, keys[1]!]]).due.actions[0]!.calendar?.title).toBe('OPD prep call')
+    const out = foldDuplicates(v, [[keys[0]!, keys[1]!]])
+    expect(out.due.actions[0]!.calendar?.title).toBe('OPD prep call')
+    expect(out.comingUp).toEqual([])
+    expect(out.calendar).toEqual([event])
+
+    // Folded into a date that stays in Coming up: that date still stands for it.
+    const other = date(post(4, 'Prep call agenda'), 'Agenda for the prep call', '2026-10-15')
+    const v2 = { ...view([], [other, call]), calendar: [] }
+    const k2 = briefingThings(v2).map((t) => t.key)
+    const out2 = foldDuplicates(v2, [[k2[0]!, k2[1]!]])
+    expect(out2.comingUp.map((c) => c.calendar)).toEqual([event])
+    expect(out2.calendar).toEqual([])
   })
 
   it('ignores answers about rows no longer there', () => {

@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 import { z } from 'zod'
 import { AiError, type AiClient } from '../ai/client'
 import type { Repo } from '../cache/repo'
-import type { ActionItem, ComingUpItem, TodayView } from './today'
+import type { ActionItem, CalendarItem, ComingUpItem, TodayView } from './today'
 
 /**
  * The Briefing, without saying one thing twice. The rules in `buildToday` fold what they can
@@ -69,6 +69,7 @@ export function foldDuplicates(view: TodayView, groups: string[][]): TodayView {
   const coming = new Map(view.comingUp.map((c) => [comingKey(c), c]))
   const gone = new Set<string>()
   const replaced = new Map<string, ActionItem | ComingUpItem>()
+  const returned: CalendarItem[] = []
 
   // What each row asks you to do, and the dates it notes: Done (or Ignore) marks them all.
   const itemsOf = (k: string): Array<{ topicId: number; text: string }> => {
@@ -95,15 +96,18 @@ export function foldDuplicates(view: TodayView, groups: string[][]): TodayView {
     const items = unique(present.flatMap(itemsOf))
     const dates = unique(present.flatMap(datesOf))
     const emails = new Set([...items, ...dates].map((t) => t.topicId)).size
-    // The calendar event any of them is: the folded row stands for it now.
-    const calendar = present.map((k) => actions.get(k)?.calendar ?? coming.get(k)?.calendar).find((e) => e != null) ?? null
+    // Calendar events the folded dates stood for: a date kept in Coming up still does (the
+    // first of them); the rest go back among the calendar's events, and a Due row names one.
+    const events = present.map((k) => coming.get(k)?.calendar).filter((e): e is CalendarItem => e != null)
     const a = actions.get(lead)
-    if (a) replaced.set(lead, { ...a, text: textOf(keep), merged: { emails, items: unique([...items, ...dates]) }, calendar })
+    const kept = a ? null : (coming.get(lead)!.calendar ?? events[0] ?? null)
+    returned.push(...events.filter((e) => e !== kept))
+    if (a) replaced.set(lead, { ...a, text: textOf(keep), merged: { emails, items: unique([...items, ...dates]) }, calendar: present.map((k) => actions.get(k)?.calendar).find((e) => e != null) ?? events[0]?.event ?? null })
     else {
       const c = coming.get(lead)!
       // A date without a to-do takes one from the rows folded in.
       const todo = c.task || c.isDeadline ? null : others.map((k) => coming.get(k)!).find((o) => o.task || o.isDeadline)
-      replaced.set(lead, { ...c, ...(todo ? { task: todo.task ?? todo.label, kind: todo.kind, amount: todo.amount, autopay: todo.autopay } : {}), merged: { emails, items, dates }, calendar })
+      replaced.set(lead, { ...c, ...(todo ? { task: todo.task ?? todo.label, kind: todo.kind, amount: todo.amount, autopay: todo.autopay } : {}), merged: { emails, items, dates }, calendar: kept })
     }
     for (const k of others) gone.add(k)
   }
@@ -114,6 +118,7 @@ export function foldDuplicates(view: TodayView, groups: string[][]): TodayView {
     ...view,
     due: { ...view.due, actions: dueActions },
     comingUp: view.comingUp.filter((c) => !gone.has(comingKey(c))).map((c) => (replaced.get(comingKey(c)) as ComingUpItem | undefined) ?? c),
+    calendar: returned.length ? [...(view.calendar ?? []), ...returned].sort((x, y) => x.date.localeCompare(y.date) || (x.time ?? '').localeCompare(y.time ?? '')) : view.calendar,
     toHandle: view.toHandle - (view.due.actions.length - dueActions.length),
   }
 }

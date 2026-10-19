@@ -325,7 +325,7 @@ describe('Today', () => {
     expect(buildToday(repo, input()).events.map((e) => e.title)).toEqual(['Gym', 'Treasury meeting'])
   })
 
-  it('leaves a calendar event out only for a row it shows: in Due, that row names the event and its time', () => {
+  it('leaves a calendar event out of Coming up only for a date shown there; a Due row names it', () => {
     const { repo, put } = setup()
     const at = (h: number) => new Date(2026, 8, 25, h).toISOString()
     put('imbox', { id: 40, topic_id: 940, active_at: daysAgo(1), seen: true })
@@ -339,13 +339,17 @@ describe('Today', () => {
       { id: 2, title: 'Dentist', starts_at: at(15), ends_at: at(16) },
     ])
     const t = buildToday(repo, input())
+    // The date gave way to Due: the event stays in Coming up, and the Due row names it.
     expect(t.comingUp).toEqual([])
     expect(t.due.actions.map((a) => [a.text, a.calendar?.title])).toEqual([['Join call about field collaborators gathering preparations', 'OPD prep call']])
-    expect(t.calendar.map((c) => c.event.title)).toEqual(['Dentist'])
+    expect(t.calendar.map((c) => [c.event.title, c.time])).toEqual([
+      ['Dentist', '15:00'],
+      ['OPD prep call', '18:00'],
+    ])
 
     // Once that to-do is done, the date shows in Coming up, and still stands for the event.
     const done = buildToday(repo, input({ done: new Set([itemKey(940, 'Join call about field collaborators gathering preparations')]) }))
-    expect(done.comingUp.map((c) => [c.label, c.calendar?.title])).toEqual([['Call: field collaborators gathering preparations', 'OPD prep call']])
+    expect(done.comingUp.map((c) => [c.label, c.calendar?.event.title])).toEqual([['Call: field collaborators gathering preparations', 'OPD prep call']])
     expect(done.calendar.map((c) => c.event.title)).toEqual(['Dentist'])
   })
 

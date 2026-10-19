@@ -103,8 +103,11 @@ export interface ComingUpItem {
    * to-do merged into this row, so Done clears them all.
    */
   merged?: { emails: number; items: Array<{ topicId: number; text: string }>; dates: Array<{ topicId: number; text: string }> }
-  /** The calendar event this date is (set by `calendarAhead`, which then leaves the event out). */
-  calendar?: EventRow | null
+  /**
+   * The calendar event this date is: `calendarAhead` leaves it out of Coming up while this row
+   * shows; a row that stops showing (folded into Due) gives it back.
+   */
+  calendar?: CalendarItem | null
 }
 
 /** A calendar event in Coming up. */
@@ -375,12 +378,15 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
   const dueFor = (c: ComingUpItem) => dueActions.find((a) => a.due === c.date && sameWords(a.text, c.task ?? c.label))
   const shownComing = coming.filter((c) => !dueFor(c)).slice(0, 8)
   const intoDue = coming.filter((c) => dueFor(c))
-  // A calendar event is left out only for a row the Briefing shows: a date in Coming up, or
-  // one given way to Due, whose row then names the event and its time.
-  const calendarRows = calendarAhead(repo.events(startOfToday.toISOString(), new Date(startOfToday.getTime() + (COMING_UP_DAYS + 1) * DAY).toISOString()), [...shownComing, ...intoDue], now, today, inAWeek)
+  // The week's calendar is read in Coming up: an event is left out only for a date shown
+  // there. A date that gave way to Due leaves its event in, and the Due row names it.
+  const week = repo.events(startOfToday.toISOString(), new Date(startOfToday.getTime() + (COMING_UP_DAYS + 1) * DAY).toISOString())
+  const calendarRows = calendarAhead(week, shownComing, now, today, inAWeek)
+  calendarAhead(week, intoDue, now, today, inAWeek) // (only marks the rows with their events)
   for (const c of intoDue) {
     const a = dueFor(c)!
-    if (c.calendar && !a.calendar) a.calendar = c.calendar
+    if (c.calendar) a.calendar ??= c.calendar.event
+    c.calendar = null
   }
 
   return {
@@ -515,11 +521,12 @@ export function calendarAhead(events: EventRow[], coming: ComingUpItem[], now: D
     const cover =
       (time != null ? coming.find((c) => c.date === date && c.time === time) : undefined) ??
       coming.find((c) => c.date === date && [...long(`${c.label} ${c.task ?? ''}`)].some((w) => words.has(w)))
+    const row: CalendarItem = { key: `event:${e.key}`, event: e, date, time, until: last > date ? last : null, more: 0 }
     if (cover) {
-      cover.calendar ??= e
+      cover.calendar ??= row
       continue
     }
-    rows.push({ key: `event:${e.key}`, event: e, date, time, until: last > date ? last : null, more: 0 })
+    rows.push(row)
   }
   rows.sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? ''))
   // A repeating event once: the next time, and how many more.
