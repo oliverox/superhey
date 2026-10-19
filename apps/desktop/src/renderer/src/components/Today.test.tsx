@@ -2,7 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { clockHm } from '../format'
+import { clock, clockHm } from '../format'
 import type { PostingRow, ThreadItem, TodoItem } from '@shared/api'
 import type { TodayData } from './Today'
 
@@ -204,6 +204,19 @@ describe('Coming up: the calendar', () => {
     const coming = host.querySelector('section[aria-label="Coming up"]')!.textContent!
     expect(coming.indexOf('Gym')).toBeLessThan(coming.indexOf('Trip to Lyon'))
     expect(coming).toContain('Personal · Club · and 2 more this week')
+  })
+})
+
+describe('Due: what’s in the calendar too', () => {
+  it('says when, under the calendar’s name for it', () => {
+    const ev = { key: 'o', id: 2, calendarId: 1, title: 'OPD prep call', startsAt: '2026-09-25T14:00:00Z', endsAt: '2026-09-25T15:00:00Z', allDay: false, location: null, color: 'purple', calendarName: 'Personal', recurring: false, joinUrl: null, appUrl: null }
+    const t = data({
+      due: { todos: [], bubbled: [], actions: [{ key: 'action:6:0', posting: posting(6, 'Call: field gathering'), text: 'Join call about the field gathering', due: '2026-09-25', daysLate: 0, kind: 'task', amount: null, calendar: ev }] },
+    })
+    act(() => root.render(createElement(Today.TodayList, { today: t, selectedId: null, onOpen: vi.fn(), onGoToBox: vi.fn() })))
+    const due = host.querySelector('section[aria-label="Due"]')!.textContent!
+    expect(due).toContain(`${clock(ev.startsAt)} · OPD prep call · Call: field gathering`)
+    expect(due).not.toMatch(/Due today|today/i)
   })
 })
 

@@ -47,6 +47,14 @@ describe('folding the Briefing', () => {
     expect(out.comingUp.map((c) => c.label)).toEqual(['Surf lesson'])
   })
 
+  it('a date that stood for a calendar event, folded into Due, takes the event with it', () => {
+    const reminder = post(3, 'Call tonight')
+    const call = { ...date(reminder, 'Prep call', '2026-10-15'), time: '18:00', calendar: { title: 'OPD prep call' } as never }
+    const v = view([checkIn], [call])
+    const keys = briefingThings(v).map((t) => t.key)
+    expect(foldDuplicates(v, [[keys[0]!, keys[1]!]]).due.actions[0]!.calendar?.title).toBe('OPD prep call')
+  })
+
   it('ignores answers about rows no longer there', () => {
     const v = view([checkIn, water])
     expect(foldDuplicates(v, [['due|10|gone', 'due|10|also gone']])).toBe(v)

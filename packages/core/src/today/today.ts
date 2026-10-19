@@ -43,6 +43,8 @@ export interface ActionItem {
   autopay?: Autopay
   /** Set when several emails ask the same (an invite, your copy, the acceptances): how many, and each one's to-do, so Done clears them all. */
   merged?: { emails: number; items: Array<{ topicId: number; text: string }> }
+  /** The calendar event it is (a call the email asks you to join, already in the calendar): shown by its time and name. */
+  calendar?: EventRow | null
 }
 
 /** Whether a bill will be paid without you: 'yes' from its own email, 'likely' from the sender's recent autopay notice. */
@@ -101,6 +103,8 @@ export interface ComingUpItem {
    * to-do merged into this row, so Done clears them all.
    */
   merged?: { emails: number; items: Array<{ topicId: number; text: string }>; dates: Array<{ topicId: number; text: string }> }
+  /** The calendar event this date is (set by `calendarAhead`, which then leaves the event out). */
+  calendar?: EventRow | null
 }
 
 /** A calendar event in Coming up. */
@@ -367,6 +371,18 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
     })
     .map(({ posting, a }) => ({ key: `alert:${posting.id}`, posting, text: a.securityAlert!, days: daysSince(posting.activeAt), box: boxList.find((b) => b.id === posting.boxId)?.name ?? '' }))
 
+  // What's due already isn't also coming up: its date row gives way to the Due row.
+  const dueFor = (c: ComingUpItem) => dueActions.find((a) => a.due === c.date && sameWords(a.text, c.task ?? c.label))
+  const shownComing = coming.filter((c) => !dueFor(c)).slice(0, 8)
+  const intoDue = coming.filter((c) => dueFor(c))
+  // A calendar event is left out only for a row the Briefing shows: a date in Coming up, or
+  // one given way to Due, whose row then names the event and its time.
+  const calendarRows = calendarAhead(repo.events(startOfToday.toISOString(), new Date(startOfToday.getTime() + (COMING_UP_DAYS + 1) * DAY).toISOString()), [...shownComing, ...intoDue], now, today, inAWeek)
+  for (const c of intoDue) {
+    const a = dueFor(c)!
+    if (c.calendar && !a.calendar) a.calendar = c.calendar
+  }
+
   return {
     generatedAt: now.toISOString(),
     alerts,
@@ -374,11 +390,10 @@ export function buildToday(repo: Repo, input: TodayInput): TodayView {
     needsReply: mergeThreads(needsReply),
     replyLater,
     waiting,
-    // What's due already isn't also coming up.
-    comingUp: coming.filter((c) => !dueActions.some((a) => a.due === c.date && sameWords(a.text, c.task ?? c.label))).slice(0, 8),
+    comingUp: shownComing,
     events: repo.events(startOfToday.toISOString(), startOfTomorrow.toISOString()),
     tucked: Object.fromEntries(boxList.filter((b) => b.kind !== 'imbox').map((b) => [b.id, b.name])),
-    calendar: calendarAhead(repo.events(startOfToday.toISOString(), new Date(startOfToday.getTime() + (COMING_UP_DAYS + 1) * DAY).toISOString()), coming, now, today, inAWeek),
+    calendar: calendarRows,
     // The first time, "new" is today's: every unread email ever would be noise, not news.
     newSince: {
       since: input.since,
@@ -469,7 +484,8 @@ const hm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.get
 /**
  * The week's calendar, for Coming up: events not over yet that start from today on, each on
  * its first day (one already under way isn't coming up). Dropped when an email's row covers it (same day, and the same
- * time or a word of the title in common), so the flight isn't listed twice. A repeating
+ * time or a word of the title in common), so the flight isn't listed twice; that row is
+ * marked with the event (`calendar`). A repeating
  * event (Gym every morning) shows once, with how many more times it comes.
  */
 export function calendarAhead(events: EventRow[], coming: ComingUpItem[], now: Date, today: string, lastDay: string): CalendarItem[] {
@@ -495,8 +511,14 @@ export function calendarAhead(events: EventRow[], coming: ComingUpItem[], now: D
     if (first < today || first > lastDay) continue
     const date = first
     const words = long(e.title)
-    const covered = coming.some((c) => c.date === date && ((time != null && c.time === time) || [...long(`${c.label} ${c.task ?? ''}`)].some((w) => words.has(w))))
-    if (covered) continue
+    // The row at the same time first; else one with a word of the title in common.
+    const cover =
+      (time != null ? coming.find((c) => c.date === date && c.time === time) : undefined) ??
+      coming.find((c) => c.date === date && [...long(`${c.label} ${c.task ?? ''}`)].some((w) => words.has(w)))
+    if (cover) {
+      cover.calendar ??= e
+      continue
+    }
     rows.push({ key: `event:${e.key}`, event: e, date, time, until: last > date ? last : null, more: 0 })
   }
   rows.sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? ''))

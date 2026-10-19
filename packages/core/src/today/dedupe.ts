@@ -95,13 +95,15 @@ export function foldDuplicates(view: TodayView, groups: string[][]): TodayView {
     const items = unique(present.flatMap(itemsOf))
     const dates = unique(present.flatMap(datesOf))
     const emails = new Set([...items, ...dates].map((t) => t.topicId)).size
+    // The calendar event any of them is: the folded row stands for it now.
+    const calendar = present.map((k) => actions.get(k)?.calendar ?? coming.get(k)?.calendar).find((e) => e != null) ?? null
     const a = actions.get(lead)
-    if (a) replaced.set(lead, { ...a, text: textOf(keep), merged: { emails, items: unique([...items, ...dates]) } })
+    if (a) replaced.set(lead, { ...a, text: textOf(keep), merged: { emails, items: unique([...items, ...dates]) }, calendar })
     else {
       const c = coming.get(lead)!
       // A date without a to-do takes one from the rows folded in.
       const todo = c.task || c.isDeadline ? null : others.map((k) => coming.get(k)!).find((o) => o.task || o.isDeadline)
-      replaced.set(lead, { ...c, ...(todo ? { task: todo.task ?? todo.label, kind: todo.kind, amount: todo.amount, autopay: todo.autopay } : {}), merged: { emails, items, dates } })
+      replaced.set(lead, { ...c, ...(todo ? { task: todo.task ?? todo.label, kind: todo.kind, amount: todo.amount, autopay: todo.autopay } : {}), merged: { emails, items, dates }, calendar })
     }
     for (const k of others) gone.add(k)
   }

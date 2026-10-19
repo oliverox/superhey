@@ -362,7 +362,16 @@ function ActionRow({ item, mark, onOpen, onDone }: { item: ActionItem; mark: Mar
           <AutopayNote autopay={item.autopay} />
         </div>
         <div className="mt-0.5 truncate text-[13px] text-ink-faint">
-          <span className={item.daysLate > 0 ? 'text-danger' : 'text-ink-soft'}>{why.action(item)}</span> · {item.merged ? `${item.merged.emails} emails` : p.subject ? stripSubjectPrefixes(p.subject) : p.senderName}
+          {/* What's in the calendar too says when, under the calendar's name for it. */}
+          {item.calendar && !item.daysLate ? (
+            <span className="text-ink-soft">
+              <span aria-hidden className="mr-1.5 inline-block size-[7px] rounded-full align-middle" style={{ background: calendarColor(item.calendar.color) }} />
+              {item.calendar.allDay ? 'All day' : clock(item.calendar.startsAt)} · {item.calendar.title || '(No title)'}
+            </span>
+          ) : (
+            <span className={item.daysLate > 0 ? 'text-danger' : 'text-ink-soft'}>{why.action(item)}</span>
+          )}{' '}
+          · {item.merged ? `${item.merged.emails} emails` : p.subject ? stripSubjectPrefixes(p.subject) : p.senderName}
           {where}
         </div>
       </div>

@@ -325,6 +325,30 @@ describe('Today', () => {
     expect(buildToday(repo, input()).events.map((e) => e.title)).toEqual(['Gym', 'Treasury meeting'])
   })
 
+  it('leaves a calendar event out only for a row it shows: in Due, that row names the event and its time', () => {
+    const { repo, put } = setup()
+    const at = (h: number) => new Date(2026, 8, 25, h).toISOString()
+    put('imbox', { id: 40, topic_id: 940, active_at: daysAgo(1), seen: true })
+    analyse(repo, 940, daysAgo(1), {
+      category: 'work',
+      dates: [{ label: 'Call: field collaborators gathering preparations', date: '2026-09-25', time: '18:00', endTime: '19:00' }],
+      actionItems: [{ text: 'Join call about field collaborators gathering preparations', due: '2026-09-25', event: true }],
+    })
+    repo.replaceEvents(new Date(2026, 8, 20).toISOString(), new Date(2026, 9, 5).toISOString(), [
+      { id: 1, title: 'OPD prep call', starts_at: at(18), ends_at: at(19) },
+      { id: 2, title: 'Dentist', starts_at: at(15), ends_at: at(16) },
+    ])
+    const t = buildToday(repo, input())
+    expect(t.comingUp).toEqual([])
+    expect(t.due.actions.map((a) => [a.text, a.calendar?.title])).toEqual([['Join call about field collaborators gathering preparations', 'OPD prep call']])
+    expect(t.calendar.map((c) => c.event.title)).toEqual(['Dentist'])
+
+    // Once that to-do is done, the date shows in Coming up, and still stands for the event.
+    const done = buildToday(repo, input({ done: new Set([itemKey(940, 'Join call about field collaborators gathering preparations')]) }))
+    expect(done.comingUp.map((c) => [c.label, c.calendar?.title])).toEqual([['Call: field collaborators gathering preparations', 'OPD prep call']])
+    expect(done.calendar.map((c) => c.event.title)).toEqual(['Dentist'])
+  })
+
   it('counts new unread mail per box since you last looked', () => {
     const { repo, put } = setup()
     put('imbox', { id: 30, topic_id: 930, active_at: daysAgo(0, 2) })
